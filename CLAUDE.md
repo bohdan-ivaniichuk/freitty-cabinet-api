@@ -10,6 +10,8 @@ Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail): .N
 |---|---|
 | Task, original mockup, mockup analysis (read-only inputs) | `assignment/` |
 | Implementation plan and agreed decisions — source of truth | `docs/plan.md` |
+| Domain vocabulary — the names used in code and docs | `CONTEXT.md` |
+| Database schema | `docs/er-diagram.md` |
 
 Read `docs/plan.md` before starting any implementation step.
 

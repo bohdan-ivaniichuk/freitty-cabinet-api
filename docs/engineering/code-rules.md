@@ -18,11 +18,11 @@ and lives on the entity that owns the data.
 
 ```csharp
 // Bad — the handler decides the transition
-order.Status = OrderStatus.InProgress;
-order.StartedAt = now;
+order.Status = OrderStatus.Completed;
+order.CompletedAt = now;
 
 // Good — one owner, and the intent has a name
-order.Start(now);
+order.Complete(now);
 ```
 
 ### 2. Several outcomes are not a `bool`
@@ -88,8 +88,8 @@ A variable is named for what it holds, not for the verb that produced it: `opera
 
 ### 9. Lambda and `out` parameters get real names
 
-`orders.Where(order => order.IsDraft)`, not `o =>`. In EF configuration use `builder` / `entity`.
-The discard `_` and `catch (Exception ex)` are fine.
+`orders.Where(order => order.Status == OrderStatus.Draft)`, not `o =>`. In EF configuration use
+`builder` / `entity`. The discard `_` and `catch (Exception ex)` are fine.
 
 ### 10. A number or a string with meaning gets a name
 

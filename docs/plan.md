@@ -12,7 +12,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 
 | Role emphasis | How it shows up here |
 |---|---|
-| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, composite indexes for list filters, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency (`xmin`) |
+| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, composite indexes for list filters, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency |
 | EF Core: change tracking, N+1, eager loading, query optimization | `AsNoTracking` + projections in read handlers, `AsSplitQuery` on the detail query, no lazy loading |
 | API: contracts, versioning, error handling | `/api/v1/...`, `ProblemDetails` everywhere, OpenAPI + Scalar |
 | Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for the whole local stack (API + Postgres), GitHub Actions: build → test → image → deploy |
@@ -28,7 +28,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 - **FastEndpoints command bus** with a pipeline: logging → **FluentValidation** → handler (no MediatR — commercial since 2025)
 - **Mapperly** (source-generated mapping; no AutoMapper — commercial). Read-side projections stay in `Select` / `IQueryable` so SQL does the work
 - **EF Core + Npgsql** for the domain and writes; **Dapper** for dashboard aggregates
-- **PostgreSQL**: migrations, seed on startup, `pg_trgm`, composite indexes, `xmin` concurrency token
+- **PostgreSQL**: migrations, seed on startup, `pg_trgm`, composite indexes, optimistic concurrency token
 - **ProblemDetails**, `/api/v1`, **Scalar** (OpenAPI UI)
 - **Serilog**
 - **xUnit + Testcontainers**
@@ -55,42 +55,53 @@ Rules:
 - Domain does not depend on infrastructure.
 - Deliberately skipped (say so in the presentation): MediatR, AutoMapper, generic repositories, value objects for every field.
 
-## 5. Domain model (draft)
+## 5. Domain model
+
+Settled in the grooming of step 2: [`steps/02-domain.md`](steps/02-domain.md) is the contract,
+[`er-diagram.md`](er-diagram.md) the picture, [`CONTEXT.md`](../CONTEXT.md) the vocabulary.
 
 | Entity | Key fields |
 |---|---|
-| **Company** | Name, Balance |
+| **Company** | Name, Balance — the client that owns the cabinet; the hub's screens call it the customer |
 | **User** | Name, Initials (derived), Role (Admin / Dispatcher), CompanyId |
-| **Hub** | Name (Markham, Toronto), Province |
-| **Carrier** | Name, Phone (Schneider, TForce, Self pickup, own driver) |
-| **Order** | Number (`FR001676`), Type (CrossDock / Consolidation), SubType (Storage / Pickup), Status, IsDraft, OriginHub, DestinationHub (e.g. Markham → Toronto), ScheduledAt, Destination, CarrierId, CreatedById, TrailerType, Dock, AssignedTo, DeclaredQty, ActualQty, Customer |
-| **OrderReference** | OrderId, Suffix (`-1`), RefN, Pallets, HasAlert |
-| **CargoLine** | OrderId, UnitType (Standard 48×40 / XL), Qty → "15 Std + 3 XL" |
+| **Hub** | Name (Markham, Toronto), ShortName, Region, TimeZone |
+| **Carrier** | Name, Phone — real carriers only |
+| **Order** | Number (`DRAFT-003` → `FR001676`), Type (CrossDock / Consolidation), CrossDockKind (Storage / Pickup), Status, CompanyId, CreatedById, HubId, TransferHubId, ScheduledAt, destination city and region, TransportKind (Carrier / OwnDriver / SelfPickup) with CarrierId or DriverName, milestone instants, UpdatedAt, Version |
+| **Shipment** | OrderId, Position (`-1`), RefNumber, WarehouseNote, arrival (trailer type, truck, trailer, ArrivedAt), ReceivedAt, dock assignment |
+| **CargoLine** | ShipmentId, UnitType (Standard 48×40 / XL), Quantity — the declared quantity |
+| **Operation** | ShipmentId, Type (Unloading / Disposal / Restack / Loading), UnitType, Quantity, TrailerNumber, AppliedAt, IsBillable, PhotoCount, CommentCount — the ledger of actual quantities |
+| **Alert** | ShipmentId, Type (QuantityDelta / MissingPhoto), RaisedAt, ResolvedAt |
 | **Service** (M:N) | Transload, Restock & Rework |
-| **Operation** | Type (Unloading / Disposal / Restack / Loading), Trailer, Qty, Unit, AppliedAt, IsBillable, PhotoCount, CommentCount |
-| **SupplyItem** + **OrderSupply** | SKU, Category, Price; OrderSupply keeps Qty + **UnitPrice snapshot** |
-| **OrderAlert** | Type (MissingPhoto, QtyDelta), ResolvedAt |
-| **Invoice** | Number (`#001812`), Amount, PaidAt → spend chart |
+| **SupplyItem** + **SupplyLine** | SKU, Category, UnitPrice; SupplyLine keeps Quantity + **UnitPrice snapshot** |
+| **Invoice** | Number (`#001812`), OrderId, Amount, IssuedAt, PaidAt → spend chart |
 
-Key decisions (presentation material, candidates for ADRs):
-- **Ref N is always a separate table.** Cross-Dock has one row, Consolidation many → one model, no special cases on the card.
-- **Delta (actual ≠ expected) and "Need Attention" are computed, not stored** → no drift.
+Key decisions (presentation material):
+- **`Order` is one aggregate; the rest is reference data** — [ADR 0003](adr/0003-order-is-one-aggregate.md).
+- **Every quantity has one source.** Declared lives in cargo lines, actual in the operations ledger;
+  delta, totals and "Need Attention" are computed, not stored →
+  no drift — [ADR 0004](adr/0004-quantities-have-one-source.md).
+- **An order is made of shipments.** Cross-Dock has one, Consolidation several → one model, no special
+  cases; cargo, arrival, operations and alerts belong to the shipment.
+- **Stored state with an append-only ledger, not event sourcing** —
+  [ADR 0005](adr/0005-stored-state-not-event-sourcing.md).
+- **One status enum** (Draft → Ready → InProgress → Completed) for the freight only; payment belongs
+  to the invoice, and an alert is a stored record, not a status.
 - **Supply price is snapshotted** on the order line → catalog changes don't rewrite history.
-- **One status enum** (Draft → Ready → InProgress → Completed); Alert is a flag, not a status.
+- **UUID v7 keys from the domain** — [ADR 0006](adr/0006-uuid-v7-keys-from-the-domain.md).
 
 ## 6. API
 
 ```
 GET  /api/v1/dashboard                    KPIs + recent active orders + weekly activity (period param)
 GET  /api/v1/orders?type=&hub=&status=&from=&to=&q=&page=&pageSize=
-GET  /api/v1/orders/counts                tab counters, one GROUP BY
-GET  /api/v1/orders/{number}              detail: refs, cargo, services, operations, supplies
+GET  /api/v1/orders/counts                tab counters
+GET  /api/v1/orders/{number}              detail: shipments, cargo, services, operations, supplies
 POST /api/v1/orders/{number}/operations   the one write flow (see below)
 ```
 
-- Filtering, search and pagination in SQL. Search: `ILIKE` on number, Ref N, customer, backed by `pg_trgm` GIN indexes. Pagination: offset/limit (mention keyset as the scale-up path).
+- Filtering, search and pagination in SQL. Search: `ILIKE` on number and Ref N (further fields are decided in step 4), backed by `pg_trgm` GIN indexes. Pagination: offset/limit (mention keyset as the scale-up path).
 - Dashboard KPIs and charts: Dapper + SQL (`date_trunc`, `FILTER (WHERE ...)`, CTEs).
-- **Write flow** (not required by the task, added to show transactions/isolation): add an operation → in one transaction recalculate actual qty and open/resolve the qty-delta alert; `xmin` optimistic concurrency, 409 ProblemDetails on conflict.
+- **Write flow** (not required by the task, added to show transactions/isolation): add an operation → in one transaction append it to the ledger and open/resolve the quantity delta alert; optimistic concurrency on the order row (`Version` or `xmin`, decided in step 8), 409 ProblemDetails on conflict.
 - Validation (FluentValidation): pageSize bounds, date range, enum values, operation payload.
 
 ## 7. Frontend
