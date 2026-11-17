@@ -13,6 +13,22 @@ Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail): .N
 
 Read `docs/plan.md` before starting any implementation step.
 
+## Code rules
+
+Every C# change follows [`docs/engineering/code-rules.md`](docs/engineering/code-rules.md). Read it before writing code; formatting is in `.editorconfig`. Before reporting a step as done, do the self-review from rule 18, then run the `code-reviewer` agent on the diff.
+
+## Agents
+
+- `code-reviewer` — reviews the diff in a fresh context against correctness and the code rules. Reports only.
+- `test-author` — writes and runs unit and integration tests (Testcontainers PostgreSQL).
+
+## Hooks
+
+- `assignment-guard` — blocks edits under `assignment/`.
+- `secrets-scan` — blocks content that looks like a real secret. Local development values in `docker-compose*.yml` and `appsettings.Development.json` are exempt.
+- `dotnet-format` — formats an edited `.cs` file after every edit; do not hand-format.
+- Commit hooks — see below.
+
 ## Language
 
 Everything committed is in English: code, comments, docs, commit messages. The conversation may be in Ukrainian. The only exception is `assignment/task.md`, a copy of the original brief.
