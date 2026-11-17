@@ -71,7 +71,8 @@ An unknown `period` → `400` `ProblemDetails`.
 
 1. **"Awaiting your action".** Two of the three in the largest tile, and undefined in the mockup.
    Candidates that the model already stores: drafts the client has not finished, and invoices
-   issued and not paid. Both, one of them, something else?
+   issued and not paid. Both, one of them, something else? The seed of [step 3](03-seed.md) has one
+   of each: DRAFT-003 and the unpaid invoice of FR001668.
 2. **The badge on "Orders" in the sidebar** (3). The same number as Need attention?
 3. **Spend.** Counted when an invoice is issued or when it is paid? "Average per order": over
    completed orders or over invoiced ones?

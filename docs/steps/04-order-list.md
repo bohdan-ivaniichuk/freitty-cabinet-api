@@ -133,4 +133,5 @@ and the badge on "Orders". It is not in the plan's API list.
 12. **FastEndpoints specifics** — the command bus middleware, versioning, the `ProblemDetails`
     setup — are to be checked against its current documentation and licence, not recalled.
 13. **Data volume for `EXPLAIN`.** A generated set of some hundred thousand orders, loaded only
-    for the measurement?
+    for the measurement? [Step 3](03-seed.md) settled that it is not the seed: the seed has seventy
+    orders, and the volume set is a SQL generator that never reaches the deployed database.

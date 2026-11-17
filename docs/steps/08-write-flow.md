@@ -101,6 +101,10 @@ start because the model has changes no migration covers.
 4. **More than one write?** Finishing receiving and resolving an alert exist in the domain. Without
    them the demo can open an alert through the API but can close one only by recording more
    freight. Add `POST …/shipments/{position}/receiving` and `POST …/alerts/{id}/resolution`?
+   The seed of [step 3](03-seed.md) prepares the stages for the single endpoint: FR001674-2 is
+   received two short with its Quantity delta alert open (its Missing photo alert stays open
+   whatever is recorded), FR001383 has 5 Standard On stock, FR001681 and FR001679
+   are Ready.
 5. **Isolation level.** Read committed plus the token is the proposal. The presentation should be
    able to say why not `SERIALIZABLE` and why not `SELECT … FOR UPDATE` — agree on the answer.
 6. **How the shipment is addressed**: by position (`1`), which is what the page shows, or by id?

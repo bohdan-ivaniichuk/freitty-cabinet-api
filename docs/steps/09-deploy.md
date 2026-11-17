@@ -39,7 +39,7 @@ if it does not answer.
 |---|---|---|
 | Database | compose `postgres:18-alpine` | managed PostgreSQL 18 |
 | Connection string | compose file | platform secret |
-| Seed | on | on |
+| Seed | on (`Seed__Enabled` in the compose file) | on (`Seed__Enabled=true` in the platform) — off by default, [step 3](03-seed.md) |
 | URL | `http://localhost:8080` | public HTTPS |
 
 ### Docs
@@ -75,8 +75,9 @@ happens, how to roll back.
    The first request of a demo may then take tens of seconds. Accept and warm it up before the
    presentation, keep it awake with a scheduled ping, or pay for a month?
 3. **Stale data.** The seed is relative to the day it ran. A database seeded a week before the
-   presentation shows a week-old "today". Reseed before the demo — by what mechanism: recreate the
-   database, or a guarded reseed switch?
+   presentation shows a week-old picture. Settled in [step 3](03-seed.md): the application has no
+   reseed switch; fresh data means an empty database. Open here: the exact command that resets the
+   schema of the managed database, and whether a restart of the container is then enough.
 4. **Registry.** GitHub Container Registry with the workflow's own token is the least setup. Does
    the chosen platform pull from it, and does the image need to be public?
 5. **The database user.** Startup migrations need DDL rights. Is the single owner user of a managed
