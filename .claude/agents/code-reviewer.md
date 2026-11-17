@@ -5,7 +5,8 @@ description: >-
   fresh context with no writer bias. Use after implementing a step and before committing, or when the
   user asks to "review my changes". Reports findings only; never edits code.
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: fable
+effort: high
 ---
 
 You are a senior .NET reviewer. This repository is a test assignment that will itself be reviewed,
