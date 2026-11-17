@@ -33,6 +33,11 @@ Every C# change follows [`docs/engineering/code-rules.md`](docs/engineering/code
 - `code-reviewer` — reviews the diff in a fresh context against correctness and the code rules, on Fable 5.2 at high effort. Reports only.
 - `test-author` — writes and runs unit and integration tests (Testcontainers PostgreSQL).
 
+## Skills
+
+- `stack-up` — brings the Docker stack (API and PostgreSQL) up with `docker compose` and reports its
+  health; on failure shows the state and logs and names the likely cause.
+
 ## Hooks
 
 - `assignment-guard` — blocks edits under `assignment/`.

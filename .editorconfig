@@ -63,6 +63,9 @@ csharp_indent_case_contents = true
 csharp_indent_switch_labels = true
 csharp_indent_labels = one_less_than_current
 
+# The naming rules' severity applies to `dotnet format` only; the build needs it on the diagnostic itself.
+dotnet_diagnostic.IDE1006.severity = warning
+
 # Naming: interfaces carry I, types PascalCase, parameters camelCase, private fields camelCase without `_`.
 dotnet_naming_rule.interfaces_start_with_i.severity = warning
 dotnet_naming_rule.interfaces_start_with_i.symbols = interface_symbols
@@ -82,6 +85,20 @@ dotnet_naming_rule.parameters_are_camel_case.symbols = parameter_symbols
 dotnet_naming_rule.parameters_are_camel_case.style = camel_case_style
 dotnet_naming_symbols.parameter_symbols.applicable_kinds = parameter
 dotnet_naming_style.camel_case_style.capitalization = camel_case
+
+# Constants and static readonly fields are PascalCase at any accessibility (`MaxPageSize`). These rules
+# carry modifiers, so they take precedence over the private-field rule below.
+dotnet_naming_rule.constants_are_pascal_case.severity = warning
+dotnet_naming_rule.constants_are_pascal_case.symbols = constant_symbols
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constant_symbols.applicable_kinds = field
+dotnet_naming_symbols.constant_symbols.required_modifiers = const
+
+dotnet_naming_rule.static_readonly_fields_are_pascal_case.severity = warning
+dotnet_naming_rule.static_readonly_fields_are_pascal_case.symbols = static_readonly_field_symbols
+dotnet_naming_rule.static_readonly_fields_are_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.static_readonly_field_symbols.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_field_symbols.required_modifiers = static, readonly
 
 dotnet_naming_rule.private_fields_are_camel_case.severity = warning
 dotnet_naming_rule.private_fields_are_camel_case.symbols = private_field_symbols

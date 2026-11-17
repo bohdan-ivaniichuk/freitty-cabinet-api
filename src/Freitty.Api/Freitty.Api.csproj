@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Freitty.Application\Freitty.Application.csproj" />
+    <ProjectReference Include="..\Freitty.Infrastructure\Freitty.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

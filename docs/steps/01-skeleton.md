@@ -26,17 +26,20 @@ tests and smoke-tests that stack on every push, so each later step only adds fea
   `rollForward: latestFeature` — local machines, CI and the Docker build use the same major line.
 - `Directory.Build.props` holds everything shared: `net10.0`, `Nullable`, `ImplicitUsings`,
   `TreatWarningsAsErrors`, `EnforceCodeStyleInBuild`. Warnings are errors locally too, so a local
-  build and a CI build cannot disagree.
+  build and a CI build cannot disagree. NuGet audit warnings (`NU1900`–`NU1904`) are the exception:
+  they stay warnings, so an advisory published after a commit does not break restore, CI or the
+  Docker build without any code change.
 - Central Package Management (`Directory.Packages.props`) — one place for versions across all
   projects.
   Latest stable versions at implementation time, looked up, not recalled; no prereleases.
+  The two `Microsoft.*` packages follow the `net10.0` runtime (10.0.x): their 11.x targets `net11.0` only.
 - Packages in this step, nothing more:
 
   | Project | Packages |
   |---|---|
   | `Freitty.Infrastructure` | `Npgsql.EntityFrameworkCore.PostgreSQL` |
   | `Freitty.Api` | `Serilog.AspNetCore`, `Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore` |
-  | `Freitty.Api.IntegrationTests` | `xunit.v3`, `xunit.runner.visualstudio`, `Microsoft.NET.Test.Sdk`, `Microsoft.AspNetCore.Mvc.Testing`, `Testcontainers.PostgreSql` |
+  | `Freitty.Api.IntegrationTests` | `xunit.v3`, `Microsoft.AspNetCore.Mvc.Testing`, `Testcontainers.PostgreSql` |
 
 **Host**
 
@@ -51,7 +54,10 @@ tests and smoke-tests that stack on every push, so each later step only adds fea
   database outage marks the instance not ready without making the platform restart it.
 - Serilog: console sink only, configured from the `Serilog` section of `appsettings.json`, request
   logging on. Health requests are logged below the minimum level — a probe every five seconds must
-  not bury real requests.
+  not bury real requests. `Microsoft.EntityFrameworkCore.Database.Command` is raised to `Warning` in
+  `appsettings.json` for the same reason: the readiness check's `SELECT 1` would otherwise log on
+  every probe. The step with the first query sets it back to `Information` in
+  `appsettings.Development.json`, so `dotnet run` shows the generated SQL.
 - No HTTPS in the app: TLS ends at the hosting platform. No `UseHttpsRedirection`.
 
 **Docker**
@@ -76,6 +82,9 @@ tests and smoke-tests that stack on every push, so each later step only adds fea
 - Integration tests run against real PostgreSQL in Testcontainers —
   [ADR 0002](../adr/0002-integration-tests-on-real-postgres.md). One container per test run, shared
   by all test classes.
+- Tests run on Microsoft.Testing.Platform, opted in through `global.json` (`test.runner`). xUnit v3
+  4.x supports only MTP v2, and `dotnet test` on the .NET 10 SDK refuses the VSTest mode for it, so
+  `xunit.runner.visualstudio` and `Microsoft.NET.Test.Sdk` are not referenced.
 - xUnit v3 with its built-in `Assert`. No assertion library: FluentAssertions is commercial since
   v8, and the plan avoids commercial dependencies.
 - Tests override the connection string with `UseSetting` on the web host builder: `Program.cs` reads

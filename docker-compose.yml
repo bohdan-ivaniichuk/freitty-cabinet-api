@@ -1,0 +1,37 @@
+services:
+  postgres:
+    # Same tag as the test fixture (tests/Freitty.Api.IntegrationTests/PostgresFixture.cs); change both together.
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: freitty
+      POSTGRES_USER: freitty
+      POSTGRES_PASSWORD: freitty
+    ports:
+      - "5432:5432"
+    volumes:
+      # From 18 on, the image keeps data in a versioned subdirectory; the volume mounts its parent.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # Over TCP: on first start the image runs a temporary socket-only server that would answer too early.
+      test: ["CMD-SHELL", "pg_isready -h localhost -U freitty -d freitty"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment:
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=freitty;Username=freitty;Password=freitty
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8080/health/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:

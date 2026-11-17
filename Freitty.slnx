@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Freitty.Domain/Freitty.Domain.csproj" />
+    <Project Path="src/Freitty.Application/Freitty.Application.csproj" />
+    <Project Path="src/Freitty.Infrastructure/Freitty.Infrastructure.csproj" />
+    <Project Path="src/Freitty.Api/Freitty.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Freitty.Api.IntegrationTests/Freitty.Api.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

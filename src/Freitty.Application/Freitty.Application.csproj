@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Freitty.Domain\Freitty.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
