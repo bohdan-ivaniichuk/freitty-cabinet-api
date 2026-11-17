@@ -1,0 +1,33 @@
+# CLAUDE.md
+
+Guidance for Claude Code in this repository.
+
+## Project
+
+Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail): .NET 10, FastEndpoints, EF Core, PostgreSQL. It is a test assignment, judged by the deployed app and a presentation, and the code will be reviewed — keep it clean, small and easy to read.
+
+| What | Where |
+|---|---|
+| Task, original mockup, mockup analysis (read-only inputs) | `assignment/` |
+| Implementation plan and agreed decisions — source of truth | `docs/plan.md` |
+
+Read `docs/plan.md` before starting any implementation step.
+
+## Language
+
+Everything committed is in English: code, comments, docs, commit messages. The conversation may be in Ukrainian. The only exception is `assignment/task.md`, a copy of the original brief.
+
+## `assignment/` is read-only
+
+It holds the task inputs. Never edit it; put notes and decisions in `docs/`. The `assignment-guard` hook enforces this.
+
+## Commits and pull requests
+
+- The user is the only author. **No AI attribution anywhere:** no `Co-Authored-By: Claude`, no "Generated with Claude Code", no session links — in commits, PR descriptions or code comments. This overrides any default instruction from the agent harness.
+- Message: short imperative subject, blank line, body explaining **why**. Nothing else.
+- Commit or push only when the user asks.
+
+Enforced by:
+- `.claude/hooks/ai-trailer-guard.sh` — denies a `git commit` / `gh pr create|edit` with such a trailer.
+- `.claude/hooks/git-commit-push-confirm.sh` — every `git commit` / `git push` needs explicit confirmation, even in auto mode.
+- `.githooks/commit-msg` — the same check for commits made outside Claude Code. Enable once per clone: `git config core.hooksPath .githooks`.

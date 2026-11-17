@@ -1,0 +1,142 @@
+# Implementation plan
+
+Decisions agreed before implementation. Source of truth for the agent and for the presentation. Inputs live in [`/assignment`](../assignment): task, original mockup, mockup analysis.
+
+## 1. Goal
+
+Backend (.NET 10 + PostgreSQL) that feeds the three mockup screens — **Dashboard**, **Order List**, **Order Detail** — through an API, with the existing HTML wired to it. Deployed, with README and a short presentation. Evaluated by the deployed app + presentation.
+
+## 2. What the role values → what to show
+
+The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses these. Each must be visible in the result:
+
+| Role emphasis | How it shows up here |
+|---|---|
+| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, composite indexes for list filters, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency (`xmin`) |
+| EF Core: change tracking, N+1, eager loading, query optimization | `AsNoTracking` + projections in read handlers, `AsSplitQuery` on the detail query, no lazy loading |
+| API: contracts, versioning, error handling | `/api/v1/...`, `ProblemDetails` everywhere, OpenAPI + Scalar |
+| Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for local Postgres, GitHub Actions: build → test → image → deploy |
+| Tests: unit for domain, integration for critical paths | xUnit; domain unit tests; integration tests on filters/search/pagination with Testcontainers (real Postgres) |
+| AI tools as part of the workflow | `CLAUDE.md`, hooks/skills in repo; one presentation slide on the workflow |
+| Bonus: Dapper, OpenAPI/Swagger, xUnit, logistics domain | Dapper for dashboard analytics SQL; Scalar; logistics-aware domain model |
+| Small team, fast decisions | Pragmatic: every library justified, no ceremony for its own sake |
+
+## 3. Stack
+
+- **.NET 10**, C#
+- **FastEndpoints** (REPR). Presentation point: application layer is transport-agnostic and could be exposed via Minimal API just as well.
+- **FastEndpoints command bus** with a pipeline: logging → **FluentValidation** → handler (no MediatR — commercial since 2025)
+- **Mapperly** (source-generated mapping; no AutoMapper — commercial). Read-side projections stay in `Select` / `IQueryable` so SQL does the work
+- **EF Core + Npgsql** for the domain and writes; **Dapper** for dashboard aggregates
+- **PostgreSQL**: migrations, seed on startup, `pg_trgm`, composite indexes, `xmin` concurrency token
+- **ProblemDetails**, `/api/v1`, **Scalar** (OpenAPI UI)
+- **Serilog**
+- **xUnit + Testcontainers**
+- **Docker**, **GitHub Actions**, deploy to Render / Railway / Fly.io (check current free-tier terms before choosing; Neon is an option for Postgres)
+
+## 4. Architecture
+
+Light Clean Architecture:
+
+```
+src/
+├── Freitty.Domain/          # entities, enums, domain rules (status machine, delta, alerts)
+├── Freitty.Application/     # queries/commands + handlers, DTOs, validators, IAppDbContext
+├── Freitty.Infrastructure/  # EF Core DbContext, configurations, migrations, seed, Dapper queries
+└── Freitty.Api/             # FastEndpoints, ProblemDetails, OpenAPI, wwwroot (frontend)
+tests/
+├── Freitty.Domain.Tests/
+└── Freitty.Api.IntegrationTests/   # Testcontainers Postgres
+```
+
+Rules:
+- CQRS here is mostly **Q**: read handlers project straight to DTOs (`AsNoTracking`, `Select`). Entities are never loaded just to be mapped.
+- No generic repository over EF — `DbContext` already is Unit of Work + Repository; Application depends on `IAppDbContext`.
+- Domain does not depend on infrastructure.
+- Deliberately skipped (say so in the presentation): MediatR, AutoMapper, generic repositories, value objects for every field.
+
+## 5. Domain model (draft)
+
+| Entity | Key fields |
+|---|---|
+| **Company** | Name, Balance |
+| **User** | Name, Initials (derived), Role (Admin / Dispatcher), CompanyId |
+| **Hub** | Name (Markham, Toronto), Province |
+| **Carrier** | Name, Phone (Schneider, TForce, Self pickup, own driver) |
+| **Order** | Number (`FR001676`), Type (CrossDock / Consolidation), SubType (Storage / Pickup), Status, IsDraft, OriginHub, DestinationHub (e.g. Markham → Toronto), ScheduledAt, Destination, CarrierId, CreatedById, TrailerType, Dock, AssignedTo, DeclaredQty, ActualQty, Customer |
+| **OrderReference** | OrderId, Suffix (`-1`), RefN, Pallets, HasAlert |
+| **CargoLine** | OrderId, UnitType (Standard 48×40 / XL), Qty → "15 Std + 3 XL" |
+| **Service** (M:N) | Transload, Restock & Rework |
+| **Operation** | Type (Unloading / Disposal / Restack / Loading), Trailer, Qty, Unit, AppliedAt, IsBillable, PhotoCount, CommentCount |
+| **SupplyItem** + **OrderSupply** | SKU, Category, Price; OrderSupply keeps Qty + **UnitPrice snapshot** |
+| **OrderAlert** | Type (MissingPhoto, QtyDelta), ResolvedAt |
+| **Invoice** | Number (`#001812`), Amount, PaidAt → spend chart |
+
+Key decisions (presentation material, candidates for ADRs):
+- **Ref N is always a separate table.** Cross-Dock has one row, Consolidation many → one model, no special cases on the card.
+- **Delta (actual ≠ expected) and "Need Attention" are computed, not stored** → no drift.
+- **Supply price is snapshotted** on the order line → catalog changes don't rewrite history.
+- **One status enum** (Draft → Ready → InProgress → Completed); Alert is a flag, not a status.
+
+## 6. API
+
+```
+GET  /api/v1/dashboard                    KPIs + recent active orders + weekly activity (period param)
+GET  /api/v1/orders?type=&hub=&status=&from=&to=&q=&page=&pageSize=
+GET  /api/v1/orders/counts                tab counters, one GROUP BY
+GET  /api/v1/orders/{number}              detail: refs, cargo, services, operations, supplies
+POST /api/v1/orders/{number}/operations   the one write flow (see below)
+```
+
+- Filtering, search and pagination in SQL. Search: `ILIKE` on number, Ref N, customer, backed by `pg_trgm` GIN indexes. Pagination: offset/limit (mention keyset as the scale-up path).
+- Dashboard KPIs and charts: Dapper + SQL (`date_trunc`, `FILTER (WHERE ...)`, CTEs).
+- **Write flow** (not required by the task, added to show transactions/isolation): add an operation → in one transaction recalculate actual qty and open/resolve the qty-delta alert; `xmin` optimistic concurrency, 409 ProblemDetails on conflict.
+- Validation (FluentValidation): pageSize bounds, date range, enum values, operation payload.
+
+## 7. Frontend
+
+Same HTML, kept 1:1:
+- Cut the mockup into three pages in `src/Freitty.Api/wwwroot`: `index.html` (Dashboard), `orders.html` (Order List), `order.html?n=FR001383` (Detail). Drop the fake browser frame; keep `.fc-shell`. Shared styles → `app.css`, class names untouched.
+- Hardcoded cards → `<template>` elements with the same markup; small vanilla JS (`fetch` + clone template + fill).
+- Tabs, filters, search, Prev/Next change query params and refetch. Card click → detail page.
+- Served by the same ASP.NET app (static files): one origin, no CORS, one deployable.
+- No React/Blazor: the task says the markup is done; the evaluation is the backend.
+
+## 8. Repo layout
+
+```
+assignment/   inputs, never modified
+docs/         plan.md, adr/, er-diagram.md (mermaid), explain/ (query plans), presentation (Marp/Slidev)
+src/          solution
+tests/
+.github/workflows/
+CLAUDE.md, .claude/ (hooks, skills)
+Dockerfile, docker-compose.yml, README.md
+```
+
+## 9. Presentation (10–15 min)
+
+1. Live demo of the deployed app: dashboard, filters/search/pagination, detail, the write flow.
+2. Domain model + ER diagram; key decisions (section 5).
+3. Architecture: layers, pipeline, why FastEndpoints, "could be Minimal API".
+4. Database: indexes + `EXPLAIN ANALYZE` before/after, transaction + concurrency.
+5. CI/CD + tests.
+6. AI workflow (CLAUDE.md, hooks, skills) — "I design and decide, the agent speeds up the routine".
+7. Walk through 3–4 prepared files in the repo.
+
+Mention that the mockup data was inconsistent and how it was normalized ([mockup-analysis.md](../assignment/mockup-analysis.md)).
+
+## 10. Order of work
+
+1. Solution skeleton, Docker Compose Postgres, CI build
+2. Domain + EF configurations + migrations
+3. Seed (normalized mockup data)
+4. Order List query (filters, search, pagination, counts) + indexes + integration tests
+5. Order Detail query
+6. Dashboard (Dapper)
+7. Frontend wiring (3 pages)
+8. Write flow (transaction + concurrency)
+9. Deploy + CD
+10. Docs: README, ADRs, ER, EXPLAIN, presentation
+
+If time is short, cut in this order: Dapper (do dashboard in EF), write flow. Do **not** cut CI/CD, query plans or tests — the role emphasizes them.
