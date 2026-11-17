@@ -57,6 +57,9 @@ src/Freitty.Infrastructure/Persistence/Seed/
 ├── DatabaseSeeder.cs   the emptiness check, the build, the save, the log line
 ├── SeedCalendar.cs     the anchor day, and an instant from a day offset and a local time
 ├── ReferenceData.cs    company, users, hubs, carriers, services, supply items
+├── OrderScript.cs      builds one order; holds the rules every seeded order follows
+├── DueInvoice.cs       when an order's invoice is issued and paid, for Invoices to number
+├── SeedResults.cs      turns a failed Result into an exception
 ├── ScriptedOrders.cs   the ten orders of the table below
 ├── OrderHistory.cs     the sixty completed orders
 └── Invoices.cs         the 62 invoices, numbered across both groups of orders
@@ -76,7 +79,7 @@ src/Freitty.Infrastructure/Persistence/Seed/
   in which daylight saving skips or repeats an hour.
 - A domain call that returns a failed `Result` becomes an `InvalidOperationException` carrying the
   message of the `DomainError`.
-- Log, at `Information`: `Seeded sample data: {OrderCount} orders, anchor day {AnchorDay}` or
+- Log, at `Information`: `Seeded sample data: {OrderCount} orders, anchor day {AnchorDay:yyyy-MM-dd}` or
   `Sample data skipped: the database is not empty`. Nothing is logged when seeding is off.
 
 | Where | Added |

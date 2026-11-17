@@ -1,4 +1,5 @@
 using Freitty.Infrastructure.Persistence;
+using Freitty.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options => options
             .UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable(MigrationsHistoryTable))
             .UseSnakeCaseNamingConvention());
+        services.AddScoped<DatabaseSeeder>();
         return services;
     }
 

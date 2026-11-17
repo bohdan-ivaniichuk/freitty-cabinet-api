@@ -5,9 +5,12 @@ namespace Freitty.Api.IntegrationTests.Persistence;
 
 // There is no endpoint yet, so these tests take AppDbContext from the services of the started API instead of
 // calling HTTP as ADR 0002 describes. Every call gets a new context, so a read sees only what was saved.
-internal sealed class TestDatabase(string connectionString) : IAsyncDisposable
+internal sealed class TestDatabase(ApiFactory factory) : IAsyncDisposable
 {
-    private readonly ApiFactory factory = new(connectionString);
+    public TestDatabase(string connectionString)
+        : this(new ApiFactory(connectionString))
+    {
+    }
 
     public async Task InContextAsync(Func<AppDbContext, Task> action)
     {

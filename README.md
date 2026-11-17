@@ -41,6 +41,39 @@ dotnet run --project src/Freitty.Api
 
 The API listens on http://localhost:5080 (for example, http://localhost:5080/health/ready).
 
+### Sample data
+
+When `Seed:Enabled` is `true` and the database is empty — it has no company — the API fills it with
+sample data at startup, right after the migrations:
+
+- the company R-way Transport with four users, the Markham and Toronto hubs, three carriers, two
+  services and sixteen supply items;
+- ten scripted orders in every status, two of them with open alerts, that the screens and the demo
+  rely on;
+- sixty completed orders over the last three months, for the dashboard figures and the chart;
+- an invoice for every completed order, one of them unpaid.
+
+The setting is on in `appsettings.Development.json` and in `docker-compose.yml`, and off everywhere
+else. Every order is built through the domain model, so the data obeys the same rules as an order
+made through the API.
+
+Dates are relative to the day before the database was seeded, so the data ages: a database seeded a
+week ago shows a week-old picture. The API never deletes or refreshes sample data; a database that
+already has a company is left as it is. To start over, empty the database:
+
+```bash
+docker compose down -v
+docker compose up -d --build --wait
+```
+
+or, running the API from source:
+
+```bash
+docker compose down -v
+docker compose up -d --wait postgres
+dotnet run --project src/Freitty.Api
+```
+
 ### Database migrations
 
 Migrations live in `src/Freitty.Infrastructure/Persistence/Migrations` and are applied by the API at startup.
