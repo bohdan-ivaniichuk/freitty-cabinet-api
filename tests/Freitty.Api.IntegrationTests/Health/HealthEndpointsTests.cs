@@ -7,38 +7,49 @@ public sealed class HealthEndpointsTests(PostgresFixture postgres)
     private const string LivenessUrl = "/health/live";
     private const string ReadinessUrl = "/health/ready";
 
-    // Nothing listens on port 1; the short timeout keeps the failing check fast.
-    private const string UnreachableConnectionString =
-        "Host=localhost;Port=1;Database=freitty;Username=freitty;Timeout=1";
-
     [Fact]
     public async Task ReadinessIsHealthyWhenPostgresIsReachable()
     {
-        HttpStatusCode statusCode = await GetStatusCodeAsync(postgres.ConnectionString, ReadinessUrl);
+        await using var factory = new ApiFactory(postgres.ConnectionString);
+        using HttpClient client = factory.CreateClient();
+
+        HttpStatusCode statusCode = await GetStatusCodeAsync(client, ReadinessUrl);
 
         Assert.Equal(HttpStatusCode.OK, statusCode);
     }
 
     [Fact]
-    public async Task ReadinessIsUnavailableWhenPostgresIsUnreachable()
+    public async Task ReadinessIsUnavailableAfterDatabaseGoesAway()
     {
-        HttpStatusCode statusCode = await GetStatusCodeAsync(UnreachableConnectionString, ReadinessUrl);
+        HttpStatusCode statusCode = await GetStatusCodeAfterDatabaseGoesAwayAsync(ReadinessUrl);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, statusCode);
     }
 
     [Fact]
-    public async Task LivenessIsHealthyWhenPostgresIsUnreachable()
+    public async Task LivenessIsHealthyAfterDatabaseGoesAway()
     {
-        HttpStatusCode statusCode = await GetStatusCodeAsync(UnreachableConnectionString, LivenessUrl);
+        HttpStatusCode statusCode = await GetStatusCodeAfterDatabaseGoesAwayAsync(LivenessUrl);
 
         Assert.Equal(HttpStatusCode.OK, statusCode);
     }
 
-    private static async Task<HttpStatusCode> GetStatusCodeAsync(string connectionString, string url)
+    // The API migrates its database at startup and does not start without one, so the outage is staged after
+    // startup on a database created for this test.
+    private async Task<HttpStatusCode> GetStatusCodeAfterDatabaseGoesAwayAsync(string url)
     {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string connectionString = await postgres.CreateDatabaseAsync(cancellationToken);
         await using var factory = new ApiFactory(connectionString);
         using HttpClient client = factory.CreateClient();
+
+        await postgres.DropDatabaseAsync(connectionString, cancellationToken);
+
+        return await GetStatusCodeAsync(client, url);
+    }
+
+    private static async Task<HttpStatusCode> GetStatusCodeAsync(HttpClient client, string url)
+    {
         using HttpResponseMessage response = await client.GetAsync(url, TestContext.Current.CancellationToken);
         return response.StatusCode;
     }

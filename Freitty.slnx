@@ -6,6 +6,7 @@
     <Project Path="src/Freitty.Api/Freitty.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Freitty.Domain.Tests/Freitty.Domain.Tests.csproj" />
     <Project Path="tests/Freitty.Api.IntegrationTests/Freitty.Api.IntegrationTests.csproj" />
   </Folder>
 </Solution>

@@ -1,6 +1,7 @@
 using Freitty.Api.Health;
 using Freitty.Api.Logging;
 using Freitty.Infrastructure;
+using Freitty.Infrastructure.Persistence;
 using Serilog;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -13,7 +14,9 @@ builder.Services.AddHealthEndpoints();
 
 WebApplication app = builder.Build();
 
+await app.Services.MigrateDatabaseAsync(app.Lifetime.ApplicationStopping);
+
 app.UseRequestLogging();
 app.MapHealthEndpoints();
 
-app.Run();
+await app.RunAsync();

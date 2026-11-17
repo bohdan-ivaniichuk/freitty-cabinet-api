@@ -25,6 +25,9 @@ This starts PostgreSQL and the API. When the command returns, both are healthy:
 | http://localhost:8080/health/live | Liveness — `200` while the process serves requests |
 | http://localhost:8080/health/ready | Readiness — `200` when the API reaches PostgreSQL, `503` otherwise |
 
+The API applies pending database migrations at startup, before it listens. If it cannot — the database is
+unreachable or a migration fails — the process exits instead of serving requests.
+
 Stop with `docker compose down`; add `-v` to delete the database as well.
 
 ### The API from source
@@ -37,6 +40,18 @@ dotnet run --project src/Freitty.Api
 ```
 
 The API listens on http://localhost:5080 (for example, http://localhost:5080/health/ready).
+
+### Database migrations
+
+Migrations live in `src/Freitty.Infrastructure/Persistence/Migrations` and are applied by the API at startup.
+To add one, restore the local tools once, then run:
+
+```bash
+dotnet tool restore
+dotnet ef migrations add <Name> --project src/Freitty.Infrastructure --startup-project src/Freitty.Api --output-dir Persistence/Migrations
+```
+
+A migration that has reached `main` is never edited; a change is a new migration.
 
 ### Tests
 

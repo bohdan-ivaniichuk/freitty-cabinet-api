@@ -8,11 +8,14 @@ namespace Freitty.Infrastructure;
 public static class DependencyInjection
 {
     private const string ConnectionStringName = "Postgres";
+    private const string MigrationsHistoryTable = "__ef_migrations_history";
 
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         string connectionString = ReadConnectionString(configuration);
-        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddDbContext<AppDbContext>(options => options
+            .UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable(MigrationsHistoryTable))
+            .UseSnakeCaseNamingConvention());
         return services;
     }
 
