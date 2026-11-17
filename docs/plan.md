@@ -15,7 +15,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 | PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, composite indexes for list filters, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency (`xmin`) |
 | EF Core: change tracking, N+1, eager loading, query optimization | `AsNoTracking` + projections in read handlers, `AsSplitQuery` on the detail query, no lazy loading |
 | API: contracts, versioning, error handling | `/api/v1/...`, `ProblemDetails` everywhere, OpenAPI + Scalar |
-| Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for local Postgres, GitHub Actions: build → test → image → deploy |
+| Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for the whole local stack (API + Postgres), GitHub Actions: build → test → image → deploy |
 | Tests: unit for domain, integration for critical paths | xUnit; domain unit tests; integration tests on filters/search/pagination with Testcontainers (real Postgres) |
 | AI tools as part of the workflow | `CLAUDE.md`, hooks/skills in repo; one presentation slide on the workflow |
 | Bonus: Dapper, OpenAPI/Swagger, xUnit, logistics domain | Dapper for dashboard analytics SQL; Scalar; logistics-aware domain model |
@@ -128,10 +128,10 @@ Mention that the mockup data was inconsistent and how it was normalized ([mockup
 
 ## 10. Order of work
 
-1. Solution skeleton, Docker Compose Postgres, CI build
-2. Domain + EF configurations + migrations
+1. Solution skeleton, health checks, Dockerfile, Docker Compose (API + Postgres), CI build + test
+2. Domain + EF configurations + migrations + domain unit tests
 3. Seed (normalized mockup data)
-4. Order List query (filters, search, pagination, counts) + indexes + integration tests
+4. Order List query (filters, search, pagination, counts) + indexes + integration tests; the first endpoint, so FastEndpoints, the pipeline, `ProblemDetails` and OpenAPI are wired here
 5. Order Detail query
 6. Dashboard (Dapper)
 7. Frontend wiring (3 pages)
