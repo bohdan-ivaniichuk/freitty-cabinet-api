@@ -272,7 +272,6 @@ function prepareAddOperation(button, status, position) {
   }
 
   button.disabled = false;
-  button.removeAttribute('title');
   button.addEventListener('click', () => openOperationDialog(position));
 }
 

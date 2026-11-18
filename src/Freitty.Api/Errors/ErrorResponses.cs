@@ -1,4 +1,5 @@
 using Freitty.Api.Health;
+using Freitty.Api.Pages;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace Freitty.Api.Errors;
@@ -20,11 +21,25 @@ internal static class ErrorResponses
         return services;
     }
 
-    // Outermost, so that it turns every exception into a response.
+    // Outermost, so that it turns every exception into a response. A browser asking for a page that is not there gets
+    // the page that says so; every other status without a body gets its ProblemDetails, as UseStatusCodePages writes
+    // it by default.
     public static WebApplication UseErrorResponses(this WebApplication app)
     {
         app.UseExceptionHandler();
-        app.UseStatusCodePages();
+        app.UseStatusCodePages(context => NotFoundPage.IsFor(context.HttpContext)
+            ? NotFoundPage.WriteAsync(context.HttpContext)
+            : WriteProblemAsync(context.HttpContext));
         return app;
+    }
+
+    private static async Task WriteProblemAsync(HttpContext context)
+    {
+        IProblemDetailsService problemDetails = context.RequestServices.GetRequiredService<IProblemDetailsService>();
+        await problemDetails.TryWriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context,
+            ProblemDetails = { Status = context.Response.StatusCode },
+        });
     }
 }

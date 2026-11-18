@@ -32,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardReader, DashboardReader>();
         services.AddScoped<ICurrentUser, FirstAdminCurrentUser>();
         services.AddScoped<DatabaseSeeder>();
+        services.AddSingleton<SampleData>();
         return services;
     }
 

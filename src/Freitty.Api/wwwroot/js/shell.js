@@ -1,13 +1,19 @@
 // The frame every page shares: the sidebar and the top bar, filled from GET /api/v1/me, the search
-// box, the loading, empty and error states the blocks of a page show, the cloning of a template
-// and the lookup of its data-field elements, and the "by" chip of a card and of the detail page.
+// box, the message a control outside the assignment answers with, the loading, empty and error
+// states the blocks of a page show, the cloning of a template and the lookup of its data-field
+// elements, and the "by" chip of a card and of the detail page.
 
 import { ApiError, getJson } from './api.js';
-import { DASH, avatarClass, formatMoney, roleTag } from './format.js';
+import { DASH, OUT_OF_SCOPE, avatarClass, formatMoney, roleTag } from './format.js';
 
 const SEARCH_MIN_LENGTH = 3;
 const SEARCH_MAX_LENGTH = 50;
 const SEARCH_TOO_SHORT = `Type at least ${SEARCH_MIN_LENGTH} characters`;
+// The controls the assignment does not cover carry this marker; a control disabled for a reason of its
+// own — Prev / Next at the ends, a filter that does not apply, a request in flight — does not.
+const OUT_OF_SCOPE_CONTROL = '[data-out-of-scope]';
+const TOAST_DURATION = 3000;
+let toastTimer = 0;
 const PAGE_FAILURE = {
   title: 'Something went wrong',
   detail: 'This part of the page could not be shown. Reload the page; if it happens again, '
@@ -61,6 +67,7 @@ export function initShell({
       onRestore();
     }
   });
+  answerOutOfScope();
 
   const input = document.getElementById('search');
   showSearchQuery(query);
@@ -79,6 +86,33 @@ export function initShell({
 
     onSearch(searchText(typed));
   });
+}
+
+// A click on a control outside the assignment says so, instead of doing nothing. A <button> turns
+// Enter and Space into a click itself; any other control focused with the keyboard is answered here.
+function answerOutOfScope() {
+  document.addEventListener('click', event => {
+    if (event.target.closest(OUT_OF_SCOPE_CONTROL)) {
+      event.preventDefault();
+      showToast(OUT_OF_SCOPE);
+    }
+  });
+  document.addEventListener('keydown', event => {
+    const isActivation = event.key === 'Enter' || event.key === ' ';
+    if (isActivation && event.target.matches(`${OUT_OF_SCOPE_CONTROL}:not(button)`)) {
+      event.preventDefault();
+      showToast(OUT_OF_SCOPE);
+    }
+  });
+}
+
+// One message at a time: a new one replaces the one shown and starts its time again.
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('is-shown');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('is-shown'), TOAST_DURATION);
 }
 
 // Fills the shell and returns the response, or null after showing the failure in the top bar.

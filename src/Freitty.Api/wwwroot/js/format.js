@@ -14,6 +14,7 @@ export const NO_SUPPLIES = 'No supplies';
 export const CHART_NO_DATA = 'No data';
 export const HUB_FILTER_UNAVAILABLE = 'Hub: unavailable';
 export const ORDER_NOT_ACTIVE = 'The order is not active';
+export const OUT_OF_SCOPE = 'Not part of this assignment';
 
 const MINUS = '−';
 const DATE_LOCALE = 'en-GB';

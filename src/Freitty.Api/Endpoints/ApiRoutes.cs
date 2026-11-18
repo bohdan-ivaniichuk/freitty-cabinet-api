@@ -9,6 +9,7 @@ internal static class ApiRoutes
 
         public const string List = "orders";
         public const string Counts = "orders/counts";
+        public const string Export = "orders/export";
         public const string Detail = $"orders/{{{NumberParameter}}}";
         public const string Operations = $"orders/{{{NumberParameter}}}/operations";
     }

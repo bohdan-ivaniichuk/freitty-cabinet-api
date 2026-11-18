@@ -9,7 +9,10 @@ internal static class Invoices
 {
     // The model has no rates: the price of handling a unit is a figure of the sample data only.
     private const decimal BillableUnitRate = 14.00m;
-    private const int FirstNumber = 1751;
+
+    // Chosen so that the scripted orders' invoices carry the numbers the demo names: 001809 on FR001668 and 001812
+    // on FR001672.
+    private const int FirstNumber = 1755;
     private const string NumberFormat = "{0:D6}";
 
     public static IReadOnlyList<Invoice> Issue(IEnumerable<OrderScript> scripts)

@@ -73,6 +73,24 @@ public sealed class SeedDataSetTests(SeededDatabase seeded)
         Assert.Equal([24, 20], counts);
     }
 
+    // The anchor day is 17 April, the day before the clock's 18 April in Toronto.
+    [Theory]
+    [InlineData(16)]
+    [InlineData(17)]
+    public async Task AnInvoicedOrderIsCompletedOnTheLastDaysBeforeTheSeedingDay(int day)
+    {
+        DateTimeOffset dayStart = Toronto.At(2026, 4, day, 0);
+        DateTimeOffset nextDayStart = Toronto.At(2026, 4, day + 1, 0);
+
+        bool hasInvoicedCompletion = await seeded.InContextAsync(db => db.Orders.AnyAsync(
+            order => order.CompletedAt >= dayStart
+                && order.CompletedAt < nextDayStart
+                && db.Invoices.Any(invoice => invoice.OrderId == order.Id),
+            CancellationToken));
+
+        Assert.True(hasInvoicedCompletion);
+    }
+
     [Fact]
     public async Task OnlyInvoiceOfFR001668IsUnpaid()
     {

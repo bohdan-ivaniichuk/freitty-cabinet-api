@@ -10,6 +10,10 @@ internal static class ApiDocumentation
 {
     private const string Title = "Freitty Cabinet API";
 
+    // Where MapOpenApi and MapScalarApiReference serve by default.
+    private static readonly PathString DocumentRoot = "/openapi";
+    private static readonly PathString ReferenceRoot = "/scalar";
+
     // The document is named for the one version the endpoints are served under.
     private static readonly string DocumentName = $"{ApiEndpoints.VersionPrefix}{ApiEndpoints.CurrentVersion}";
 
@@ -35,5 +39,10 @@ internal static class ApiDocumentation
         app.MapOpenApi();
         app.MapScalarApiReference(options => options.WithTitle(Title));
         return app;
+    }
+
+    public static bool IsDocumentationRequest(HttpRequest request)
+    {
+        return request.Path.StartsWithSegments(DocumentRoot) || request.Path.StartsWithSegments(ReferenceRoot);
     }
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Freitty — Order</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css">
 <script type="module" src="js/order.js"></script>
 </head>
@@ -14,21 +14,22 @@
     <a class="fc-logo" href="index.html">FREITT<span>Y</span></a>
     <ul class="fc-nav">
       <li class="active"><a href="orders.html"><span><span aria-hidden="true">📦</span> Orders</span> <span class="badge" id="nav-attention" hidden></span></a></li>
-      <li aria-disabled="true" title="Not part of this assignment">⚙️ Settings</li>
+      <li><span role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">⚙️ Settings</span></li>
     </ul>
     <div style="padding: 20px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,.1)">
-      <button class="btn btn-primary" style="width:100%" disabled title="Not part of this assignment">+ New Order</button>
+      <button type="button" class="btn btn-primary" style="width:100%" aria-disabled="true" data-out-of-scope title="Not part of this assignment">+ New Order</button>
     </div>
   </aside>
   <main class="fc-main">
     <div class="fc-topbar">
       <div class="fc-search"><span aria-hidden="true">🔍</span> <input id="search" type="search" placeholder="Search orders…" maxlength="50" autocomplete="off" aria-label="Search orders"></div>
       <div class="spacer"></div>
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" aria-disabled="true" title="Not part of this assignment">Top up →</span></div>
-      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Notifications">🔔</div>
-      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Help">❓</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">Top up →</span></div>
+      <div class="fc-topbar-btn" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment" aria-label="Notifications">🔔</div>
+      <a class="fc-topbar-btn" href="/scalar/" target="_blank" rel="noopener" title="API reference" aria-label="API reference">❓</a>
       <div class="fc-user"><div class="avatar" id="user-initials"></div><div class="name" id="user-name"></div></div>
     </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <!-- /shell -->
     <div class="fc-content">
       <div class="fc-crumbs" id="crumbs"><a href="orders.html">Orders</a> <span>›</span> </div>
@@ -92,7 +93,7 @@
   <div style="display:flex;align-items:center;gap:12px;padding:8px 0 14px;border-bottom:1px solid #E5E7EB;margin-bottom:14px">
     <div style="width:40px;height:40px;background:#ED1C2E;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:22px">F</div>
     <h2 style="font-size:18px;font-weight:700;color:#1F2A3A" data-field="management"></h2>
-    <div style="margin-left:auto;width:36px;height:36px;background:#F3F4F6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6B7280" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Menu">☰</div>
+    <div style="margin-left:auto;width:36px;height:36px;background:#F3F4F6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6B7280" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment" aria-label="Menu">☰</div>
   </div>
 
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
@@ -112,16 +113,16 @@
   </div>
 
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">💬 <span style="color:#9CA3AF" data-field="comments"></span></button>
-    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">📷 <span style="color:#9CA3AF" data-field="photos"></span></button>
-    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">$</button>
-    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">🖨</button>
-    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">📦</button>
-    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">🕘</button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">💬 <span style="color:#9CA3AF" data-field="comments"></span></button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">📷 <span style="color:#9CA3AF" data-field="photos"></span></button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">$</button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">🖨</button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">📦</button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">🕘</button>
     <div style="margin-left:auto;display:flex;gap:8px">
-      <button class="btn btn-secondary" style="font-size:12px;padding:7px 12px" disabled title="Not part of this assignment">📷 Share QR</button>
-      <button class="btn btn-primary" style="font-size:12px;padding:7px 12px" disabled title="Not part of this assignment">📥 BOL PDF</button>
-      <button class="btn btn-primary" style="padding:7px 14px;font-size:12px" disabled title="Not part of this assignment">✏️ Edit</button>
+      <button type="button" class="btn btn-secondary" style="font-size:12px;padding:7px 12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">📷 Share QR</button>
+      <button type="button" class="btn btn-primary" style="font-size:12px;padding:7px 12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">📥 BOL PDF</button>
+      <button type="button" class="btn btn-primary" style="padding:7px 14px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">✏️ Edit</button>
     </div>
   </div>
 
@@ -148,7 +149,7 @@
       <div style="color:#6B7280" data-crossdock>Dock</div><div data-crossdock data-fact="dock"><strong style="color:#ED1C2E"></strong></div>
       <div style="color:#6B7280" data-crossdock>Assigned to</div><div data-crossdock data-fact="floor-lead"><span style="color:#ED1C2E;font-weight:600"></span></div>
       <div style="color:#6B7280">Status flow</div><div><span style="font-size:11px;color:#374151"><span data-status="Draft"></span> → <span data-status="Ready"></span> → <span data-status="InProgress"></span> → <span data-status="Completed"></span></span></div>
-      <div style="color:#6B7280">Deltas detected</div><div><span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px" data-field="deltas"></span> <a style="color:#2563EB;font-size:11px;font-weight:700;text-decoration:none;margin-left:6px" aria-disabled="true" title="Not part of this assignment">View all →</a></div>
+      <div style="color:#6B7280">Deltas detected</div><div><span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px" data-field="deltas"></span> <a style="color:#2563EB;font-size:11px;font-weight:700;text-decoration:none;margin-left:6px" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">View all →</a></div>
     </div>
   </div>
 
@@ -160,7 +161,7 @@
         <h2 style="color:#1F2A3A">Supplies</h2>
         <span style="font-size:11px;color:#6B7280">mandatory stock items purchased as Platform Sale</span>
       </div>
-      <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled title="Not part of this assignment">+ Supply</button>
+      <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">+ Supply</button>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead style="background:#F9FAFB;font-size:11px;text-transform:uppercase;color:#6B7280">
@@ -246,7 +247,7 @@
         <div style="display:flex;align-items:center;gap:10px" data-field="operations-title">
           <h2 style="font-weight:700;color:#1F2A3A">Operations</h2>
         </div>
-        <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled title="Not part of this assignment" data-field="add-operation">+ Operation</button>
+        <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled data-field="add-operation">+ Operation</button>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead style="background:#F9FAFB;font-size:11px;text-transform:uppercase;color:#6B7280">

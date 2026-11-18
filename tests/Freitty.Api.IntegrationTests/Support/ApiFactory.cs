@@ -18,9 +18,12 @@ internal sealed class ApiFactory(
     TimeProvider? clock = null,
     ICurrentUser? currentUser = null,
     string? reportingTimeZone = null,
-    IInterceptor? saveInterceptor = null)
+    IInterceptor? saveInterceptor = null,
+    bool seedRefreshOn = false)
     : WebApplicationFactory<Program>
 {
+    public const string SeedRefreshKey = "Seed:Refresh";
+
     private const string ConnectionStringKey = "ConnectionStrings:Postgres";
     private const string SeedEnabledKey = "Seed:Enabled";
     private const string ReportingTimeZoneKey = "Cabinet:TimeZone";
@@ -40,6 +43,11 @@ internal sealed class ApiFactory(
         if (seedEnabled)
         {
             builder.UseSetting(SeedEnabledKey, bool.TrueString);
+        }
+
+        if (seedRefreshOn)
+        {
+            builder.UseSetting(SeedRefreshKey, bool.TrueString);
         }
 
         if (reportingTimeZone is not null)

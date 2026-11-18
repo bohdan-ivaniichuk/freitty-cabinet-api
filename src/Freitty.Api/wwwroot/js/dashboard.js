@@ -3,7 +3,7 @@
 // redraws the activity block in place.
 
 import { getJson } from './api.js';
-import { openCardsOnClick, renderCard } from './card.js';
+import { openOrdersOnClick, renderCard } from './card.js';
 import { PERIOD } from './codes.js';
 import * as format from './format.js';
 import { errorBox, initShell, isPlainClick, loadMe, markCurrent, stateBox } from './shell.js';
@@ -37,7 +37,7 @@ initShell({
     loadDashboard();
   },
 });
-openCardsOnClick(document.getElementById('active-orders'));
+openOrdersOnClick(document.getElementById('active-orders'));
 bindPeriods();
 markActivePeriod();
 loadMe().then(renderWelcome);

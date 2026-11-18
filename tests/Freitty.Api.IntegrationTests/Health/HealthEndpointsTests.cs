@@ -4,7 +4,6 @@ namespace Freitty.Api.IntegrationTests.Health;
 
 public sealed class HealthEndpointsTests(PostgresFixture postgres)
 {
-    private const string LivenessUrl = "/health/live";
     private const string ReadinessUrl = "/health/ready";
 
     [Fact]
@@ -29,7 +28,7 @@ public sealed class HealthEndpointsTests(PostgresFixture postgres)
     [Fact]
     public async Task LivenessIsHealthyAfterDatabaseGoesAway()
     {
-        HttpStatusCode statusCode = await GetStatusCodeAfterDatabaseGoesAwayAsync(LivenessUrl);
+        HttpStatusCode statusCode = await GetStatusCodeAfterDatabaseGoesAwayAsync(ApiUrls.Liveness);
 
         Assert.Equal(HttpStatusCode.OK, statusCode);
     }

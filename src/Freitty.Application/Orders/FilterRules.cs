@@ -3,7 +3,7 @@ using Freitty.Application.Common;
 
 namespace Freitty.Application.Orders;
 
-// The rules of the filters the list and the counters share.
+// The rules of the filters the list, the counters and the export share.
 public static class FilterRules
 {
     public const int MinSearchLength = 3;

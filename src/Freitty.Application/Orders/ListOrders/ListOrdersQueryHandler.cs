@@ -17,23 +17,15 @@ public sealed class ListOrdersQueryHandler(
     public async Task<OrderPageDto> ExecuteAsync(ListOrdersQuery query, CancellationToken ct)
     {
         CurrentUser user = await currentUser.GetAsync(ct);
-        IQueryable<Order> orders = filter.Apply(
+        IQueryable<Order> orders = filter.ApplyWithTab(
             db.Orders.AsNoTracking(),
             user.CompanyId,
             query.HubId,
             query.DatePreset,
             query.Status,
-            query.Search);
-
-        if (query.Type is { } type)
-        {
-            orders = orders.Where(order => order.Type == type);
-        }
-
-        if (query.HasOpenAlerts)
-        {
-            orders = OrderFilter.WithOpenAlert(orders);
-        }
+            query.Search,
+            query.Type,
+            query.HasOpenAlerts);
 
         int total = await orders.CountAsync(ct);
         List<Guid> pageIds = await OrderListSort.Apply(orders)

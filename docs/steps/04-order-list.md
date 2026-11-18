@@ -216,6 +216,43 @@ status — eight rows at most — and the handler folds them: a tab adds the row
 the requested status, Drafts adds the rows of status `Draft`. The other counts the orders that pass
 all four filters and have an open Alert.
 
+### `GET /api/v1/orders/export`
+
+The "Export CSV" button of the Order List: the whole filtered list as a file. Takes `type`, `status`,
+`hasOpenAlerts`, `hubId`, `datePreset` and `search` with the meaning and validation of the list —
+the same `OrderFilter`, `FilterRules` and `OrderListSort` — and no `page` or `pageSize`. Every order
+that passes, in the list's order, at most `MaxExportRows` (10 000), a constant of the handler;
+beyond it the file ends silently, which no company's list comes near.
+
+`200`, `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment;
+filename="orders.csv"`. The body is UTF-8 with a byte order mark — without it Excel reads the file
+in the local code page — and follows RFC 4180: CRLF after every line, the last included; a field
+holding a comma, a quote or a line break is quoted, its quotes doubled. A field that starts with
+`=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with an apostrophe, so a spreadsheet does
+not run a city or a name typed by a user as a formula. Numbers and instants are written in the
+invariant culture.
+
+A header row, then one row per order:
+
+| Column | Value |
+|---|---|
+| `Number` | the order number, or the draft number |
+| `Type`, `Status` | the enum names the JSON uses: `CrossDock`, `InProgress` |
+| `Hub` | the name of the hub that handles the order |
+| `Scheduled at (UTC)` | ISO 8601 with `Z`, `2026-04-15T16:00:00Z`; empty when unscheduled |
+| `Destination` | `City, Region`; empty when none |
+| `Carrier` | the words of the cards: the carrier's name, `Driver: <name>` for an own driver, `Self pickup`; empty when no transport is arranged |
+| `Shipments` | the number of shipments |
+| `Declared` | the declared quantity over all shipments and Unit Types |
+| `Actual` | the unloaded quantity over all shipments and Unit Types |
+| `Open alerts` | the open Alerts over all shipments |
+| `Created by` | the name of the user who created the order |
+
+One statement: the filters, the sort and `LIMIT`, with the sums and counts as subqueries of a
+projection straight to `OrderExportRow` — no entity, no card reader. The handler returns the rows;
+the CSV is written in Api by `OrderCsv`, next to the endpoint, because CSV is a presentation of
+them. A route literal wins over a parameter, so `orders/export` is never taken for an order number.
+
 ### `GET /api/v1/hubs`
 
 `[{ "id", "name", "shortName" }]`, ordered by name — the options of the Hub filter.
@@ -264,21 +301,24 @@ src/Freitty.Application/
 ├── Abstractions/     IAppDbContext, ICurrentUser, CurrentUser
 ├── Common/           ReportingCalendar, ReportingTimeZone, DatePreset, InstantRange, UserDto,
 │                     TextRules — the one rule against control characters
-├── Orders/           OrderFilter — the hub, date, status and search filters applied to a query —
-│                     with FilterRules, OrderListSort and IOrderSearch; the read model shared with
+├── Orders/           OrderFilter — Apply, the hub, date, status and search filters applied to a
+│                     query, and ApplyWithTab, the type and alerts tabs on top of them — with FilterRules,
+│                     OrderListSort and IOrderSearch; the read model shared with
 │                     the detail of step 5: UnitTypeSums, ShipmentQuantities, ShipmentProgress,
 │                     OrderProgress, OrderStage
 ├── Orders/Cards/     OrderCardDto and its parts, OrderCardReader
 ├── Orders/ListOrders/    ListOrdersQuery, its handler and validator, the paged result
 ├── Orders/CountOrders/   CountOrdersQuery, its handler and validator, OrderCountsDto
+├── Orders/ExportOrders/  ExportOrdersQuery, its handler and validator, OrderExportRow
 ├── Hubs/ListHubs/        ListHubsQuery, its handler, HubDto
 └── Me/GetMe/             GetMeQuery, its handler, MeDto
 src/Freitty.Api/
 ├── Endpoints/        ApiEndpoints — FastEndpoints and its JSON options; ApiRoutes — the route of
 │                     every endpoint; one folder per endpoint, named for its operation (rule 4):
-│                     Orders/ListOrders, Orders/CountOrders, Hubs/ListHubs, Me/GetMe;
-│                     Orders/OrderFilterDescriptions — the parameters the list and the
-│                     counters share
+│                     Orders/ListOrders, Orders/CountOrders, Orders/ExportOrders (with
+│                     OrderCsv, the writer of the file), Hubs/ListHubs, Me/GetMe;
+│                     Orders/OrderFilterDescriptions — the parameters the list, the
+│                     counters and the export share
 ├── Pipeline/         the two command middleware classes
 ├── Errors/           ProblemDetails for an unknown route and an unhandled exception
 ├── OpenApi/          the OpenAPI document and Scalar
@@ -434,9 +474,11 @@ because "today" moves:
       | FR001668 | `AwaitingPayment` | invoice `001809`, 1540.00; transfer hub Toronto; 2 trailers |
       | DRAFT-003 | `ContinueEditing` | no shipments; `scheduledAt` set |
 
+- [ ] `GET /api/v1/orders/export` downloads `orders.csv` with 71 lines, the header and the 70
+      orders in the list's order; under any filters it holds exactly the orders of the list.
 - [ ] An invalid `pageSize`, enum value or `hubId` is a `400` `ProblemDetails` with field errors; an
       unknown route under `/api` is a `404` `ProblemDetails`.
-- [ ] `/scalar` serves the Scalar page and `/openapi/v1.json` lists the four endpoints of this step
+- [ ] `/scalar` serves the Scalar page and `/openapi/v1.json` lists the five endpoints of this step
       under `/api/v1` with their parameters and schemas; enums are strings.
 
 Elsewhere:
@@ -448,7 +490,7 @@ Elsewhere:
 - [ ] `dotnet ef migrations has-pending-model-changes` reports none; `docs/er-diagram.md` names the
       indexes.
 - [ ] Build with 0 warnings, `dotnet format --verify-no-changes` clean, `dotnet test` green.
-- [ ] *Browser session:* `/scalar` renders the four endpoints of this step and a request sent from
+- [ ] *Browser session:* `/scalar` renders the five endpoints of this step and a request sent from
       it succeeds.
 
 ## Tests
@@ -481,9 +523,17 @@ What is covered:
   finished: `AwaitingCompletion`, not `AwaitingTruck`.
 - The counters equal the list's totals for the same filters; `drafts` ignores `status`.
 - Validation and binding failures as `ProblemDetails` with the name of the field; an unknown
-  route under `/api` is a `404` with a body; the OpenAPI document lists the four endpoints of this
+  route under `/api` is a `404` with a body; the OpenAPI document lists the five endpoints of this
   step.
-- Orders of another company never appear, in the list, in the counters or in a search.
+- Orders of another company never appear, in the list, in the counters, in the export or in a
+  search.
+- The export: the header and a row with every column of a known order; an unscheduled draft's
+  empty fields; the carrier words for an own driver and a self pickup; under each filter and tab,
+  and some combinations with `search`, exactly the orders of the list in its order; more orders
+  than a page holds; a destination with a comma and quotes, and values that look like formulas;
+  an invalid parameter as the `400` naming it; the content type, the disposition and the byte
+  order mark; `orders/export` and `orders/{number}` each reaching their own endpoint; the OpenAPI
+  document describing its `200` as `text/csv`.
 - `/hubs` contains the test's own hubs in name order; `/me` returns the test's user and company.
 - The migration: the three indexes exist and the model has no pending changes.
 - Startup fails, naming `Cabinet__TimeZone`, when the zone is missing or not an IANA id.
@@ -495,6 +545,7 @@ above, not in a project of their own.
 
 - The detail — [step 5](05-order-detail.md). The dashboard — [step 6](06-dashboard.md). The
   pages — [step 7](07-frontend.md).
-- Sorting chosen by the user, the Table and Pipeline views, CSV export.
+- Sorting chosen by the user and the Pipeline view. The Table view of the page and the wiring of
+  its "Export CSV" button to the export endpoint — [step 7](07-frontend.md).
 - Authentication and authorisation.
 - Searching by carrier, destination or creator.

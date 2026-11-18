@@ -19,6 +19,7 @@ public sealed class StaticPagesTests(PostgresFixture postgres) : IAsyncDisposabl
     [InlineData("/orders.html", Html)]
     [InlineData("/order.html", Html)]
     [InlineData("/app.css", "text/css")]
+    [InlineData("/favicon.svg", "image/svg+xml")]
     [InlineData("/js/api.js", JavaScript)]
     [InlineData("/js/format.js", JavaScript)]
     [InlineData("/js/shell.js", JavaScript)]

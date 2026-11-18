@@ -27,6 +27,9 @@ internal sealed class OrderHistory(ReferenceData reference, SeedCalendar calenda
     private const int ScheduledDaysBeforeCompletion = 1;
     private const int PaidDaysAfterCompletion = 2;
 
+    // Nothing seeded may lie after the anchor day, so an invoice is paid on it at the latest.
+    private const int LatestPaymentDay = 0;
+
     private const string OrderNumberFormat = "FR{0:D6}";
     private const string RefNumberFormat = "REF-{0:D4}";
     private const string TruckNumberFormat = "TRK-{0:D4}";
@@ -34,10 +37,13 @@ internal sealed class OrderHistory(ReferenceData reference, SeedCalendar calenda
 
     // Days before the anchor day on which the orders are completed, newest first, so order i takes the entry i
     // places from the end. With the two completed scripted orders it gives 24 completed in the last 30 days and 20
-    // in the 30 before; the empty boundary days keep both counts on the seeding day and the next.
+    // in the 30 before; the empty boundary days keep both counts on the seeding day and the next. The newest days
+    // vary — none, one, two or three a day with the scripted orders — and the anchor day and the day before it have
+    // completions, so the daily chart's last days before today are neither empty nor flat. Days 3 and 4 hold two
+    // orders between them: that keeps the scripted invoices' numbers.
     private static readonly int[] CompletionDaysAgo =
     [
-        3, 4, 6, 7, 8, 8, 10, 11, 12, 13, 14, 15, 17, 18, 20, 21, 22, 22, 24, 25, 26, 27,
+        0, 0, 1, 2, 3, 3, 5, 5, 6, 8, 8, 9, 10, 11, 11, 14, 16, 18, 20, 22, 24, 26,
         32, 34, 35, 36, 36, 38, 40, 41, 43, 44, 46, 48, 49, 50, 50, 52, 53, 55, 56, 57,
         62, 63, 65, 66, 68, 69, 71, 72, 74, 76, 77, 78, 79, 80, 81, 83, 88, 95,
     ];
@@ -60,6 +66,9 @@ internal sealed class OrderHistory(ReferenceData reference, SeedCalendar calenda
     private static readonly TimeOnly CompletedTime = new(14, 0);
     private static readonly TimeOnly InvoicedTime = new(15, 0);
     private static readonly TimeOnly PaidTime = new(12, 0);
+
+    // An invoice paid on the day it is issued is paid later that day than InvoicedTime.
+    private static readonly TimeOnly PaidOnIssueDayTime = new(17, 0);
 
     private static readonly TimeSpan ArrivalAfterSchedule = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan UnloadingAfterArrival = TimeSpan.FromMinutes(30);
@@ -177,10 +186,14 @@ internal sealed class OrderHistory(ReferenceData reference, SeedCalendar calenda
 
         LoadEverything(script, calendar.At(completionDay, LoadedTime));
         script.Complete(calendar.At(completionDay, CompletedTime));
-        script.Invoice(
-            calendar.At(completionDay, InvoicedTime),
-            paidAt: calendar.At(completionDay + PaidDaysAfterCompletion, PaidTime));
+        script.Invoice(calendar.At(completionDay, InvoicedTime), PaidAt(completionDay));
         return script;
+    }
+
+    private DateTimeOffset PaidAt(int completionDay)
+    {
+        int paymentDay = Math.Min(completionDay + PaidDaysAfterCompletion, LatestPaymentDay);
+        return calendar.At(paymentDay, paymentDay == completionDay ? PaidOnIssueDayTime : PaidTime);
     }
 
     private OrderScript Submitted(int index, int completionDay, DateTimeOffset scheduledAt)

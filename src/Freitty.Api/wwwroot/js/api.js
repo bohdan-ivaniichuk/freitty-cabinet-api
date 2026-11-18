@@ -13,8 +13,8 @@ export class ApiError extends Error {
   }
 }
 
-// Parameters that are null or undefined are left out of the query string.
-export function getJson(path, parameters = {}) {
+// The address of an API path with its query. Parameters that are null or undefined are left out.
+export function apiUrl(path, parameters = {}) {
   const url = new URL(path, location.href);
   for (const [name, value] of Object.entries(parameters)) {
     if (value !== null && value !== undefined) {
@@ -22,7 +22,11 @@ export function getJson(path, parameters = {}) {
     }
   }
 
-  return request(url, { headers: { Accept: 'application/json' } });
+  return url;
+}
+
+export function getJson(path, parameters = {}) {
+  return request(apiUrl(path, parameters), { headers: { Accept: 'application/json' } });
 }
 
 export function postJson(path, body) {

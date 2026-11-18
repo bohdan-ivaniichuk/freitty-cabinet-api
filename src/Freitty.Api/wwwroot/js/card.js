@@ -1,5 +1,6 @@
-// The order card of the dashboard and the list: one <template id="order-card"> in both pages,
-// filled from a card of GET /api/v1/orders or of the dashboard.
+// An order of the dashboard and the list, from a card of GET /api/v1/orders or of the dashboard: a
+// card, one <template id="order-card"> in both pages, or a row of the list's table view,
+// <template id="order-row">. Both word the same facts the same way.
 
 import { ORDER_TYPE, STATUS } from './codes.js';
 import * as format from './format.js';
@@ -12,12 +13,13 @@ function orderUrl(number) {
   return `order.html?${new URLSearchParams({ n: number })}`;
 }
 
-// A card cannot be wrapped in a link around its <details>, so one listener opens the order.
-export function openCardsOnClick(container) {
+// A card cannot be wrapped in a link around its <details>, nor a table row in a link at all, so one
+// listener opens the order.
+export function openOrdersOnClick(container) {
   container.addEventListener('click', event => {
-    const card = event.target.closest('.order-card');
-    if (card && !event.target.closest(OWN_CLICK)) {
-      location.assign(card.dataset.href);
+    const order = event.target.closest('.order-card, .order-row');
+    if (order && !event.target.closest(OWN_CLICK)) {
+      location.assign(order.dataset.href);
     }
   });
 }
@@ -28,20 +30,58 @@ export function renderCard(order, { openAlertRefs = false } = {}) {
   const fragment = cloneTemplate('order-card');
   const card = fragment.querySelector('.order-card');
   const field = fieldsOf(card);
+  const { isDraft, hasAlert } = fillOrder(card, field, order);
+
+  card.classList.toggle('has-alert', hasAlert);
+  fillRefs(field, order.shipments, openAlertRefs);
+  fillCreatedBy(field, order.createdBy, 'card');
+  fillTrailers(field, order);
+  field(isDraft ? 'order-icons' : 'draft-icons').remove();
+  return fragment;
+}
+
+// The list's table view: the orders as rows of one table, in the same order.
+export function renderTable(orders) {
+  const table = cloneTemplate('order-table');
+  fieldsOf(table)('rows').append(...orders.map(renderRow));
+  return table;
+}
+
+function renderRow(order) {
+  const fragment = cloneTemplate('order-row');
+  const row = fragment.querySelector('.order-row');
+  const field = fieldsOf(row);
+  fillOrder(row, field, order);
+
+  // The cell may cut a long Ref N; its title keeps it whole.
+  const ref = field('ref');
+  ref.textContent = refSummary(order.shipments);
+  ref.title = ref.textContent;
+  ref.classList.toggle('is-empty', order.shipments.length === 0);
+  return fragment;
+}
+
+// One Ref N as it is, several as their count.
+function refSummary(shipments) {
+  return shipments.length > 1
+    ? format.refCount(shipments.length)
+    : shipments[0]?.refNumber ?? format.DASH;
+}
+
+// What a card and a row show alike: the number as a link, the type line, the badges, Hub, Date,
+// Q-ty, Carrier, Destination and the next step; and the whole element opens the order.
+function fillOrder(element, field, order) {
   const isDraft = order.status === STATUS.Draft;
   const hasAlert = order.openAlertTypes.length > 0;
   const href = orderUrl(order.number);
 
-  card.dataset.href = href;
-  card.classList.toggle('is-draft', isDraft);
-  card.classList.toggle('has-alert', hasAlert);
+  element.dataset.href = href;
+  element.classList.toggle('is-draft', isDraft);
 
   const number = field('number');
   number.href = href;
   number.textContent = order.number;
-  fillRefs(field, order.shipments, openAlertRefs);
   field('type-line').textContent = format.typeLine(order);
-  fillCreatedBy(field, order.createdBy, 'card');
   fillBadges(field, order, isDraft, hasAlert);
 
   field('hub').textContent = format.hubShortLabel(order.hub, order.transferHub);
@@ -49,11 +89,8 @@ export function renderCard(order, { openAlertRefs = false } = {}) {
   fillQuantity(field('quantity'), order);
   field('carrier').textContent = format.transportLabel(order.transport);
   field('destination').textContent = format.destinationLabel(order.destination);
-  fillTrailers(field, order);
-
   fillNext(field('next'), order.nextStep, href);
-  field(isDraft ? 'order-icons' : 'draft-icons').remove();
-  return fragment;
+  return { isDraft, hasAlert };
 }
 
 function fillRefs(field, shipments, openAlertRefs) {

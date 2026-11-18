@@ -37,15 +37,31 @@ public sealed class SeededDashboardTests(SeededDatabase seeded)
             dashboard.Orders.Select(card => card.Number));
     }
 
+    // Saturday's current week holds the anchor day and the day before it; on a Monday it would be empty.
     [Fact]
-    public async Task EveryWeekBeforeTheCurrentOneHasCompletedOrders()
+    public async Task OnASaturdayEveryWeekHasCompletedOrders()
     {
         DashboardDto dashboard = await DashboardAsync("Week");
 
         IReadOnlyList<ActivityBucketDto> buckets = dashboard.Activity.Buckets;
         Assert.Equal(12, buckets.Count);
         Assert.Equal(new DateOnly(2026, 4, 13), buckets[^1].Start);
-        Assert.All(buckets.SkipLast(1), bucket => Assert.True(bucket.CompletedOrders > 0, $"{bucket}"));
+        Assert.All(buckets, bucket => Assert.True(bucket.CompletedOrders > 0, $"{bucket}"));
+    }
+
+    // The right edge of the chart: the seeding day itself is still empty, the two days before it are not.
+    [Fact]
+    public async Task TheAnchorDayAndTheDayBeforeItHaveCompletedOrdersAndSpend()
+    {
+        DashboardDto dashboard = await DashboardAsync("Day");
+
+        IReadOnlyList<ActivityBucketDto> buckets = dashboard.Activity.Buckets;
+        Assert.Equal(
+            [new DateOnly(2026, 4, 16), new DateOnly(2026, 4, 17)],
+            buckets.SkipLast(1).TakeLast(2).Select(bucket => bucket.Start));
+        Assert.All(
+            buckets.SkipLast(1).TakeLast(2),
+            bucket => Assert.True(bucket.CompletedOrders > 0 && bucket.Spend > 0, $"{bucket}"));
     }
 
     [Fact]

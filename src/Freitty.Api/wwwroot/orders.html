@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Freitty — Orders</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css">
 <script type="module" src="js/orders.js"></script>
 </head>
@@ -14,29 +14,30 @@
     <a class="fc-logo" href="index.html">FREITT<span>Y</span></a>
     <ul class="fc-nav">
       <li class="active"><a href="orders.html"><span><span aria-hidden="true">📦</span> Orders</span> <span class="badge" id="nav-attention" hidden></span></a></li>
-      <li aria-disabled="true" title="Not part of this assignment">⚙️ Settings</li>
+      <li><span role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">⚙️ Settings</span></li>
     </ul>
     <div style="padding: 20px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,.1)">
-      <button class="btn btn-primary" style="width:100%" disabled title="Not part of this assignment">+ New Order</button>
+      <button type="button" class="btn btn-primary" style="width:100%" aria-disabled="true" data-out-of-scope title="Not part of this assignment">+ New Order</button>
     </div>
   </aside>
   <main class="fc-main">
     <div class="fc-topbar">
       <div class="fc-search"><span aria-hidden="true">🔍</span> <input id="search" type="search" placeholder="Search orders…" maxlength="50" autocomplete="off" aria-label="Search orders"></div>
       <div class="spacer"></div>
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" aria-disabled="true" title="Not part of this assignment">Top up →</span></div>
-      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Notifications">🔔</div>
-      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Help">❓</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">Top up →</span></div>
+      <div class="fc-topbar-btn" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment" aria-label="Notifications">🔔</div>
+      <a class="fc-topbar-btn" href="/scalar/" target="_blank" rel="noopener" title="API reference" aria-label="API reference">❓</a>
       <div class="fc-user"><div class="avatar" id="user-initials"></div><div class="name" id="user-name"></div></div>
     </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <!-- /shell -->
     <div class="fc-content">
       <div class="fc-crumbs"><a href="index.html">Home</a> <span>›</span> Orders</div>
       <div class="fc-page-title">
         <h1>All Orders</h1>
         <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-secondary" disabled title="Not part of this assignment">📥 Export CSV</button>
-          <button class="btn btn-primary" disabled title="Not part of this assignment">+ New Order</button>
+          <a class="btn btn-secondary" id="export-csv" download>📥 Export CSV</a>
+          <button type="button" class="btn btn-primary" aria-disabled="true" data-out-of-scope title="Not part of this assignment">+ New Order</button>
         </div>
       </div>
 
@@ -54,13 +55,13 @@
         <select id="filter-date" autocomplete="off" aria-label="Date" style="padding:6px 10px;border:1px solid #D0D7DE;border-radius:6px;font-size:12px"><option value="">Date: Any</option><option value="today">Today</option><option value="week">This week</option><option value="last30">Last 30 days</option></select>
         <select id="filter-status" autocomplete="off" aria-label="Status" style="padding:6px 10px;border:1px solid #D0D7DE;border-radius:6px;font-size:12px"><option value="">Status: Any</option><option value="ready">New</option><option value="inprogress">In progress</option><option value="completed">Completed</option></select>
         <div style="margin-left:auto;display:flex;gap:4px;padding:3px;background:#F0F2F5;border-radius:6px">
-          <button style="padding:4px 10px;background:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600" aria-pressed="true">⊞ Cards</button>
-          <button style="padding:4px 10px;background:transparent;border:none;font-size:12px;color:#6B7280" disabled title="Not part of this assignment">☰ Table</button>
-          <button style="padding:4px 10px;background:transparent;border:none;font-size:12px;color:#6B7280;position:relative" disabled title="Not part of this assignment">⎔ Pipeline </button>
+          <a class="view-btn" data-layout="cards">⊞ Cards</a>
+          <a class="view-btn" data-layout="table">☰ Table</a>
+          <button type="button" style="padding:4px 10px;background:transparent;border:none;font-size:12px;color:#6B7280;position:relative" aria-disabled="true" data-out-of-scope title="Not part of this assignment">⎔ Pipeline </button>
         </div>
       </div>
 
-      <div class="cards-grid order-list" id="order-cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      <div class="cards-grid order-list" id="orders" style="grid-template-columns:repeat(3,minmax(0,1fr))">
         <div class="state">Loading…</div>
       </div>
 
@@ -109,5 +110,29 @@
   <div class="ref-item"><span class="sub-id"></span><span class="sub-ref"></span><span class="sub-desc"><em style="color:#DC2626"></em></span></div>
 </template>
 <!-- /card -->
+<template id="order-table">
+  <div class="order-table">
+    <table>
+      <colgroup><col style="width:12%"><col style="width:13%"><col style="width:10%"><col style="width:9%"><col style="width:10%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:13%"></colgroup>
+      <thead>
+        <tr><th>Order #</th><th>Status</th><th>Ref N</th><th>Hub</th><th>Date</th><th>Q-ty</th><th>Carrier</th><th>Destination</th><th>Next</th></tr>
+      </thead>
+      <tbody data-field="rows"></tbody>
+    </table>
+  </div>
+</template>
+<template id="order-row">
+  <tr class="order-row">
+    <td><a class="oc-num" data-field="number"></a><div class="oc-type" data-field="type-line"></div></td>
+    <td><span class="badge" data-field="type-badge"></span> <span class="badge" data-field="status-badge"></span></td>
+    <td class="ref-cell" data-field="ref"></td>
+    <td data-field="hub"></td>
+    <td data-field="date"></td>
+    <td data-field="quantity"></td>
+    <td data-field="carrier"></td>
+    <td data-field="destination"></td>
+    <td data-field="next"></td>
+  </tr>
+</template>
 </body>
 </html>

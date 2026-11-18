@@ -23,6 +23,8 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=freitty;Username=freitty;Password=freitty
       Seed__Enabled: "true"
+      # The demo stays dated from today: rebuilt at every start and whenever the day moves on.
+      Seed__Refresh: "true"
     ports:
       - "8080:8080"
     depends_on:

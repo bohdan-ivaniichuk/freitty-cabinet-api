@@ -4,9 +4,11 @@
 
 An empty database is filled with sample data when the API starts with seeding switched on: the
 reference data, ten scripted orders that the screens and the demo rely on, and sixty completed
-orders of history. Every order is built through the `Order` aggregate of [step 2](02-domain.md), so
-the data cannot contradict a domain rule. There is exactly as much of it as a reviewer needs to
-click through every tab, filter, search, page and chart period and never see an empty result.
+orders of history. With the refresh switched on as well, the data is rebuilt at every start and
+whenever the day moves on, so the deployed demo is always dated from today. Every order is built
+through the `Order` aggregate of [step 2](02-domain.md), so the data cannot contradict a domain
+rule. There is exactly as much of it as a reviewer needs to click through every tab, filter,
+search, page and chart period and never see an empty result.
 
 The mockup is the starting point, not the target: where it contradicts itself
 ([`mockup-analysis.md`](../../assignment/mockup-analysis.md)) or the demo needs something else, the
@@ -22,9 +24,21 @@ data below wins.
   off: the API never writes sample data into a database unless its environment says so. It is on in
   `appsettings.Development.json`, in `docker-compose.yml` and, in step 9, in the deployed
   environment.
-- **No reseed in the application.** Fresh data means an empty database: `docker compose down -v`
-  locally, resetting the schema on the deployed database (step 9 names the command). A path that
-  deletes data does not belong in the API.
+- **The demo refreshes itself when asked** —
+  [ADR 0015](../adr/0015-the-demo-rebuilds-its-sample-data.md). A second switch, `Seed:Refresh`,
+  has an effect only with `Seed:Enabled` on. Then the sample data is rebuilt at startup whatever
+  the database holds, and again while the API runs as soon as the anchor day changes: a hosted
+  service checks every 15 minutes on the injected clock. Without it a demo opened two days after
+  its start shows an empty "Today", a stale dashboard and every operation a visitor recorded. It is
+  on in `docker-compose.yml` and in the deployed environment, off in both `appsettings` files; off,
+  the behaviour is the one above, and fresh data means an empty database (`docker compose down -v`).
+- **A rebuild replaces everything in one transaction.** One `TRUNCATE` empties every table of the
+  EF Core model and the seed runs again before the commit, so a failure leaves the previous data,
+  and a reader never sees an empty database. The migrations history is not in the model and
+  survives. The rebuild runs behind the closed request gate, so nothing of the process reads or
+  writes meanwhile, and it takes no lock of its own beyond the one `TRUNCATE` holds. A failed
+  rebuild at startup stops the process, like a failed seed; one while running is logged once and
+  tried again at the next check.
 - **Dates are relative to the anchor day `D` — the day before the seeding day**, in the time zone
   of the hubs; times of day are fixed. The mockup's "today" (17 Apr 2026) is `D`. If it were the
   seeding day itself, an API started in the morning would hold Operations dated later that day, and
@@ -42,10 +56,10 @@ data below wins.
   supply subtotal plus `14.00` for every unit of a billable Operation; Unloading and Loading are
   billable, Disposal and Restack are not. The model has no rates: the rate is a named constant of
   the seed.
-- **One `SaveChangesAsync`** writes everything — EF Core wraps it in a transaction, so a failure
-  leaves the database empty. Two instances seeding at once do not both succeed: the unique index on
-  `hubs.name` fails the second and it exits; started again — by the platform, or by hand under
-  Compose, which has no restart policy — it finds the data.
+- **One `SaveChangesAsync`** writes a seed of an empty database — EF Core wraps it in a
+  transaction, so a failure leaves the database empty. Two instances seeding at once do not both
+  succeed: the unique index on `hubs.name` fails the second and it exits; started again — by the
+  platform, or by hand under Compose, which has no restart policy — it finds the data.
 
 ## Contract
 
@@ -53,8 +67,10 @@ data below wins.
 
 ```
 src/Freitty.Infrastructure/Persistence/Seed/
-├── DatabaseSeed.cs     SeedDatabaseAsync, the extension Program.cs calls: reads the switch
-├── DatabaseSeeder.cs   the emptiness check, the build, the save, the log line
+├── DatabaseSeed.cs     SeedDatabaseAsync, the extension Program.cs calls: seeds or rebuilds
+├── SeedSettings.cs     the two switches, read from configuration
+├── DatabaseSeeder.cs   seeding an empty database, rebuilding any; the build, the save, the log lines
+├── SampleData.cs       with refresh on: the anchor day the data was built for, and the rebuild
 ├── SeedCalendar.cs     the anchor day, and an instant from a day offset and a local time
 ├── ReferenceData.cs    company, users, hubs, carriers, services, supply items
 ├── OrderScript.cs      builds one order; holds the rules every seeded order follows
@@ -63,12 +79,53 @@ src/Freitty.Infrastructure/Persistence/Seed/
 ├── ScriptedOrders.cs   the ten orders of the table below
 ├── OrderHistory.cs     the sixty completed orders
 └── Invoices.cs         the 62 invoices, numbered across both groups of orders
+src/Freitty.Api/Seed/
+├── SampleDataRefresh.cs    registers the refresher and the request gate, only with refresh on
+├── SampleDataRefresher.cs  the hosted service: a check every 15 minutes, a rebuild on a new day
+└── RequestGate.cs          holds requests while a rebuild runs, and the rebuild while requests run
 ```
 
 - `DatabaseSeed` mirrors `DatabaseMigration`: a static extension on `IServiceProvider` that opens a
-  scope. It reads the switch with `IConfiguration.GetValue<bool>("Seed:Enabled")` — absent is
-  `false`, a value that is not a boolean throws — and, when on, resolves `DatabaseSeeder`. There is
-  no options class for one flag; the key is a named constant.
+  scope. `SeedSettings.Read` reads both switches with `IConfiguration.GetValue<bool>` — absent is
+  `false`, a value that is not a boolean throws — into `IsEnabled` and `IsRefreshEnabled`, the
+  second true only with the first. Enabled alone, it resolves `DatabaseSeeder` and seeds; with
+  refresh on, it calls `SampleData.RebuildAsync`. The keys are named constants.
+- `SampleData` is a singleton: it remembers the anchor day of the data it last built, and
+  `IsOutdated` says whether the anchor day has moved on since. It resolves `DatabaseSeeder` in a
+  scope of its own for each rebuild.
+- `DatabaseSeeder.RebuildAsync`, in one transaction: `TRUNCATE TABLE` with every table of
+  `Model.GetRelationalModel()`, quoted, in one statement — so their foreign keys need no order —
+  then the seed, then the commit. `TRUNCATE` holds an exclusive lock on every table until the
+  commit. What that means for each reader:
+  - a request of this process is held at the gate and never meets the lock;
+  - at startup nothing is serving yet;
+  - while a rolling deploy runs two instances, the old instance's readers block on the lock for
+    the length of the rebuild — well under a second — and then read the new rows.
+- `SampleDataRefresher` is a `BackgroundService` in Api — Infrastructure has no hosting
+  abstractions, and Application stays out of it
+  ([ADR 0001](../adr/0001-light-clean-architecture.md)). Its `PeriodicTimer` runs on the injected
+  `TimeProvider` every `CheckInterval`, 15 minutes, and is created with the service, so the first
+  tick is due one interval after the host started. On a tick it asks `SampleData.IsOutdated`; if
+  so it closes the request gate — waiting at most `DrainTimeout`, 10 seconds on the same clock, for
+  the requests in flight, so one request that hangs fails the check instead of holding every other
+  one — and rebuilds. An exception is logged once, at `Error`, and the loop goes on; cancellation
+  ends it with the application. It is registered — with the gate and its middleware — only when
+  `IsRefreshEnabled`; otherwise nothing of it runs. It has no member for tests.
+- **What a request sees during a rebuild.** Every row gets a new id. Without the gate, a request
+  whose statements fall on both sides of the commit looks up ids that are gone: measured with
+  readers running against repeated rebuilds, `/me` answered `500` (its user had vanished), a list
+  had `total` 70 and no cards, and FR001383 was not found. `RequestGate` therefore holds one
+  process still for a rebuild: closing it waits for the requests in flight to finish, and a request
+  that arrives while it is closed waits until it opens — about 100–500 ms, the time of a rebuild of
+  seventy orders. Behind it every request answers `200` with either the old data or the new. It
+  sits after the static pages and the request log, so the wait is in the logged duration; the
+  health checks pass by it. The gate is in-process; the deployment runs one instance. Two effects
+  remain:
+  - During a rolling deploy, an old-instance request whose statements straddle the new instance's
+    startup commit can meet ids that are gone. A deadlock between its lock order and the
+    `TRUNCATE` can abort one of the two.
+  - A page left open across a rebuild keeps the hub ids it read before, so its Hub filter matches
+    nothing — an empty list, not an error — until it is reloaded.
 - `DatabaseSeeder` is a sealed class registered as scoped in `AddInfrastructure`, with a primary
   constructor: `AppDbContext db`, `TimeProvider clock`, `ILogger<DatabaseSeeder> logger`.
 - `Program.cs`: migrate → `await app.Services.SeedDatabaseAsync(app.Lifetime.ApplicationStopping)`
@@ -80,14 +137,16 @@ src/Freitty.Infrastructure/Persistence/Seed/
 - A domain call that returns a failed `Result` becomes an `InvalidOperationException` carrying the
   message of the `DomainError`.
 - Log, at `Information`: `Seeded sample data: {OrderCount} orders, anchor day {AnchorDay:yyyy-MM-dd}` or
-  `Sample data skipped: the database is not empty`. Nothing is logged when seeding is off.
+  `Sample data skipped: the database is not empty`, and for each rebuild
+  `Rebuilt sample data: {OrderCount} orders, anchor day {AnchorDay:yyyy-MM-dd}`. Nothing is logged
+  when seeding is off.
 
 | Where | Added |
 |---|---|
 | `Freitty.Infrastructure` | `Microsoft.Extensions.Configuration.Binder`, 10.0.x — `GetValue<T>` lives there |
 | `Freitty.Api.IntegrationTests` | `Microsoft.Extensions.TimeProvider.Testing`, the latest stable version that supports `net10.0`, looked up |
 | `appsettings.Development.json` | `"Seed": { "Enabled": true }` |
-| `docker-compose.yml` | `Seed__Enabled: "true"` on the `api` service |
+| `docker-compose.yml` | `Seed__Enabled: "true"` and `Seed__Refresh: "true"` on the `api` service |
 | `README.md` | A "Sample data" section: what is seeded, when, and how to start over |
 
 ### Reference data
@@ -149,15 +208,20 @@ Sixty completed orders, index 0 the oldest. Order `i` is completed on day `D −
 offsets taken from this list read backwards (95 first):
 
 ```
- 3  4  6 |  7  8  8 10 11 12 13 | 14 15 17 18 20 | 21 22 22 24 25 26 27        22 orders
+ 0  0  1  2  3  3  5  5  6 |  8  8  9 10 11 11 | 14 16 18 20 | 22 24 26        22 orders
 32 34 | 35 36 36 38 40 41 | 43 44 46 48 | 49 50 50 52 53 55 | 56 57            20 orders
 62 | 63 65 66 68 69 | 71 72 74 76 | 77 78 79 80 81 83 | 88 95                  18 orders
 ```
 
 The list is the contract: with the two completed scripted orders it gives 24 completed in the last
 30 days and 20 in the 30 before, leaves the boundary days empty so both counts hold on the seeding
-day and the day after, puts a different number in neighbouring weeks, and reaches back more than
-92 days so the chart has at least two quarters.
+day and the day after, puts a different number in neighbouring weeks, completes orders on `D` and
+`D − 1` and varies the newest days — with the scripted orders, from none to three a day — so the
+daily chart is neither empty nor flat before today, and reaches back more than 92 days so the
+chart has at least two quarters. Days `D − 3` and `D − 4` hold exactly two orders between them,
+which keeps the scripted invoice numbers below. Nothing is completed on the seeding day itself, so the
+current week has completed orders unless the seeding day is a Monday; on the test's Saturday every
+one of the twelve weekly buckets has them.
 
 Timeline of a history order, `C` being its completion day:
 
@@ -167,7 +231,9 @@ Timeline of a history order, `C` being its completion day:
   later, is unloaded 30 minutes after it arrives and received 15 minutes after that; further
   shipments of a Consolidation follow 90 minutes apart;
 - `C 10:00` Supply lines, `C 11:00` Loading of everything On stock — one outbound trailer per
-  order — `C 14:00` completed, `C 15:00` invoice issued, paid at `C+2 12:00`.
+  order — `C 14:00` completed, `C 15:00` invoice issued, paid at `C+2 12:00` — but never after
+  `D`: the invoice of an order completed on `D − 1` is paid at `D 12:00`, the one of an order
+  completed on `D` at `D 17:00`, after it was issued.
 
 What must hold; the tables behind it are the implementer's, taken by index and never random:
 
@@ -188,8 +254,9 @@ What must hold; the tables behind it are the implementer's, taken by index and n
   creation order and stay below `REF-1001`. Truck and trailer numbers come from counters.
 - Every history order and both completed scripted orders have exactly one invoice, with the amount
   of the rule under *Decisions*. `Invoices` collects all 62, sorts them by `IssuedAt` — two issued
-  at the same instant, by order number — and numbers them `001751` to `001812`. That puts `001809`
-  on FR001668 and `001812` on FR001672.
+  at the same instant, by order number — and numbers them `001755` to `001816`. That puts `001809`
+  on FR001668 and `001812` on FR001672; the first number is chosen for that, since four of the
+  history's invoices, of `D − 2` to `D`, are issued after FR001672's.
 
 ### The whole data set
 
@@ -225,7 +292,9 @@ What later steps may rely on:
 - [ ] `docker compose down -v && docker compose up -d --build --wait` exits 0, and
       `SELECT status, count(*) FROM orders GROUP BY status` returns 1, 2, 5 and 62.
 - [ ] After `docker compose restart api` the counts are the same and the log says the sample data
-      was skipped.
+      was rebuilt; started with `Seed__Refresh` off, the log says it was skipped.
+- [ ] With `Seed:Refresh` on, an operation recorded on an order is gone once the anchor day has
+      moved on, and the order is back at its seeded version.
 - [ ] With `Seed:Enabled` absent, the API starts on an empty database and leaves it empty.
 - [ ] Every row of *Scripted orders* reads back with the state of its last column.
 - [ ] The figures of *The whole data set* hold.
@@ -252,7 +321,7 @@ Counts are plain queries.
   2 services, 16 supply items.
 - The orders are 70, with the status counts, the two orders with an open Alert and the 62 invoices
   of *The whole data set*; 24 have `completed_at` in `[clock − 30 d, clock)` and 20 in
-  `[clock − 60 d, clock − 30 d)`.
+  `[clock − 60 d, clock − 30 d)`. `D` and `D − 1` each have a completed order with an invoice.
 - FR001383 reads back with its four Operations, declared 10, actual 12, On stock 5, an open
   Quantity delta alert, two Services and a supply subtotal of `314.00`.
 - FR001674 has both Alerts open on its second shipment; FR001676 has 2 Standard On stock and two
@@ -270,10 +339,28 @@ Counts are plain queries.
   with the clock at `2026-04-18T04:05:00Z`, five minutes past midnight in Toronto.
 - A second start on a seeded database adds nothing.
 - With the seed off, an empty database stays empty after the API starts.
+- With refresh on, each on a database of its own: a start on a non-empty database rebuilds it — a
+  row added before is gone and the seventy orders are there; the clock moved to the next day
+  rebuilds it with the new anchor day — an operation recorded before is gone and FR001383 is back
+  at version 20; `SampleData.IsOutdated` is false a minute before midnight and true at it; a
+  rebuild refused after the `TRUNCATE` leaves the previous data and the next check rebuilds it —
+  a trigger the test adds refuses the seed's company, and a sequence counts the attempts; a request
+  made while the gate is closed is answered once it opens, and a health probe is answered while it
+  is closed. The timer tests start ten minutes before midnight in Toronto and advance a
+  `FakeTimeProvider` by one interval. The refresher has no hook for tests, so a test then asks
+  through the API until it sees the result, within a 30-second bound that only ends a test that
+  would hang; nothing sleeps. Proving that a request is held takes one bounded real wait of
+  500 ms.
+- `Seed:Refresh` without `Seed:Enabled` registers no refresher and seeds nothing; a value of
+  `Seed:Refresh` that is not a boolean stops the startup.
+- `RequestGate`: closing waits for a request in flight, a request waits while it is closed, a
+  cancelled close leaves it open, a request cancelled at the closed gate is not counted in flight,
+  and closing a closed gate is refused.
 
 ## Out of scope
 
 - Endpoints that read the data — steps 4–6. How the current user is found — step 4.
 - The large data set for `EXPLAIN ANALYZE` — step 4.
 - Resetting the deployed database, and whether to do it before the presentation — step 9.
-- A reseed switch, a scheduled refresh, a second company.
+- Refreshing more than one instance: the request gate holds one process.
+- A second company.

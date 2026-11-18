@@ -150,7 +150,9 @@ an undefined number, an empty value — with the `400` of step 4.
 - [ ] On the seeded database, on the day it was seeded: active orders 7, completed 24 and 20,
       Need attention 4 (2 awaiting, 2 alerts, FR001383 listed before FR001674), four cards
       (FR001681, FR001679, FR001678, FR001383), and twelve weekly buckets, the last starting on
-      the Monday of the current week and each of the eleven before it with `completedOrders > 0`.
+      the Monday of the current week and each of them with `completedOrders > 0` (the current week
+      only when today is not a Monday, which the seed leaves empty); in the daily series the two
+      days before today have completed orders and spend.
 - [ ] `needAttention.alerts` equals `alerts` of `GET /api/v1/orders/counts`.
 - [ ] The sum of `spend` over the `Quarter` buckets equals the sum of all seeded invoice amounts.
 - [ ] Each period returns its number of buckets, oldest first, the last containing today.

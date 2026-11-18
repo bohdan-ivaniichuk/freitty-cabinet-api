@@ -10,7 +10,7 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
 
     private readonly CabinetApi api = new(postgres.ConnectionString);
 
-    public static TheoryData<string> FilteredPaths => [ApiUrls.Orders, ApiUrls.OrderCounts];
+    public static TheoryData<string> FilteredPaths => [ApiUrls.Orders, ApiUrls.OrderCounts, ApiUrls.OrderExport];
 
     [Fact]
     public async Task OpenApiDocumentListsEveryEndpoint()
@@ -27,6 +27,7 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
             {
                 (ApiUrls.Orders, "get"),
                 (ApiUrls.OrderCounts, "get"),
+                (ApiUrls.OrderExport, "get"),
                 (ApiUrls.OrderTemplate, "get"),
                 (ApiUrls.OperationsTemplate, "post"),
                 (ApiUrls.Hubs, "get"),
@@ -86,6 +87,21 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
         Assert.Equal(
             ["shipmentPosition", "type", "unitType", "quantity", "expectedVersion"],
             request.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesTheExportAsCsv()
+    {
+        JsonElement document = await ReadOpenApiDocumentAsync();
+
+        JsonElement responses = document.GetProperty("paths").GetProperty(ApiUrls.OrderExport)
+            .GetProperty("get").GetProperty("responses");
+        Assert.Equal(["200", "400"], responses.EnumerateObject().Select(status => status.Name));
+        Assert.Equal(
+            ["text/csv; charset=utf-8"],
+            responses.GetProperty("200").GetProperty("content").EnumerateObject().Select(content => content.Name));
+        Assert.True(
+            responses.GetProperty("400").GetProperty("content").TryGetProperty(ProblemResponse.ContentType, out _));
     }
 
     [Fact]

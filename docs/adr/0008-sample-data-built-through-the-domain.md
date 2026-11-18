@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-17
+- The refusal to refresh stale data is superseded by [ADR 0015](0015-the-demo-rebuilds-its-sample-data.md).
 
 ## Context
 

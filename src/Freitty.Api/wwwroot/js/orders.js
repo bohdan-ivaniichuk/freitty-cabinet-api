@@ -1,9 +1,10 @@
-// orders.html: the list of GET /api/v1/orders with its tabs, filters, search and pages. The view
-// lives in the URL. A change of it rewrites the URL through the History API and loads the counts
-// and the list again in place, so Back, Forward and a copied link all lead to the same view.
+// orders.html: the list of GET /api/v1/orders with its tabs, filters, search and pages, as cards or
+// as a table. The view lives in the URL. A change of it rewrites the URL through the History API and
+// loads the counts and the list again in place, so Back, Forward and a copied link all lead to the
+// same view. "Export CSV" downloads the list of the view shown, all its pages.
 
-import { getJson } from './api.js';
-import { openCardsOnClick, renderCard } from './card.js';
+import { apiUrl, getJson } from './api.js';
+import { openOrdersOnClick, renderCard, renderTable } from './card.js';
 import { ORDER_TYPE, STATUS } from './codes.js';
 import * as format from './format.js';
 import {
@@ -27,6 +28,9 @@ const TABS = {
   drafts: { parameters: { status: STATUS.Draft }, count: 'drafts' },
 };
 const DEFAULT_TAB = 'all';
+// The URL's `view`: how the list is shown.
+const LAYOUTS = { cards: 'cards', table: 'table' };
+const DEFAULT_LAYOUT = LAYOUTS.cards;
 // The filters' URL values and the API values they stand for.
 const DATE_FILTERS = { today: 'Today', week: 'ThisWeek', last30: 'Last30Days' };
 const STATUS_FILTERS = {
@@ -54,7 +58,7 @@ initShell({
   },
 });
 loadMe();
-openCardsOnClick(document.getElementById('order-cards'));
+openOrdersOnClick(document.getElementById('orders'));
 bindControls();
 start();
 
@@ -65,6 +69,7 @@ function readView(url) {
   const page = Number(url.get('page'));
   return {
     tab: known(TABS, 'tab') ?? DEFAULT_TAB,
+    layout: known(LAYOUTS, 'view') ?? DEFAULT_LAYOUT,
     hub: url.get('hub'),
     date: known(DATE_FILTERS, 'date'),
     status: known(STATUS_FILTERS, 'status'),
@@ -77,6 +82,10 @@ function viewUrl(next) {
   const url = new URLSearchParams();
   if (next.tab !== DEFAULT_TAB) {
     url.set('tab', next.tab);
+  }
+
+  if (next.layout !== DEFAULT_LAYOUT) {
+    url.set('view', next.layout);
   }
 
   for (const name of [...FILTERS, 'search']) {
@@ -97,6 +106,7 @@ function viewUrl(next) {
 // and the list, which send it. The address is rewritten to the view the page really shows.
 async function start() {
   renderTabs();
+  renderLayouts();
   renderFilters();
   hubs = await loadHubs();
   view = withKnownHub(view);
@@ -127,7 +137,9 @@ function show(next) {
 
 function render() {
   renderTabs();
+  renderLayouts();
   renderFilters();
+  renderExport();
   showSearchQuery(view.search);
   loadCounts();
   loadList();
@@ -142,6 +154,10 @@ function bindControls() {
 
   for (const tab of document.querySelectorAll('[data-tab]')) {
     showOnClick(tab, () => ({ ...view, tab: tab.dataset.tab, page: FIRST_PAGE }));
+  }
+
+  for (const link of document.querySelectorAll('[data-layout]')) {
+    showOnClick(link, () => ({ ...view, layout: link.dataset.layout }));
   }
 
   for (const link of [document.getElementById('page-prev'), document.getElementById('page-next')]) {
@@ -189,6 +205,14 @@ function renderTabs() {
   }
 }
 
+// A switch of the layout keeps everything else, the page included.
+function renderLayouts() {
+  for (const link of document.querySelectorAll('[data-layout]')) {
+    link.href = viewUrl({ ...view, layout: link.dataset.layout });
+    markCurrent(link, link.dataset.layout === view.layout);
+  }
+}
+
 // The Hub filter is set once its options are loaded. Drafts is a status of its own: on that tab the
 // Status filter does not apply.
 function renderFilters() {
@@ -209,6 +233,16 @@ function filterParameters() {
     status: STATUS_FILTERS[view.status],
     search: view.search,
   };
+}
+
+// The filters of the list: those of the counts, and the tab's. Drafts sends its own status.
+function listParameters() {
+  return { ...filterParameters(), ...TABS[view.tab].parameters };
+}
+
+// The export takes the filters of the list, without its page.
+function renderExport() {
+  document.getElementById('export-csv').href = apiUrl('/api/v1/orders/export', listParameters()).href;
 }
 
 async function loadCounts() {
@@ -241,32 +275,36 @@ async function loadCounts() {
 }
 
 async function loadList() {
-  const grid = document.getElementById('order-cards');
-  const parameters = {
-    ...filterParameters(),
-    ...TABS[view.tab].parameters,
-    page: view.page > FIRST_PAGE ? view.page : null,
-  };
+  const list = document.getElementById('orders');
+  const parameters = { ...listParameters(), page: view.page > FIRST_PAGE ? view.page : null };
+  const { layout } = view;
   const request = ++latestList;
-  grid.setAttribute('aria-busy', 'true');
+  list.setAttribute('aria-busy', 'true');
   try {
     const result = await getJson('/api/v1/orders', parameters);
     if (request !== latestList) {
       return;
     }
 
-    const cards = result.items.map(order => renderCard(order));
-    grid.replaceChildren(...(cards.length === 0 ? [stateBox(format.NO_MATCHING_ORDERS)] : cards));
+    list.replaceChildren(...renderItems(result.items, layout));
     renderPager(result);
   } catch (error) {
     if (request !== latestList) {
       return;
     }
 
-    grid.replaceChildren(errorBox(error));
+    list.replaceChildren(errorBox(error));
   }
 
-  grid.removeAttribute('aria-busy');
+  list.removeAttribute('aria-busy');
+}
+
+function renderItems(orders, layout) {
+  if (orders.length === 0) {
+    return [stateBox(format.NO_MATCHING_ORDERS)];
+  }
+
+  return layout === LAYOUTS.table ? [renderTable(orders)] : orders.map(order => renderCard(order));
 }
 
 // A page past the end shows nothing, with Prev leading back to the last page.

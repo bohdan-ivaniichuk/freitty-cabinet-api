@@ -120,7 +120,7 @@ details.ref-n-multi .sub-desc { color: #6B7280; font-size: 10.5px; white-space: 
 
 /* These links look like the text and buttons around them: no underline, the parent's colour. Zero
    specificity, so the element's own class still sets its colour. */
-:where(a.fc-logo, .fc-nav a, .fc-crumbs a, a.tab, a.oc-num, a.kpi, a.period-btn, a.btn, .next-edit a) { text-decoration: none; color: inherit; }
+:where(a.fc-logo, a.fc-topbar-btn, .fc-nav a, .fc-crumbs a, a.tab, a.oc-num, a.kpi, a.period-btn, a.btn, .next-edit a) { text-decoration: none; color: inherit; }
 a.fc-logo { display: block; }
 /* The whole row of a nav item is its link: the padding moves from the item to the link. */
 .fc-nav li:has(> a) { padding: 0; }
@@ -132,8 +132,20 @@ a.btn, a.period-btn { line-height: normal; }
 .fc-search:focus-within { outline: 2px solid #2E75B6; }
 
 /* Controls without a function in this assignment, and Prev / Next at the ends of the list. A nav
-   item sets its own pointer cursor with a more specific rule, so it is named here too. */
-:disabled, [aria-disabled="true"], .fc-nav li[aria-disabled="true"] { cursor: default; opacity: .55; }
+   item sets its own pointer cursor with a more specific rule, so the item that holds one is
+   named here too. */
+:disabled, [aria-disabled="true"] { cursor: default; opacity: .55; }
+.fc-nav li:has(> [aria-disabled="true"]) { cursor: default; }
+
+/* The page a mistyped address shows: the brand on the sidebar's colour, the message, the way back. */
+.not-found { max-width: 360px; margin: 15vh auto 0; text-align: center; }
+.not-found .fc-logo { display: inline-block; padding: 12px 20px; background: #1F2A3A; color: #fff; }
+.not-found h1 { margin: 24px 0 16px; font-size: 20px; }
+
+/* The one short message a click on a control without a function shows, at the bottom of the window.
+   Faded out rather than hidden, so the live region stays in the accessibility tree and is announced. */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 10; padding: 10px 16px; border-radius: 8px; background: #1F2A3A; color: #fff; font-size: 13px; box-shadow: 0 4px 12px rgba(31,42,58,.25); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.is-shown { opacity: 1; }
 
 /* Loading, empty and error states of a block. */
 .state { grid-column: 1 / -1; padding: 24px; background: #fff; border: 1px dashed #E5E7EB; border-radius: 10px; text-align: center; font-size: 13px; color: #6B7280; }
@@ -166,6 +178,26 @@ details.ref-n-multi .sub-ref { white-space: nowrap; }
 .next-alert { color: #DC2626; font-weight: 700; }
 .next-edit { color: #2E75B6; font-weight: 600; }
 .next-invoice { color: #2E75B6; }
+
+/* Order List: the Cards / Table switch, links styled as the mockup's buttons, the shown one pressed. */
+.view-btn { padding: 4px 10px; border-radius: 4px; font-size: 12px; line-height: normal; color: #6B7280; text-decoration: none; cursor: pointer; }
+.view-btn[aria-current] { background: #fff; color: #1A1A1A; font-weight: 600; }
+/* The list as a table, in the look of the detail page's tables. The columns are fixed, so the table
+   never widens the page: long text wraps, and a Ref N, which never breaks, is cut with an ellipsis. */
+.order-table { grid-column: 1 / -1; background: #fff; border: 1px solid #E5E7EB; border-radius: 10px; overflow: hidden; }
+.order-table table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.order-table thead { background: #F9FAFB; font-size: 11px; text-transform: uppercase; color: #6B7280; }
+.order-table th { text-align: left; padding: 8px 6px; }
+.order-table td { padding: 10px 6px; overflow-wrap: anywhere; }
+.order-table :is(th, td):first-child { padding-left: 14px; }
+.order-table :is(th, td):last-child { padding-right: 14px; }
+.order-table .badge { overflow-wrap: normal; }
+.order-row { border-top: 1px solid #F3F4F6; cursor: pointer; }
+.order-row:hover { background: #F9FAFB; }
+.order-row.is-draft { opacity: .75; }
+.ref-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; font-weight: 800; color: #ED1C2E; }
+/* An order without a shipment has no Ref N: its dash is plain text like the other empty cells. */
+.ref-cell.is-empty { font: inherit; color: inherit; }
 
 /* Dashboard. */
 .trend-up { color: #16A34A; }

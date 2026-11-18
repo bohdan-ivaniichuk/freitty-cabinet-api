@@ -15,6 +15,7 @@ the OpenAPI document at http://localhost:8080/openapi/v1.json. The endpoints:
 |---|---|---|
 | `GET` | `/api/v1/orders` | One page of order cards, with the tabs, filters and search of the Order List |
 | `GET` | `/api/v1/orders/counts` | The counter of each Order List tab, under the same filters |
+| `GET` | `/api/v1/orders/export` | The whole filtered Order List as a CSV file |
 | `GET` | `/api/v1/orders/{number}` | The detail of an order |
 | `POST` | `/api/v1/orders/{number}/operations` | Records an operation on a shipment |
 | `GET` | `/api/v1/dashboard` | The tiles, the first active orders and the activity chart |
@@ -84,10 +85,16 @@ The setting is on in `appsettings.Development.json` and in `docker-compose.yml`,
 else. Every order is built through the domain model, so the data obeys the same rules as an order
 made through the API.
 
-Dates are relative to the day before the database was seeded, so the data ages: a database seeded a
-week ago shows a week-old picture. The API never deletes or refreshes sample data; a database that
-already has a company is left as it is. Recording an operation from an order page changes this data;
-to start over, empty the database:
+Dates are relative to the day before the database was seeded. The Docker stack — the demo — keeps
+them fresh: `Seed__Refresh` is `true` in `docker-compose.yml`, so the API rebuilds the sample data at
+every start and again soon after midnight in Toronto, when that day changes (it checks every 15
+minutes). A rebuild deletes everything in the database, operations recorded from an order page
+included, and seeds again in one transaction; requests wait for it, well under a second. To keep
+what you recorded, set `Seed__Refresh` to `"false"` in `docker-compose.yml`, or remove it.
+
+Without `Seed:Refresh` — as with `dotnet run`, where `appsettings.Development.json` turns on only
+`Seed:Enabled` — the data ages: a database seeded a week ago shows a week-old picture, and a database
+that already has a company is left as it is. To start over, empty the database:
 
 ```bash
 docker compose down -v

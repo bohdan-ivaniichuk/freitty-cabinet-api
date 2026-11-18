@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Freitty — Dashboard</title>
-<link rel="icon" href="data:,">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="app.css">
 <script type="module" src="js/dashboard.js"></script>
 </head>
@@ -14,21 +14,22 @@
     <a class="fc-logo" href="index.html">FREITT<span>Y</span></a>
     <ul class="fc-nav">
       <li class="active"><a href="orders.html"><span><span aria-hidden="true">📦</span> Orders</span> <span class="badge" id="nav-attention" hidden></span></a></li>
-      <li aria-disabled="true" title="Not part of this assignment">⚙️ Settings</li>
+      <li><span role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">⚙️ Settings</span></li>
     </ul>
     <div style="padding: 20px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,.1)">
-      <button class="btn btn-primary" style="width:100%" disabled title="Not part of this assignment">+ New Order</button>
+      <button type="button" class="btn btn-primary" style="width:100%" aria-disabled="true" data-out-of-scope title="Not part of this assignment">+ New Order</button>
     </div>
   </aside>
   <main class="fc-main">
     <div class="fc-topbar">
       <div class="fc-search"><span aria-hidden="true">🔍</span> <input id="search" type="search" placeholder="Search orders…" maxlength="50" autocomplete="off" aria-label="Search orders"></div>
       <div class="spacer"></div>
-      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" aria-disabled="true" title="Not part of this assignment">Top up →</span></div>
-      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Notifications">🔔</div>
-      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Help">❓</div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment">Top up →</span></div>
+      <div class="fc-topbar-btn" role="button" tabindex="0" aria-disabled="true" data-out-of-scope title="Not part of this assignment" aria-label="Notifications">🔔</div>
+      <a class="fc-topbar-btn" href="/scalar/" target="_blank" rel="noopener" title="API reference" aria-label="API reference">❓</a>
       <div class="fc-user"><div class="avatar" id="user-initials"></div><div class="name" id="user-name"></div></div>
     </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <!-- /shell -->
     <div class="fc-content">
       <div class="fc-crumbs"><a href="index.html">Home</a> <span>›</span> Dashboard</div>

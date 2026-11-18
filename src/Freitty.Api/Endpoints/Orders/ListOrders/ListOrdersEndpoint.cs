@@ -16,15 +16,9 @@ internal sealed class ListOrdersEndpoint : Endpoint<ListOrdersQuery, OrderPageDt
                 "One page of order cards, newest Scheduled date first with unscheduled drafts on top. The tabs " +
                 "are filters: type for Cross-Dock and Consolidation, hasOpenAlerts for Alerts, and status Draft " +
                 "for Drafts.";
-            summary.RequestParam(
-                query => query.Type,
-                "CrossDock or Consolidation, the tabs of those names; every type when left out.");
-            summary.RequestParam(
-                query => query.Status,
-                "The Status filter; Draft is the Drafts tab. Every status when left out.");
-            summary.RequestParam(
-                query => query.HasOpenAlerts,
-                "True keeps the orders with an open alert on any shipment, the Alerts tab; false when left out.");
+            summary.RequestParam(query => query.Type, OrderFilterDescriptions.Type);
+            summary.RequestParam(query => query.Status, OrderFilterDescriptions.Status);
+            summary.RequestParam(query => query.HasOpenAlerts, OrderFilterDescriptions.HasOpenAlerts);
             summary.RequestParam(query => query.HubId, OrderFilterDescriptions.HubId);
             summary.RequestParam(query => query.DatePreset, OrderFilterDescriptions.DatePreset);
             summary.RequestParam(query => query.Search, OrderFilterDescriptions.Search);
