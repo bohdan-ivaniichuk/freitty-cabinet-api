@@ -29,8 +29,14 @@ public sealed class User
 
     public Company Company { get; private set; } = null!;
 
-    public string Initials => string.Concat(Name
-        .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-        .Take(InitialsWordCount)
-        .Select(word => char.ToUpperInvariant(word[0])));
+    public string Initials => InitialsOf(Name);
+
+    // Public so that a read projection can take the name alone and derive the same initials.
+    public static string InitialsOf(string name)
+    {
+        return string.Concat(name
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(InitialsWordCount)
+            .Select(word => char.ToUpperInvariant(word[0])));
+    }
 }

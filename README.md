@@ -24,9 +24,15 @@ This starts PostgreSQL and the API. When the command returns, both are healthy:
 |---|---|
 | http://localhost:8080/health/live | Liveness — `200` while the process serves requests |
 | http://localhost:8080/health/ready | Readiness — `200` when the API reaches PostgreSQL, `503` otherwise |
+| http://localhost:8080/scalar | The API reference (Scalar), with requests that can be sent from the page |
+| http://localhost:8080/openapi/v1.json | The OpenAPI document; the endpoints are under `/api/v1` |
 
 The API applies pending database migrations at startup, before it listens. If it cannot — the database is
-unreachable or a migration fails — the process exits instead of serving requests.
+unreachable or a migration fails — the process exits instead of serving requests. The database itself must
+already exist (Compose creates it); instances starting together take turns to migrate it.
+
+The API reads its reporting time zone — where "today" and "this week" begin — from `Cabinet__TimeZone`
+(`America/Toronto` by default, in `appsettings.json`). It must be an IANA id; any other value stops the startup.
 
 Stop with `docker compose down`; add `-v` to delete the database as well.
 

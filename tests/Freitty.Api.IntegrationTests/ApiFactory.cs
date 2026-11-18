@@ -1,3 +1,4 @@
+using Freitty.Application.Abstractions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -6,11 +7,19 @@ using Microsoft.Extensions.Hosting;
 
 namespace Freitty.Api.IntegrationTests;
 
-internal sealed class ApiFactory(string connectionString, bool seedEnabled = false, TimeProvider? clock = null)
+// An HTTP test passes its own current user: in the shared database the default one would find some other test's
+// Admin.
+internal sealed class ApiFactory(
+    string connectionString,
+    bool seedEnabled = false,
+    TimeProvider? clock = null,
+    ICurrentUser? currentUser = null,
+    string? reportingTimeZone = null)
     : WebApplicationFactory<Program>
 {
     private const string ConnectionStringKey = "ConnectionStrings:Postgres";
     private const string SeedEnabledKey = "Seed:Enabled";
+    private const string ReportingTimeZoneKey = "Cabinet:TimeZone";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -29,9 +38,22 @@ internal sealed class ApiFactory(string connectionString, bool seedEnabled = fal
             builder.UseSetting(SeedEnabledKey, bool.TrueString);
         }
 
-        if (clock is not null)
+        if (reportingTimeZone is not null)
         {
-            builder.ConfigureTestServices(services => services.AddSingleton(clock));
+            builder.UseSetting(ReportingTimeZoneKey, reportingTimeZone);
         }
+
+        builder.ConfigureTestServices(services =>
+        {
+            if (clock is not null)
+            {
+                services.AddSingleton(clock);
+            }
+
+            if (currentUser is not null)
+            {
+                services.AddSingleton(currentUser);
+            }
+        });
     }
 }

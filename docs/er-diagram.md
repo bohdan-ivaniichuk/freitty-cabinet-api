@@ -1,7 +1,8 @@
 # ER diagram
 
 The schema created by the `InitialSchema` migration
-([step 2](steps/02-domain.md)). Terms are defined in [`CONTEXT.md`](../CONTEXT.md).
+([step 2](steps/02-domain.md)), with the indexes of `OrderListIndexes`
+([step 4](steps/04-order-list.md)). Terms are defined in [`CONTEXT.md`](../CONTEXT.md).
 
 Every `id` is a UUID v7 created by the domain. Instants are `timestamptz` in UTC. Enums are stored
 as integers, each with a `CHECK` that lists the values of its enum.
@@ -199,3 +200,16 @@ erDiagram
   deleted, and so neither can its order. A draft has neither, so a draft can be deleted.
 - `RESTRICT` everywhere else: a company, user, hub, carrier, service or supply item that an order
   refers to cannot be deleted, and neither can an order that has an invoice.
+
+## Indexes
+
+Besides the primary keys, the unique keys named in the diagrams and an index per foreign key, the
+Order List has three of its own (migration `OrderListIndexes`, which also enables `pg_trgm`):
+
+| Index | On | Serves |
+|---|---|---|
+| `ix_orders_number_trgm` | `orders (number)`, GIN, `gin_trgm_ops` | the search's `number ILIKE '%…%'` |
+| `ix_shipments_ref_number_trgm` | `shipments (ref_number)`, GIN, `gin_trgm_ops` | the search's `ref_number ILIKE '%…%'` |
+| `ix_orders_company_id_scheduled_at_id` | `orders (company_id, scheduled_at DESC, id DESC)` | the default list of a company, newest Scheduled date first, without a sort |
+
+Their query plans, before and after, are in [`explain/`](explain/README.md).

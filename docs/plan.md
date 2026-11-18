@@ -111,7 +111,7 @@ GET  /api/v1/me                           the shell: user, company balance, atte
 Same HTML, kept 1:1:
 - Cut the mockup into three pages in `src/Freitty.Api/wwwroot`: `index.html` (Dashboard), `orders.html` (Order List), `order.html?n=FR001383` (Detail). Drop the fake browser frame; keep `.fc-shell`. Shared styles → `app.css`, class names untouched.
 - Hardcoded cards → `<template>` elements with the same markup; small vanilla JS (`fetch` + clone template + fill).
-- Tabs, filters, search, Prev/Next change query params and refetch. Card click → detail page.
+- Tabs, filters, search and Prev/Next are plain navigations that change the query string. Card click → detail page.
 - Served by the same ASP.NET app (static files): one origin, no CORS, one deployable.
 - No React/Blazor: the task says the markup is done; the evaluation is the backend.
 

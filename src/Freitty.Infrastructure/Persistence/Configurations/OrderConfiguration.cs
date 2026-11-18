@@ -9,6 +9,7 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
     private const int Draft = (int)OrderStatus.Draft;
     private const int InProgress = (int)OrderStatus.InProgress;
     private const int Completed = (int)OrderStatus.Completed;
+    private const string OrderNumberTrigramIndex = "ix_orders_number_trgm";
 
     public void Configure(EntityTypeBuilder<Order> builder)
     {
@@ -22,6 +23,15 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         // Draft numbers are the company's own; official numbers are unique across the platform.
         builder.HasIndex(order => new { order.CompanyId, order.Number }).IsUnique();
         builder.HasIndex(order => order.Number).IsUnique().HasFilter($"status <> {Draft}");
+
+        // The search's ILIKE '%…%', and the default list: newest Scheduled date first, then id. The trigram index
+        // needs the named overload, since the unnamed one would reconfigure the unique index on the same column,
+        // and a database name of its own, since the naming convention would number it.
+        builder.HasIndex(order => order.Number, OrderNumberTrigramIndex)
+            .HasDatabaseName(OrderNumberTrigramIndex)
+            .IsTrigramIndex();
+        builder.HasIndex(order => new { order.CompanyId, order.ScheduledAt, order.Id })
+            .IsDescending(false, true, true);
 
         ConfigureReferences(builder);
         ConfigureChildren(builder);

@@ -20,6 +20,7 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Freitty.Domain.Billing.Invoice", b =>
@@ -503,6 +504,16 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_orders_company_id_number");
 
+                    b.HasIndex("CompanyId", "ScheduledAt", "Id")
+                        .IsDescending(false, true, true)
+                        .HasDatabaseName("ix_orders_company_id_scheduled_at_id");
+
+                    b.HasIndex(new[] { "Number" }, "ix_orders_number_trgm")
+                        .HasDatabaseName("ix_orders_number_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex(new[] { "Number" }, "ix_orders_number_trgm"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex(new[] { "Number" }, "ix_orders_number_trgm"), new[] { "gin_trgm_ops" });
+
                     b.ToTable("orders", null, t =>
                         {
                             t.HasCheckConstraint("ck_orders_carrier_matches_transport", "(transport_kind IS NOT DISTINCT FROM 1) = (carrier_id IS NOT NULL)");
@@ -632,6 +643,12 @@ namespace Freitty.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_shipments");
+
+                    b.HasIndex("RefNumber")
+                        .HasDatabaseName("ix_shipments_ref_number_trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("RefNumber"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("RefNumber"), new[] { "gin_trgm_ops" });
 
                     b.HasIndex("OrderId", "Position")
                         .IsUnique()

@@ -4,13 +4,22 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+    <PackageVersion Include="FastEndpoints" Version="9.0.0" />
+    <PackageVersion Include="FastEndpoints.Messaging.Core" Version="9.0.0" />
+    <PackageVersion Include="FastEndpoints.OpenApi" Version="9.0.0" />
+    <!-- The version FastEndpoints 9.0.0 depends on. -->
+    <PackageVersion Include="FluentValidation" Version="12.2.0" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="3.0.1" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <!-- Released on the Microsoft.Extensions (dotnet/extensions) train, not the runtime's; 11.x also targets net10.0. -->
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.0" />
     <!-- The Microsoft packages below follow the net10.0 runtime; 11.x of most of them targets net11.0 only. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.15" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.17.0" />

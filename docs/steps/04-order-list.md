@@ -43,6 +43,12 @@ their query plans.
   turns a date preset into a half-open range of UTC instants from `TimeProvider` and that zone.
 - `Microsoft.EntityFrameworkCore.Database.Command` goes back to `Information` in
   `appsettings.Development.json`, so `dotnet run` shows the SQL (promised in step 1).
+- **Startup migrations take turns.** With a second migration, instances that start together would
+  both apply it: the provider's lock is released at each migration's commit, while the list of
+  pending migrations is read once. `MigrateDatabaseAsync` therefore holds a PostgreSQL advisory
+  lock around the whole run. The API no longer creates a missing database — Compose, the tests
+  and the deployment do. This amends a consequence of
+  [ADR 0007](../adr/0007-migrations-applied-at-startup.md), which trusted the provider's lock.
 
 **The list**
 
@@ -144,7 +150,7 @@ Response — the card of FR001674 from the seed, abbreviated:
     "createdBy": { "name": "User 3", "initials": "U3", "role": "Dispatcher" },
     "hub": { "name": "Markham", "shortName": "Mark", "timeZone": "America/Toronto" },
     "transferHub": null,
-    "scheduledAt": "2026-04-13T15:00:00Z",
+    "scheduledAt": "2026-04-13T15:00:00+00:00",
     "destination": { "city": "Calgary", "region": "AB" },
     "transport": { "kind": "Carrier", "carrierName": "TForce", "driverName": null },
     "declared": [{ "unitType": "Standard", "quantity": 20 }],
@@ -231,7 +237,12 @@ Step 6 adds the number for the sidebar badge.
 | An unknown route | `404` `ProblemDetails` |
 | No user to act as (an empty, unseeded database) | `500` `ProblemDetails`; the log line says to seed the database |
 
-A `hub` id that matches no hub is not an error: the list is empty.
+A `hub` id that matches no hub is not an error: the list is empty. An empty `hub=` is a `400` —
+it would otherwise bind to the empty GUID and silently return nothing; an empty `type=`, `status=`
+or `date=` is the same as absent. A control character in `q` is a `400`: PostgreSQL cannot store
+one.
+
+Instants are serialised with an explicit offset, `2026-04-13T15:00:00+00:00`.
 
 The body of a `400` is the one FastEndpoints produces, and the pages rely on it:
 

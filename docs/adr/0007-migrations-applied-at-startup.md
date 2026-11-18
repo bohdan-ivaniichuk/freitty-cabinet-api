@@ -33,8 +33,11 @@ If that fails, the process exits.
   connection string in step 1. An instance cannot start while the database is unreachable; the
   platform restarts it. Readiness still reports a database that goes away after startup.
 - The application's database user needs DDL rights.
-- Instances starting together do not race: EF Core takes a database lock for the duration of a
-  migration.
+- Instances starting together do not race, but not for free: the provider's lock covers one
+  migration at a time while the pending list is read once, so from the second migration on the
+  API holds a PostgreSQL advisory lock around the whole run
+  ([step 4](../steps/04-order-list.md)). A missing database is then an error, not something the
+  API creates.
 - A migration must stay compatible with the version that is still running during a deploy. With one
   instance and a restart this is not yet a constraint; it becomes one with rolling deploys.
 - Moving to a bundle later means removing one call from startup and adding one step to the

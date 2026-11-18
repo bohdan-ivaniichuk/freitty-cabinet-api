@@ -57,7 +57,7 @@ The example is FR001383 as the seed leaves it, instants shortened:
   "company": { "name": "R-way Transport" },
   "hub": { "name": "Markham", "shortName": "Mark", "region": "ON", "timeZone": "America/Toronto" },
   "transferHub": null,                  // { "name", "shortName" } when set
-  "scheduledAt": "2026-04-17T12:30:00Z",
+  "scheduledAt": "2026-04-17T12:30:00+00:00",
   "destination": { "city": "Kingston", "region": "ON" },      // null in a draft
   "transport": { "kind": "Carrier", "carrierName": "R-way Transport Inc.",
                  "carrierPhone": "+1 647 555 0199", "driverName": null },   // null in a draft
@@ -74,7 +74,7 @@ The example is FR001383 as the seed leaves it, instants shortened:
     "position": 1,
     "label": "FR001383-1",
     "refNumber": "REF-1012",
-    "receivedAt": "2026-04-17T13:05:00Z",
+    "receivedAt": "2026-04-17T13:05:00+00:00",
     "warehouseNote": "Counted 12 pallets on arrival, …",
     "arrival": { "trailerType": "DryVan53", "truckNumber": "TRK-4521",
                  "trailerNumber": "TRL-8830", "arrivedAt": "…" },           // null before arrival

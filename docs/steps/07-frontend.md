@@ -41,17 +41,40 @@ which is read and never edited: sections `#dashboard`, `#orderlist` and `#crossd
   - static text, glyphs and decoration stay;
   - text that would be data and has no source is removed, never invented.
 - **One order card.** The mockup draws two variants; the dashboard's — six fields, date with time
-  — is used on both pages. The list keeps its three-column grid.
+  — is used on both pages. The list keeps its three-column grid. The card's
+  `<template id="order-card">` is repeated, identical, in `index.html` and `orders.html`.
 - **One shell.** The mockup's three shells differ slightly; the dashboard's is used on all three
-  pages.
-- **Hub-local time and CAD.** Dates: `Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric',
-  month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })` → `12 Apr, 09:00`, in
-  the zone the response names. Money: `Intl.NumberFormat('en-CA', { style: 'currency',
-  currency: 'CAD' })` → `$1,540.00`. No single locale gives both.
-- **Styles added for the wiring go in one marked block at the end of `app.css`**: disabled
-  controls, the search input, links that must look like the elements they replace, the active
-  period button, loading / empty / error states, the Draft badge. Everything above the block is
-  the mockup's CSS, with the seeded names in its comments removed.
+  pages, its markup repeated, identical, in the three files — there is no build step to include it
+  from one place and no `innerHTML` to inject it.
+- **Hub-local time and CAD.** Instants are formatted with `en-GB` in the zone the response names;
+  money with `Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' })` → `$1,540.00`.
+  No single locale gives both. The date shapes, all in `format.js`:
+
+  | Shape | How |
+  |---|---|
+  | `12 Apr, 09:00` | `{ timeZone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }` |
+  | `17 Apr 2026` | `{ timeZone, day: 'numeric', month: 'short', year: 'numeric' }` — also the "paid" date of an invoice |
+  | `17 Apr · 08:55` | the day-and-month part and the time part of two formatters, joined by " · " |
+  | "today" | the date in the hub's zone equals today's date in the hub's zone, both as `en-CA` `{ timeZone, dateStyle: 'short' }` strings |
+  | a bucket's `start` | a calendar date, not an instant: formatted with `timeZone: 'UTC'`, never a hub's or the browser's zone — west of UTC it would print the day before. `12 Apr`, `Apr`; `Q2 2026` is computed |
+- **`app.css` is the mockup's CSS for the shell, then one marked block of additions.**
+  - *Kept, from the first `<style>` block only:* the reset and `html, body`; `.fc-*`; `.btn*`;
+    `.badge*`; `.kpi*`; `.cards-grid`, `.order-card`, `.oc-*`, `.ref-n-inline`,
+    `details.ref-n-multi`; `.tabs` and `.tab`; `.field*` (for the form of step 8). Comments that
+    name seeded users are removed. Everything else, and the three later `<style>` blocks, is
+    dropped. The mockup loads no font, image or script.
+  - *Inline styles stay inline.* Most of the tiles, the chart and the detail page are styled with
+    `style` attributes in the markup; they are copied as they are.
+  - *Additions:* `.fc-shell { min-height: 100vh }` (it is 640px inside the frame);
+    `.fc-main { min-width: 0 }` (the frame's `overflow: hidden` is gone); links that replace
+    `div.tab`, `.oc-num`, the period buttons, Prev / Next, the crumbs, the nav item and the tile —
+    `text-decoration: none; color: inherit`; the search input — `flex: 1; min-width: 0; border: 0;
+    outline: 0; background: transparent; font: inherit; color: inherit`;
+    `:disabled, [aria-disabled="true"] { cursor: default; opacity: .55 }`; loading, empty and error
+    states; the Draft badge; the active period button.
+  - *States the mockup writes inline on one sample become modifier classes* with the mockup's
+    values: the alert card's top border, the draft card, the red "Next" line, the orange
+    "actual", the amber Actual card, the Disposal row, the red "today" date.
 
 ## Contract
 
@@ -64,8 +87,8 @@ src/Freitty.Api/wwwroot/
 ├── order.html      Order Detail — order.html?n=FR001383
 ├── app.css
 └── js/
-    ├── api.js        fetch wrapper: JSON, ProblemDetails → an error with title, detail, errors
-    ├── format.js     labels for codes, dates in a zone, money, quantities
+    ├── api.js        fetch wrapper: JSON, ProblemDetails → an error with status, code, title, detail, errors
+    ├── format.js     labels for codes, dates in a zone, money, quantities, chart geometry — no DOM
     ├── shell.js      sidebar and top bar: GET /api/v1/me, the search box
     ├── card.js       fills one order card — shared by the dashboard and the list
     ├── dashboard.js
@@ -73,11 +96,27 @@ src/Freitty.Api/wwwroot/
     └── order.js
 ```
 
-`Program.cs`: `UseDefaultFiles()` then `UseStaticFiles()`, before the request logging so assets
-are not logged one line each, and before FastEndpoints. Static files are sent with
-`Cache-Control: no-cache`, so a new deploy is picked up on the next load. `/` serves `index.html`.
-Each page has `<link rel="icon" href="data:,">` — without it the browser asks for a favicon that
-does not exist.
+`Program.cs`: `UseDefaultFiles()` then `UseStaticFiles(…)`, after the exception handler and before
+the request logging — so assets are not logged one line each — and before FastEndpoints. Static
+files are sent with `Cache-Control: no-cache` (`StaticFileOptions.OnPrepareResponse`), so a new
+deploy is picked up on the next load. `/` serves `index.html`; a file that does not exist falls
+through to the `404` `ProblemDetails`. Each page has its own `<title>` ("Freitty — Dashboard",
+"… — Orders", "… — Order") and `<link rel="icon" href="data:,">` — without it the browser asks
+for a favicon that does not exist. The selects and the search input have `autocomplete="off"`, so
+the browser's form restore does not fight the URL.
+
+### Codes and their labels
+
+| Field | Values → text |
+|---|---|
+| `status` | `Draft` → "Draft", `Ready` → "New", `InProgress` → "In progress", `Completed` → "Completed" |
+| `type`, `crossDockKind` | `CrossDock` → "Cross-Dock", `Consolidation`; `Storage`, `Pickup` |
+| `unitType` | `Standard`, `ExtraLarge` — worded per place below |
+| `transport.kind` | `Carrier` → the carrier's name, `OwnDriver` → "Driver: {driverName}", `SelfPickup` → "Self pickup" |
+| `arrival.trailerType` | `DryVan53` → "Van · 53ft", `Reefer53` → "Reefer · 53ft", `Flatbed48` → "Flatbed · 48ft" |
+| Alert types | `QuantityDelta` → "quantity delta", `MissingPhoto` → "missing photo" |
+| `role` | `Admin`, `Dispatcher` |
+| `period` in the URL | `day`, `week`, `month`, `quarter`, sent as `Day`, `Week`, `Month`, `Quarter` |
 
 ### The shell (every page)
 
@@ -106,8 +145,9 @@ Calls `GET /api/v1/dashboard?period=…` and `GET /api/v1/me`. URL: `period` = `
   "⟶ same as previous 30 d", with the same colours.
 - **Need Attention**: the total; "{n} · awaiting your action"; "{n} · alert" or "alerts" followed
   by the first of `alertOrders` in brackets — "(photo missing · FR001674)", "(quantity delta ·
-  FR001383)", from its first Alert type. A chip whose number is zero is hidden. The tile and
-  "Open list →" are links to `orders.html?tab=alerts`.
+  FR001383)", from its first Alert type. A chip whose number is zero is hidden. The whole tile is
+  one link to `orders.html?tab=alerts`; "Open list →" stays a `<div>` inside it — a link inside a
+  link is invalid.
 - **Active Orders**: the cards of the response in the mockup's grid; "View all →" is a link to
   `orders.html`. Empty: "No active orders".
 - **Your activity**:
@@ -115,13 +155,18 @@ Calls `GET /api/v1/dashboard?period=…` and `GET /api/v1/me`. URL: `period` = `
     mockup's red style.
   - Header figures: `summary.completedLast30Days` and `summary.spendLast30Days`, each followed by
     "last 30d".
-  - Completed orders: one bar per bucket across the mockup's `0 0 400 120` view box. The tallest
-    bar is 110 high, the others in proportion; a zero has no bar. Opacity runs from 0.3 to 1 with
-    the value, as the mockup's ramp does.
-  - Spend: the line, its area fill and a dot per bucket; the highest point gets the mockup's
+  - Both charts use the mockup's `0 0 400 120` view box: the baseline is y = 115, labels sit at
+    y = 118. SVG nodes are created with `createElementNS('http://www.w3.org/2000/svg', …)`.
+  - Completed orders, for n buckets: slot = 380 / n; bar i at x = 10 + i·slot, width 0.7·slot,
+    height 110·value/max, y = 115 − height, `rx` 3, opacity 0.3 + 0.7·value/max; no rect for a
+    zero.
+  - Spend: point i at x = 10 + i·360/(n − 1), y = 115 − 100·value/max; the line through the
+    points, the area closed down to y = 115, a dot per point; the highest point gets the mockup's
     larger dot with the white stroke.
-  - Axis labels on the first bucket, the last and every third between: `Day` and `Week` — the
-    start date as `12 Apr`; `Month` — `Apr`; `Quarter` — `Q2 2026`.
+  - Axis labels on the last bucket and every third before it (n − 1, n − 4, …), centred on the bar
+    or the point: `Day` and `Week` — the start date as `12 Apr`; `Month` — `Apr`; `Quarter` —
+    `Q2 2026`. `text-anchor` is `middle`, and `start` on point 0 of the line chart, where a
+    centred label would be clipped.
   - A series that is all zeros draws the grid lines and the text "No data".
   - Summary: "📈 +20% completed orders vs previous 30 days" (green from zero up, red below; with a
     `null` percentage: "📈 {n} completed orders in the last 30 days"); "💰 {spend} spent · avg
@@ -143,11 +188,13 @@ Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GE
 
 - The filters are the mockup's three selects. A change navigates with the new value and without
   `page`; so does a tab and a search. A tab link keeps `hub`, `date`, `status` and `q`.
-- A value the page does not know is treated as absent.
-- On the Drafts tab the Status select is disabled and `status` from the URL is not sent.
+- A value the page does not know is treated as absent; so is a `q` shorter than 3 or longer than
+  50 characters after trimming — the API would answer `400`. The input has `maxlength="50"`.
+- On the Drafts tab the Status select is disabled and `status` from the URL is not sent to the
+  list. `/orders/counts` always receives the URL's `status`.
 - The tab counters come from `/orders/counts` with the same `hub`, `date`, `status` and `q`.
 - "Showing {from}–{to} of {total}"; Prev and Next are disabled at the ends. An empty result says
-  "No orders match these filters".
+  "No orders match these filters"; a page past the end shows that too, with Prev enabled.
 - The page title stays "All Orders".
 - Disabled: "Export CSV", "+ New Order", the Table and Pipeline buttons; Cards stays the active
   one. The Pipeline note is removed.
@@ -167,11 +214,12 @@ Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GE
   quantity once anything was unloaded, the declared one before — and, for an open Alert,
   " · ⚠ missing photo" or " · ⚠ quantity delta" (both, comma-separated, when both are open).
 - Type line: "Cross-Dock · Storage", "Cross-Dock · Pickup", "Consolidation · {n} sub-orders"
-  ("1 sub-order"), and "… · incomplete" for a draft without shipments.
+  ("1 sub-order"), and "{type label} · incomplete" for a draft without shipments, which has no
+  Ref N element. A draft shows only the "DRAFT" badge, without the type badge, as in the mockup.
 - "by" chip: initials in `.ava`, the name, the role tag — `.role` "Admin" or `.role.disp`
   "Dispatcher". A draft's card has no chip in the mockup; ours shows it like any other. The avatar
-  colour class is `u1`–`u4`, chosen from the initials (the sum of their character codes modulo
-  four) so one person always has one colour.
+  colour class is `u1`–`u4`: `u{((sum of the initials' character codes + 2) mod 4) + 1}`, so one
+  person always has one colour — the same rule on the detail page's chip.
 - Fields: **Hub** — the name, or "Mark→Tor" from the short names with a transfer hub. **Date** —
   `12 Apr, 09:00` in the hub's zone, "—" when not scheduled. **Q-ty** — one Unit Type:
   "23 × Standard" or "10 × XL"; several: "15 × Std + 3 × XL"; with `hasQuantityDelta`:
@@ -193,7 +241,8 @@ Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `ord
 
 **Header**
 
-- The strip: "F", "Cross-Dock management" or "Consolidation management", the menu glyph.
+- The strip: "F", "Cross-Dock management" or "Consolidation management", the menu glyph, inert.
+  The type badge keeps the mockup's inline blue style for both types.
 - "←" is a link to `orders.html`. The number. The green "$" is shown when the order has an
   invoice, the truck glyph when transport is arranged. The type badge. "● On Stock" while any
   `totals.onStock` is above zero. The stage badge:
@@ -209,7 +258,8 @@ Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `ord
 
 - Ref N inline for one shipment; "{n} sub-orders" for several.
 - The "by" chip with the derived initials and the tag "ADMIN" or "DISP".
-- "⚠ Actual ≠ Expected" when `totals.quantityDeltas` is above zero.
+- "⚠ Actual ≠ Expected" when `totals.quantityDeltas` is above zero, and after it a
+  `badge badge-alert` "⚠ Missing photo" while any shipment has an open Missing photo alert.
 - Icon bar: "💬 {comments}" and "📷 {photos}" as plain sums, without denominators; all its
   buttons, "Share QR", "BOL PDF" and "Edit" are disabled.
 - The transfer banner only when the order has a transfer hub: "**Read-only:** transfers between
@@ -223,8 +273,8 @@ Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `ord
 | Hub | "Markham (ON)"; with a transfer hub "Markham (ON) → Toronto" |
 | Services | one badge each, alternating the mockup's two badge styles; "—" without any |
 | Date | `17 Apr 2026`; " · today" and the red style only when that is today in the hub's zone; "—" when not scheduled |
-| Declared q-ty | per Unit Type of `totals.declared`: "10 Std · 48×40", "2 XL"; "—" when empty |
-| Actual q-ty | per Unit Type of `totals.actual`, with the badge "Δ +2" / "Δ −2" — the sum of that Unit Type's non-null shipment deltas — when it is not zero |
+| Declared q-ty | per Unit Type of `totals.declared`, separated by " + ": "10 Std · 48×40", "2 XL"; "—" when empty |
+| Actual q-ty | per Unit Type of `totals.actual`, the same way — "0 Std · 48×40" before any Unloading, "—" when empty — with the badge "Δ +2" / "Δ −2", the sum of that Unit Type's non-null shipment deltas, when it is not zero |
 | Trailer type | Cross-Dock only: "Van · 53ft", "Reefer · 53ft", "Flatbed · 48ft"; "—" before arrival |
 
 | Right column | |
@@ -236,19 +286,24 @@ Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `ord
 | Dock | Cross-Dock only: "Dock 12 · Bay B" or "—" |
 | Assigned to | Cross-Dock only: "User 6 (floor lead)" or "—" |
 | Status flow | "Draft → New → In progress → Completed", the current status highlighted |
-| Deltas detected | "{n} (q-ty)"; "View all →" stays, disabled |
+| Deltas detected | "{n} (q-ty)", also at zero; "View all →" stays, disabled |
 
 **Shipment block** — once for a Cross-Dock, once per shipment in order of position for a
-Consolidation. A Consolidation's block starts with a header line, "{label} · Ref N: {Ref N} ·
-received" or "· receiving", and a small grid with that shipment's Trailer type, Truck / trailer,
-Dock and Assigned to, which its meta grid leaves out. Then:
+Consolidation. A Consolidation's block is a white box like the meta grid. It starts with a header
+— the sub-order label in bold, the Ref N in the mockup's `.ref-n-inline`, and a badge:
+`badge-done` "Received", `badge-prog` "Receiving" (arrived, not received) or `badge-new`
+"Expected" (not arrived) — and under it the meta grid's inner two-column grid with that
+shipment's Trailer type, Truck / trailer, Dock and Assigned to, which its meta grid leaves out.
+Then, for both types:
 
 - **Dock card.** The wall reads "{HUB NAME} HUB"; the highlighted dock "DOCK {dock}"; the two
-  flanking docks stay without numbers; the trailer box shows the arrival's trailer number from
-  arrival until the order is completed. Below: "Dock 12 · Bay B", "Assigned 17 Apr, 08:42", and one
-  status line — "● Trailer docked · unloading" / "· loading" (from the stage; no suffix
-  otherwise) while a trailer is shown, "Waiting for the truck" before arrival, "Released" on a
-  completed order. Without a dock the schematic is replaced by "No dock assigned".
+  flanking docks stay without numbers. Below: "Dock 12 · Bay B" and "Assigned 17 Apr, 08:42". One
+  status line, the first that applies: the order is completed → "Released", no trailer box; the
+  shipment has not arrived → "Waiting for the truck", no trailer box; otherwise the trailer box
+  with the arrival's trailer number and "● Trailer docked" with a suffix of the shipment's own —
+  " · unloading" while it is not received, " · loading" once it is received and has anything On
+  stock, none otherwise. Without a dock, "No dock assigned" replaces the schematic and the two
+  lines under it; the status line stays.
 - **Expected (BOL)** and **Actual (warehouse)**: one line per row of the shipment's `quantities` —
   the number and "Standard · 48×40" or "XL". The Actual card has the mockup's amber style, the
   badge "+2" / "−2" and "Delta from BOL · read-only" only for a delta that is neither `null` nor
@@ -258,7 +313,9 @@ Dock and Assigned to, which its meta grid leaves out. Then:
 - **Operations**: per row, the green "$" for a billable one; a Disposal with the mockup's badge
   and red row; the trailer or "—"; the quantity; "Standard (48×40)" or "XL"; "17 Apr · 08:55" in
   the hub's zone; "💬 {n} · 📷 {n}" followed by the two inert glyphs. Empty: "No operations yet".
-  "+ Operation" is disabled here and becomes the form of [step 8](08-write-flow.md).
+  The table's header shows, in the mockup's red, "⚠ missing photo" and "⚠ quantity delta" for
+  the shipment's open Alerts (`resolvedAt` is `null`). "+ Operation" is disabled here and becomes
+  the form of [step 8](08-write-flow.md).
 
 **Once per order, after the blocks**
 
@@ -266,8 +323,8 @@ Dock and Assigned to, which its meta grid leaves out. Then:
   category keeps one style), quantity, unit price, line total, the two inert glyphs; the subtotal.
   Empty: "No supplies". "+ Supply" is disabled. "→ Invoice line items" and the picker note are
   removed.
-- **Invoices**, when there are any: one line each — "#{number} · {amount} · paid {date}" or
-  "· unpaid" — in a block styled like the Supplies one.
+- **Invoices**, when there are any: a block styled like the Supplies one, headed "Invoices", one
+  line each — "#{number} · {amount} · paid {date}" or "· unpaid".
 
 A draft renders the same page with dashes and "No shipments yet" in place of the blocks. An
 unknown number shows a not-found state with the `detail` of the `ProblemDetails` and a link to the
@@ -291,9 +348,15 @@ What the implementation session checks itself, on `docker compose up -d --build 
 
 - [ ] `/`, the three pages, `app.css` and every script answer `200`; `/health/ready`, `/scalar`
       and `/api/v1/me` answer as before.
-- [ ] `node --check` passes for every module, when Node is available.
-- [ ] No order number, person, company, hub, carrier name or amount appears in `wwwroot`, comments
-      included, and no Cyrillic character.
+- [ ] `node --check` passes for every module, when Node is available. `format.js` touches no DOM:
+      a throwaway `node -e "import(…)"`, not committed, prints one date in each shape, one amount,
+      and the bar and point coordinates for 14, 12, 6 and 4 buckets, and they are what the rules
+      above give.
+- [ ] No seeded value and no Cyrillic in `wwwroot`, comments included:
+      `grep -rnE 'FR0[0-9]|DRAFT-0|REF-[0-9]|TR[KL]-[0-9]|User [0-9]|R-way|Markham|Toronto|TForce|Schneider|\$[0-9]|[А-Яа-яІіЇїЄєҐґ]' src/Freitty.Api/wwwroot`
+      prints nothing.
+- [ ] The shell block is byte-identical in the three pages and the card template in the two that
+      have it (`diff`).
 - [ ] No `innerHTML`, `insertAdjacentHTML` or `document.write` in the scripts.
 - [ ] `assignment/` is unchanged.
 - [ ] Build with 0 warnings, `dotnet format --verify-no-changes` clean, `dotnet test` green.
@@ -313,7 +376,7 @@ and recorded in the step's review:
 ## Tests
 
 - `/`, `/index.html`, `/orders.html`, `/order.html`, `/app.css` and each script are served with
-  `200` and the right content type — integration.
+  `200`, the right content type and `Cache-Control: no-cache` — integration.
 - `/health/ready` and `/api/v1/me` still answer after static files are added — integration.
 
 ## Out of scope

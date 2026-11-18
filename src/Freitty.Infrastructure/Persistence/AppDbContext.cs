@@ -1,3 +1,4 @@
+using Freitty.Application.Abstractions;
 using Freitty.Domain.Billing;
 using Freitty.Domain.Carriers;
 using Freitty.Domain.Catalog;
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Freitty.Infrastructure.Persistence;
 
 // Children of Order have no DbSet: they are reached through the aggregate.
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IAppDbContext
 {
     public DbSet<Order> Orders => Set<Order>();
 
@@ -29,6 +30,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.HasPostgresExtension("pg_trgm");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

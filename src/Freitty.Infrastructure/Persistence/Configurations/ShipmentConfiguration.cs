@@ -6,6 +6,8 @@ namespace Freitty.Infrastructure.Persistence.Configurations;
 
 internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
 {
+    private const string RefNumberTrigramIndex = "ix_shipments_ref_number_trgm";
+
     public void Configure(EntityTypeBuilder<Shipment> builder)
     {
         builder.ToTable("shipments", ConfigureChecks);
@@ -20,6 +22,11 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
 
         builder.HasIndex(shipment => new { shipment.OrderId, shipment.Position }).IsUnique();
         builder.HasIndex(shipment => new { shipment.OrderId, shipment.RefNumber }).IsUnique();
+
+        // The search's ILIKE '%…%' on Ref N, named like the trigram index on the order number.
+        builder.HasIndex(shipment => shipment.RefNumber)
+            .HasDatabaseName(RefNumberTrigramIndex)
+            .IsTrigramIndex();
 
         ConfigureChildren(builder);
     }

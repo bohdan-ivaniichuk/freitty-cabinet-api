@@ -3,8 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Freitty.Api.IntegrationTests.Persistence;
 
-// There is no endpoint yet, so these tests take AppDbContext from the services of the started API instead of
-// calling HTTP as ADR 0002 describes. Every call gets a new context, so a read sees only what was saved.
+// AppDbContext from the services of the started API: persistence tests read and write through it, and HTTP tests
+// arrange their data with it. Every call gets a new context, so a read sees only what was saved.
 internal sealed class TestDatabase(ApiFactory factory) : IAsyncDisposable
 {
     public TestDatabase(string connectionString)
@@ -18,10 +18,16 @@ internal sealed class TestDatabase(ApiFactory factory) : IAsyncDisposable
         await action(scope.ServiceProvider.GetRequiredService<AppDbContext>());
     }
 
-    public async Task<T> InContextAsync<T>(Func<AppDbContext, Task<T>> action)
+    public Task<T> InContextAsync<T>(Func<AppDbContext, Task<T>> action)
+    {
+        return InScopeAsync(services => action(services.GetRequiredService<AppDbContext>()));
+    }
+
+    // For a test that calls an application service directly, without HTTP.
+    public async Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
     {
         await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        return await action(scope.ServiceProvider.GetRequiredService<AppDbContext>());
+        return await action(scope.ServiceProvider);
     }
 
     public Task SaveAsync(params object[] entities)

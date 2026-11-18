@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Freitty.Infrastructure.Persistence.Configurations;
@@ -12,6 +13,12 @@ internal static class ConfigurationExtensions
     public static PropertyBuilder<decimal> IsMoney(this PropertyBuilder<decimal> property)
     {
         return property.HasPrecision(MoneyPrecision, MoneyScale);
+    }
+
+    // A GIN index of trigrams, which serves ILIKE '%…%' on the column.
+    public static IndexBuilder<TEntity> IsTrigramIndex<TEntity>(this IndexBuilder<TEntity> index)
+    {
+        return index.HasMethod("gin").HasOperators("gin_trgm_ops");
     }
 
     // The list is built from the enum, so a new member changes the constraint in the next migration. The naming
