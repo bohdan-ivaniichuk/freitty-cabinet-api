@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using Freitty.Api.Seed;
+using Freitty.Application.Orders.AttachPhotos;
 using Freitty.Application.Orders.GetOrderDetail;
+using Freitty.Application.Orders.ListPhotos;
 using Freitty.Domain.Carriers;
 using Freitty.Domain.Orders;
 using Freitty.Infrastructure.Persistence;
@@ -19,6 +21,7 @@ namespace Freitty.Api.IntegrationTests.Seed;
 
 // With Seed:Refresh on, each test has a database of its own: the refresh empties every table. The clock only moves when
 // a test advances it; the refresher has no hook for tests, so a test that moves it asks until it sees the result.
+[Collection(PhotoStorageCollection.Name)]
 public sealed class SeedRefreshTests(PostgresFixture postgres)
 {
     private const string LoadedOrder = "FR001383";
@@ -137,6 +140,26 @@ public sealed class SeedRefreshTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task RebuildDeletesTheUploadsAndKeepsTheSampleImages()
+    {
+        await using ApiFactory factory = Refreshing(await postgres.CreateDatabaseAsync(), new FakeTimeProvider(Now));
+        using HttpClient client = factory.CreateClient();
+        Guid unloadingId = (await DetailAsync(client, LoadedOrder)).Shipments.Single().Operations[0].Id;
+        Guid uploadedId = await UploadAsync(client, unloadingId);
+
+        await factory.Services.GetRequiredService<SampleData>().RebuildAsync(CancellationToken);
+
+        using HttpResponseMessage uploaded =
+            await client.GetAsync(ApiUrls.Photo(LoadedOrder, uploadedId), CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, uploaded.StatusCode);
+        Assert.Empty(await StoredUploads.ListAsync(factory.Services));
+        PhotoDto sample = (await PhotosAsync(client, LoadedOrder))[0];
+        using HttpResponseMessage served =
+            await client.GetAsync(ApiUrls.Photo(LoadedOrder, sample.Id), CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, served.StatusCode);
+    }
+
+    [Fact]
     public async Task HealthProbeIsAnsweredWhileTheGateIsClosed()
     {
         await using ApiFactory factory = Refreshing(await postgres.CreateDatabaseAsync(), new FakeTimeProvider(Now));
@@ -219,7 +242,6 @@ public sealed class SeedRefreshTests(PostgresFixture postgres)
             LoadableStandard,
             OutboundTrailer,
             IsBillable: true,
-            PhotoCount: 0,
             SeededVersion);
         using HttpResponseMessage response = await client.PostAsJsonAsync(
             ApiUrls.Operations(LoadedOrder),
@@ -227,6 +249,21 @@ public sealed class SeedRefreshTests(PostgresFixture postgres)
             ApiJson.Options,
             CancellationToken);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    private static async Task<Guid> UploadAsync(HttpClient client, Guid operationId)
+    {
+        using MultipartFormDataContent form = PhotoUpload.Form(SeededVersion, PhotoUpload.Png());
+        using HttpResponseMessage response =
+            await client.PostAsync(ApiUrls.OperationPhotos(LoadedOrder, operationId), form, CancellationToken);
+        AttachedPhotosDto attached = await ApiJson.ReadAsync<AttachedPhotosDto>(response, HttpStatusCode.Created);
+        return attached.Photos.Single().Id;
+    }
+
+    private static async Task<IReadOnlyList<PhotoDto>> PhotosAsync(HttpClient client, string number)
+    {
+        using HttpResponseMessage response = await client.GetAsync(ApiUrls.Photos(number), CancellationToken);
+        return await ApiJson.ReadAsync<IReadOnlyList<PhotoDto>>(response, HttpStatusCode.OK);
     }
 
     private static async Task<OrderDetailDto> DetailAsync(HttpClient client, string number)

@@ -4,6 +4,7 @@ using Freitty.Api.Health;
 using Freitty.Api.Logging;
 using Freitty.Api.OpenApi;
 using Freitty.Api.Pages;
+using Freitty.Api.Photos;
 using Freitty.Api.Pipeline;
 using Freitty.Api.Reporting;
 using Freitty.Api.Seed;
@@ -11,6 +12,7 @@ using Freitty.Application;
 using Freitty.Infrastructure;
 using Freitty.Infrastructure.Persistence;
 using Freitty.Infrastructure.Persistence.Seed;
+using Freitty.Infrastructure.Photos;
 using Serilog;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -23,6 +25,7 @@ builder.Services.AddReportingTimeZone(builder.Configuration);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSampleDataRefresh(builder.Configuration);
+builder.Services.AddPhotoLimits(builder.Configuration);
 builder.Services.AddErrorResponses();
 builder.Services.AddApiEndpoints();
 builder.Services.AddCommandPipeline();
@@ -31,6 +34,8 @@ builder.Services.AddHealthEndpoints();
 
 WebApplication app = builder.Build();
 
+// Storage first: it changes no schema, so a wrong storage setting stops the startup before the migrations do.
+await app.Services.PreparePhotoStorageAsync(app.Lifetime.ApplicationStopping);
 await app.Services.MigrateDatabaseAsync(app.Lifetime.ApplicationStopping);
 await app.Services.SeedDatabaseAsync(app.Lifetime.ApplicationStopping);
 
@@ -39,6 +44,7 @@ app.UseErrorResponses();
 app.UseStaticPages();
 app.UseRequestLogging();
 app.UseSampleDataRefresh();
+app.UsePhotoLimits();
 app.MapHealthEndpoints();
 app.UseApiEndpoints();
 app.MapApiDocumentation();

@@ -143,6 +143,12 @@ Disposal, Restack or Loading — with a **Unit Type** and a quantity. The **Oper
 and does not change their count. "Applied at" is the moment an **Operation** was recorded.
 _Avoid_: Action, activity, movement
 
+**Photo**:
+A picture that documents an **Operation**, uploaded after the **Operation** is recorded: at most
+ten per **Operation**. The photo count of an **Operation** is the number of its **Photos**; the
+comment count is still only a number.
+_Avoid_: Image, attachment, file (the file is how a **Photo** is uploaded, not what it is)
+
 **Actual quantity**:
 What the hub received, per **Shipment** and **Unit Type**: the sum of its Unloading
 **Operations**. Never entered on its own.
@@ -178,7 +184,8 @@ same difference does not raise it again.
 
 **Missing photo alert**:
 The **Alert** raised when an **Operation** that documents the condition of freight — Unloading or
-Disposal — was recorded without a photo. It ends when someone resolves it.
+Disposal — was recorded without a **Photo**. It ends when every Unloading and Disposal of the
+**Shipment** has a **Photo**, or when someone resolves it.
 
 **Awaiting action**:
 **Orders** that only the client can move: **Drafts** and **Orders** with an unpaid **Invoice**.
@@ -229,6 +236,7 @@ issued — per day, week, month or quarter. Not the **Operations** of an **Order
   for a Consolidation. A **Draft** may have none yet.
 - A **Shipment** has one **Cargo Line** per **Unit Type**, one **Arrival**, one current
   **Dock assignment**, and its own **Operations** and **Alerts**.
+- An **Operation** has up to ten **Photos**.
 - An **Order** is handled at one **Hub** and may have a **Transfer hub**.
 - An **Order** has many **Supply lines** and selects many **Services**.
 - An **Order** may have several **Invoices**; an **Invoice** belongs to one **Order**.

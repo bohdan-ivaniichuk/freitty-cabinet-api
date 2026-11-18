@@ -34,7 +34,7 @@ public sealed class RecordOperationRaceTests(PostgresFixture postgres) : IAsyncD
 
         using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
-            OperationRequest.Unloading(order, 4, photos: 0));
+            OperationRequest.Unloading(order, 4));
 
         await AssertLostAsync(response, order.Number);
         DetailShipmentDto shipment = Assert.Single((await api.DetailAsync(order.Number)).Shipments);

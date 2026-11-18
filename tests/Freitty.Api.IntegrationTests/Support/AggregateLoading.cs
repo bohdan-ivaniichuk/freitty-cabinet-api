@@ -10,7 +10,9 @@ internal static class AggregateLoading
     {
         return db.Orders
             .Include(order => order.Shipments).ThenInclude(shipment => shipment.CargoLines)
-            .Include(order => order.Shipments).ThenInclude(shipment => shipment.Operations)
+            .Include(order => order.Shipments)
+                .ThenInclude(shipment => shipment.Operations)
+                .ThenInclude(operation => operation.Photos)
             .Include(order => order.Shipments).ThenInclude(shipment => shipment.Alerts)
             .Include(order => order.SupplyLines)
             .Include(order => order.Services)

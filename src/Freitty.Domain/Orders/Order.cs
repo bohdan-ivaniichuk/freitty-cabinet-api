@@ -350,6 +350,30 @@ public sealed class Order
         return operation;
     }
 
+    // Photos come after the operation they document. The caller names where their bytes are kept: storing them is
+    // not a rule of the order.
+    public Result<PhotoAttachment> AttachPhotos(Guid operationId, IReadOnlyList<NewPhoto> photos, DateTimeOffset now)
+    {
+        CheckContract(photos);
+        ArgumentOutOfRangeException.ThrowIfZero(photos.Count, nameof(photos));
+        DateTimeOffset instant = AcceptInstant(now);
+
+        if (!IsActive)
+        {
+            return OrderErrors.NotActive(Number, Status);
+        }
+
+        foreach (Shipment shipment in shipments)
+        {
+            if (shipment.FindOperation(operationId) is { } operation)
+            {
+                return AttachPhotos(shipment, operation, photos, instant);
+            }
+        }
+
+        return OrderErrors.OperationNotFound(Number, operationId);
+    }
+
     // A shipment that never arrived is finished with no Unloading, which reports it as short.
     public Result FinishReceiving(Guid shipmentId, DateTimeOffset now)
     {
@@ -512,7 +536,8 @@ public sealed class Order
         Guard.Defined(newOperation.Type);
         Guard.Defined(newOperation.UnitType);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(newOperation.Quantity);
-        ArgumentOutOfRangeException.ThrowIfNegative(newOperation.PhotoCount);
+        CheckContract(newOperation.Photos);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(newOperation.Photos.Count, Operation.MaxPhotoCount);
         ArgumentOutOfRangeException.ThrowIfNegative(newOperation.CommentCount);
 
         bool needsTrailer = Operation.RequiresTrailer(newOperation.Type);
@@ -536,6 +561,18 @@ public sealed class Order
         }
 
         return newOperation with { TrailerNumber = Guard.VehicleNumber(newOperation.TrailerNumber) };
+    }
+
+    private static void CheckContract(IReadOnlyList<NewPhoto> photos)
+    {
+        ArgumentNullException.ThrowIfNull(photos);
+        foreach (NewPhoto photo in photos)
+        {
+            ArgumentNullException.ThrowIfNull(photo, nameof(photos));
+            ArgumentException.ThrowIfNullOrWhiteSpace(photo.StorageKey, nameof(photos));
+            ArgumentException.ThrowIfNullOrWhiteSpace(photo.ContentType, nameof(photos));
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(photo.SizeBytes, nameof(photos));
+        }
     }
 
     // Time moves forward within an order: this one rule keeps the milestones, the Operations and the Alerts in
@@ -572,6 +609,22 @@ public sealed class Order
         DriverName = driverName;
         Touch(instant);
         return Result.Success();
+    }
+
+    private Result<PhotoAttachment> AttachPhotos(
+        Shipment shipment,
+        Operation operation,
+        IReadOnlyList<NewPhoto> photos,
+        DateTimeOffset now)
+    {
+        if (!operation.HasRoomFor(photos.Count))
+        {
+            return OrderErrors.PhotoLimit(LabelOf(shipment), operation.Type, operation.PhotoCount, photos.Count);
+        }
+
+        PhotoAttachment attachment = shipment.AttachPhotos(operation, photos, now);
+        Touch(now);
+        return attachment;
     }
 
     private List<string> MissingForSubmit()

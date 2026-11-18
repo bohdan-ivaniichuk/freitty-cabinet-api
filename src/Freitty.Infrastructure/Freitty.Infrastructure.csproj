@@ -1,11 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Npgsql.DependencyInjection" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The pictures seeded photos point at, drawn by Persistence/Seed/Images/draw_sample_photos.py. -->
+    <EmbeddedResource Include="Persistence/Seed/Images/*.png" LogicalName="SamplePhotos.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

@@ -13,6 +13,8 @@ internal static class ApiUrls
         $"/{ApiEndpoints.RoutePrefix}/{ApiEndpoints.VersionPrefix}{ApiEndpoints.CurrentVersion}";
 
     private static readonly string NumberPlaceholder = $"{{{ApiRoutes.Orders.NumberParameter}}}";
+    private static readonly string OperationIdPlaceholder = $"{{{ApiRoutes.Orders.OperationIdParameter}}}";
+    private static readonly string PhotoIdPlaceholder = $"{{{ApiRoutes.Orders.PhotoIdParameter}}}";
 
     public static string Orders { get; } = Of(ApiRoutes.Orders.List);
 
@@ -28,6 +30,12 @@ internal static class ApiUrls
     public static string OperationsTemplate { get; } = Of(ApiRoutes.Orders.Operations);
 
     public static string SubmitTemplate { get; } = Of(ApiRoutes.Orders.Submit);
+
+    public static string PhotosTemplate { get; } = Of(ApiRoutes.Orders.Photos);
+
+    public static string PhotoTemplate { get; } = Of(ApiRoutes.Orders.Photo);
+
+    public static string OperationPhotosTemplate { get; } = Of(ApiRoutes.Orders.OperationPhotos);
 
     public static string Dashboard { get; } = Of(ApiRoutes.Dashboard.Get);
 
@@ -48,6 +56,36 @@ internal static class ApiUrls
     public static string Submit(string orderNumber)
     {
         return SubmitTemplate.Replace(NumberPlaceholder, orderNumber, StringComparison.Ordinal);
+    }
+
+    public static string Photos(string orderNumber)
+    {
+        return PhotosTemplate.Replace(NumberPlaceholder, orderNumber, StringComparison.Ordinal);
+    }
+
+    public static string Photo(string orderNumber, Guid photoId)
+    {
+        return Photo(orderNumber, photoId.ToString());
+    }
+
+    // Any text in place of the id, also one that is not a UUID.
+    public static string Photo(string orderNumber, string photoId)
+    {
+        return PhotoTemplate
+            .Replace(NumberPlaceholder, orderNumber, StringComparison.Ordinal)
+            .Replace(PhotoIdPlaceholder, photoId, StringComparison.Ordinal);
+    }
+
+    public static string OperationPhotos(string orderNumber, Guid operationId)
+    {
+        return OperationPhotos(orderNumber, operationId.ToString());
+    }
+
+    public static string OperationPhotos(string orderNumber, string operationId)
+    {
+        return OperationPhotosTemplate
+            .Replace(NumberPlaceholder, orderNumber, StringComparison.Ordinal)
+            .Replace(OperationIdPlaceholder, operationId, StringComparison.Ordinal);
     }
 
     public static string Of(string route)

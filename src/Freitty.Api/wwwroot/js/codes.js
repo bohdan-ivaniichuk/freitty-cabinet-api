@@ -29,6 +29,14 @@ export const ROLE = { Admin: 'Admin', Dispatcher: 'Dispatcher' };
 
 export const PERIOD = { Day: 'Day', Week: 'Week', Month: 'Month', Quarter: 'Quarter' };
 
+// What an upload of photos may hold, as the API checks it; the page checks the same before sending.
+// The API reads the type from the bytes, the page only from what the browser says.
+export const PHOTO_UPLOAD = {
+  maxFiles: 5,
+  maxSizeBytes: 5 * 1024 * 1024,
+  contentTypes: ['image/jpeg', 'image/png', 'image/webp'],
+};
+
 // The ProblemDetails code of a write made against an older version of the order.
 export const VERSION_CONFLICT = 'order.version_conflict';
 

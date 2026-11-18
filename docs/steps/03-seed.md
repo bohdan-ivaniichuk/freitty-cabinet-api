@@ -74,6 +74,8 @@ src/Freitty.Infrastructure/Persistence/Seed/
 ├── SeedCalendar.cs     the anchor day, and an instant from a day offset and a local time
 ├── ReferenceData.cs    company, users, hubs, carriers, services, supply items
 ├── OrderScript.cs      builds one order; holds the rules every seeded order follows
+├── SamplePhotos.cs     the sample images seeded photos point at, uploaded to storage at every seed
+├── Images/             the four sample images and draw_sample_photos.py, which drew them
 ├── DueInvoice.cs       when an order's invoice is issued and paid, for Invoices to number
 ├── SeedResults.cs      turns a failed Result into an exception
 ├── ScriptedOrders.cs   the eleven orders of the table below
@@ -93,8 +95,17 @@ src/Freitty.Api/Seed/
 - `SampleData` is a singleton: it remembers the anchor day of the data it last built, and
   `IsOutdated` says whether the anchor day has moved on since. It resolves `DatabaseSeeder` in a
   scope of its own for each rebuild.
-- `DatabaseSeeder.RebuildAsync`, in one transaction: `TRUNCATE TABLE` with every table of
-  `Model.GetRelationalModel()`, quoted, in one statement — so their foreign keys need no order —
+- **Photos go with the data** (step 12, [ADR 0017](../adr/0017-photos-in-blob-storage-behind-the-api.md)).
+  A seeded photo is a row that names one of four sample images, placeholders drawn by
+  `Images/draw_sample_photos.py` and embedded in Infrastructure; the photo counts below are that
+  many rows. Before the database is seeded or rebuilt, the images are uploaded under `samples/`,
+  replacing what is there. A rebuild deletes every blob under `uploads/` once its
+  transaction has committed, inside the same closed gate; a failure there leaves at worst uploads
+  that no row names, and the data stays outdated, so the next check rebuilds again. Seeding an
+  empty database deletes no upload.
+- `DatabaseSeeder.RebuildAsync`, in one transaction: `TRUNCATE TABLE … CASCADE` with every table of
+  `Model.GetRelationalModel()`, quoted, in one statement — so their foreign keys need no order, and a
+  table of a newer version that refers to them is emptied too —
   then the seed, then the commit. `TRUNCATE` holds an exclusive lock on every table until the
   commit. What that means for each reader:
   - a request of this process is held at the gate and never meets the lock;
@@ -186,7 +197,8 @@ without a day continues the day before it. Rules for every seeded order, scripte
 - Every arrival is followed two minutes later by a dock assignment. Dock and bay are the
   implementer's choice, except for FR001383; the floor lead is the one of the hub.
 - An Unloading names the trailer of the shipment's arrival. Unloadings and Loadings are billable.
-  Photo and comment counts are zero unless written.
+  Photos and comments are none unless written; each photo written is a row naming the next of the
+  four sample images, in turn within the order.
 - Invoice numbers are stored as six digits; the `#` of the screens is presentation.
 
 | Order | Script | State to assert |
@@ -285,14 +297,18 @@ What later steps may rely on:
   your action".
 - **Step 8** — FR001383 has 5 Standard On stock: a Loading of 5 empties it, a Loading of 6 is
   refused. FR001674-2 is received two short with its Quantity delta alert open: an Unloading of 2
-  resolves that Alert. Its Missing photo alert stays — no endpoint resolves one — so the order
-  still has an open Alert afterwards and the count of such orders stays 2. FR001681 and FR001679
-  are Ready: any Operation starts them, an Unloading
-  above the declared quantity or without a photo raises an Alert.
+  resolves that Alert. Its Missing photo alert stays until every Unloading of the shipment has a
+  photo (step 12), so the order still has an open Alert afterwards and the count of such orders
+  stays 2.
+  FR001681 and FR001679 are Ready: any Operation starts them, an Unloading above the declared
+  quantity or without a photo raises an Alert.
 - **Step 11** — DRAFT-004 is complete: submitting it moves it to Ready under the next official
   number. DRAFT-003 lacks a destination, a transport arrangement and its shipments, so a submit is
   refused with that list; a refused submit takes no number, so DRAFT-004 gets FR001682 whatever
   was tried before it.
+- **Step 12** — FR001383 holds seven photos, the same total as its header: four on the Unloading,
+  two on the Disposal, one on the Restack. The Unloading of FR001674-2 has none, so uploading one
+  to it closes the Missing photo alert of FR001674.
 
 ## Acceptance criteria
 

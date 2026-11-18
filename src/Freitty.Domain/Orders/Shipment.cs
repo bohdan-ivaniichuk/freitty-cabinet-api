@@ -150,6 +150,27 @@ public sealed class Shipment
         return operation;
     }
 
+    internal Operation? FindOperation(Guid operationId)
+    {
+        return operations.Find(operation => operation.Id == operationId);
+    }
+
+    // The Missing photo alert is about the shipment, so it closes only once no operation that needs a photo lacks
+    // one. A Quantity delta alert is not about photos and stays as it is.
+    internal PhotoAttachment AttachPhotos(Operation operation, IReadOnlyList<NewPhoto> newPhotos, DateTimeOffset now)
+    {
+        List<Photo> photos = operation.AttachPhotos(newPhotos, now);
+        var resolvedAlertTypes = new List<AlertType>();
+        Alert? missingPhotoAlert = FindOpenAlert(AlertType.MissingPhoto);
+        if (missingPhotoAlert is not null && !LacksARequiredPhoto())
+        {
+            missingPhotoAlert.Resolve(now);
+            resolvedAlertTypes.Add(AlertType.MissingPhoto);
+        }
+
+        return new PhotoAttachment(operation, photos, resolvedAlertTypes);
+    }
+
     // The alert follows changes of the delta, not its presence: once resolved by hand, the same delta does not
     // raise it again, while a different one does — also a smaller one, since the client was told about a state
     // that no longer holds.
@@ -168,6 +189,12 @@ public sealed class Shipment
         {
             RaiseUnlessOpen(AlertType.QuantityDelta, now);
         }
+    }
+
+    private bool LacksARequiredPhoto()
+    {
+        return operations.Exists(operation =>
+            Operation.TypesRequiringPhoto.Contains(operation.Type) && operation.PhotoCount == 0);
     }
 
     private void RaiseUnlessOpen(AlertType type, DateTimeOffset now)

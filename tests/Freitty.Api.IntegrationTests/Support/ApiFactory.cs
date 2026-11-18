@@ -19,14 +19,19 @@ internal sealed class ApiFactory(
     ICurrentUser? currentUser = null,
     string? reportingTimeZone = null,
     IInterceptor? saveInterceptor = null,
-    bool seedRefreshOn = false)
+    bool seedRefreshOn = false,
+    string? photoStorageConnectionString = null,
+    IPhotoStorage? photoStorage = null,
+    bool photoUploadsEnabled = true)
     : WebApplicationFactory<Program>
 {
     public const string SeedRefreshKey = "Seed:Refresh";
 
     private const string ConnectionStringKey = "ConnectionStrings:Postgres";
+    private const string PhotoStorageConnectionStringKey = "ConnectionStrings:PhotoStorage";
     private const string SeedEnabledKey = "Seed:Enabled";
     private const string ReportingTimeZoneKey = "Cabinet:TimeZone";
+    private const string PhotoUploadsEnabledKey = "Photos:UploadsEnabled";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -38,6 +43,9 @@ internal sealed class ApiFactory(
         // configuration callbacks run. It also wins over a ConnectionStrings__Postgres variable in the
         // developer's shell, so an empty value reliably means "missing".
         builder.UseSetting(ConnectionStringKey, connectionString);
+        builder.UseSetting(
+            PhotoStorageConnectionStringKey,
+            photoStorageConnectionString ?? AzuriteFixture.ConnectionString);
 
         // Left absent when off, as in appsettings.json: that default is what the seed tests check.
         if (seedEnabled)
@@ -48,6 +56,12 @@ internal sealed class ApiFactory(
         if (seedRefreshOn)
         {
             builder.UseSetting(SeedRefreshKey, bool.TrueString);
+        }
+
+        // Left absent when on, as in appsettings.json: on is the default.
+        if (!photoUploadsEnabled)
+        {
+            builder.UseSetting(PhotoUploadsEnabledKey, bool.FalseString);
         }
 
         if (reportingTimeZone is not null)
@@ -65,6 +79,11 @@ internal sealed class ApiFactory(
             if (currentUser is not null)
             {
                 services.AddSingleton(currentUser);
+            }
+
+            if (photoStorage is not null)
+            {
+                services.AddSingleton(photoStorage);
             }
 
             if (saveInterceptor is not null)

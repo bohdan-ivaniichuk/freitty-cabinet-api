@@ -1,10 +1,20 @@
 // order.html?n={number}: GET /api/v1/orders/{number}. The whole order is rendered into #order from
 // <template id="order-view">, so a refetch re-renders it in one replaceChildren. The "+ Operation"
 // button of a shipment opens the dialog that records an Operation: POST
-// /api/v1/orders/{number}/operations with the version the page shows.
+// /api/v1/orders/{number}/operations with the version the page shows, then the chosen photos to
+// POST /api/v1/orders/{number}/operations/{id}/photos. The 📷 buttons open the gallery: GET
+// /api/v1/orders/{number}/photos, each image served by /api/v1/orders/{number}/photos/{id}.
 
-import { getJson, postJson } from './api.js';
-import { ALERT_TYPE, OPERATION_TYPE, ORDER_TYPE, STATUS, UNIT_TYPE, VERSION_CONFLICT } from './codes.js';
+import { getJson, postForm, postJson } from './api.js';
+import {
+  ALERT_TYPE,
+  OPERATION_TYPE,
+  ORDER_TYPE,
+  PHOTO_UPLOAD,
+  STATUS,
+  UNIT_TYPE,
+  VERSION_CONFLICT,
+} from './codes.js';
 import * as format from './format.js';
 import {
   cloneTemplate,
@@ -14,6 +24,8 @@ import {
   fillCreatedBy,
   initShell,
   loadMe,
+  showRefusal,
+  showToast,
   stateBox,
 } from './shell.js';
 
@@ -33,9 +45,14 @@ const operationDialog = document.getElementById('operation-dialog');
 const operationForm = document.getElementById('operation-form');
 const operationField = fieldsOf(operationForm);
 const control = name => operationForm.elements.namedItem(name);
+const galleryDialog = document.getElementById('gallery-dialog');
+const galleryField = fieldsOf(galleryDialog);
+const galleryForm = galleryField('add-form');
 
 // The order as the page shows it: the dialog reads its shipments and sends its version.
 let shownOrder = null;
+// The operation whose photos the gallery shows, or null for the whole order.
+let galleryOperationId = null;
 
 if (number) {
   initShell({
@@ -45,6 +62,7 @@ if (number) {
     },
   });
   initOperationForm();
+  initGallery();
   document.getElementById('crumbs').append(number);
   loadMe();
   loadOrder();
@@ -157,6 +175,7 @@ function renderHeader(field, order) {
     format.openAlertTypes(shipment).includes(ALERT_TYPE.MissingPhoto));
   field('comments').textContent = order.totals.commentCount;
   field('photos').textContent = order.totals.photoCount;
+  field('open-gallery').addEventListener('click', () => openGallery(null));
 }
 
 function renderMeta(field, order, timeZone) {
@@ -375,7 +394,12 @@ function operationRow(operation, timeZone) {
   field('quantity').textContent = operation.quantity;
   field('unit').textContent = format.unitLabel(operation.unitType, 'operation');
   field('applied').textContent = format.formatDayDotTime(operation.appliedAt, timeZone);
-  field('counters').textContent = format.operationCounters(operation);
+  field('comments').textContent = format.commentCounter(operation);
+  const photos = field('photos');
+  photos.textContent = format.photoCounter(operation);
+  photos.setAttribute('aria-label', format.photoCounterLabel(operation));
+  photos.dataset.operationId = operation.id;
+  photos.addEventListener('click', () => openGallery(operation.id));
   return row;
 }
 
@@ -426,6 +450,8 @@ function initOperationForm() {
     .map(type => new Option(format.operationLabel(type), type)));
   control('unitType').replaceChildren(...Object.values(UNIT_TYPE)
     .map(unitType => new Option(format.unitLabel(unitType, 'operation'), unitType)));
+  control('files').accept = PHOTO_UPLOAD.contentTypes.join(',');
+  operationField('photo-limits').textContent = format.PHOTO_LIMITS;
   control('shipmentPosition').addEventListener('change', applyShipmentDefaults);
   control('type').addEventListener('change', applyTypeDefaults);
   operationField('cancel').addEventListener('click', () => operationDialog.close());
@@ -466,13 +492,27 @@ function applyTypeDefaults() {
   control('isBillable').checked = movesThroughTrailer;
 }
 
+// The operation is recorded first and its photos uploaded to it after: a failed upload leaves the
+// operation recorded, so the dialog closes and the toast says why the photos are missing.
 async function recordOperation(event) {
   event.preventDefault();
+  clearOperationErrors();
+  const files = [...control('files').files];
+  const filesError = files.length === 0 ? '' : photoFilesError(files);
+  if (filesError) {
+    showFieldError({ name: 'files', reason: filesError });
+    return;
+  }
+
   const request = operationRequest();
   setInFlight(true);
-  clearOperationErrors();
   try {
-    await postJson(`/api/v1/orders/${encodeURIComponent(shownOrder.number)}/operations`, request);
+    const recorded = await postJson(
+      `/api/v1/orders/${encodeURIComponent(shownOrder.number)}/operations`, request);
+    if (files.length > 0) {
+      await uploadRecordedPhotos(recorded, files);
+    }
+
     operationDialog.close();
     await Promise.all([loadOrder(), loadMe()]);
     focusAddOperation(request.shipmentPosition);
@@ -487,6 +527,17 @@ async function recordOperation(event) {
     }
   } finally {
     setInFlight(false);
+  }
+}
+
+async function uploadRecordedPhotos(recorded, files) {
+  try {
+    const { operation, order } = recorded;
+    const attached = await uploadPhotos(order.number, operation.id, order.version, files);
+    showToast(format.operationRecordedWithPhotos(attached.photos.length));
+  } catch (error) {
+    const { title, detail } = describeError(error);
+    showRefusal(format.photosNotUploaded(detail || title));
   }
 }
 
@@ -511,7 +562,6 @@ function operationRequest() {
     quantity: numberOrAbsent(control('quantity').value),
     trailerNumber: trailer.disabled ? null : trailer.value,
     isBillable: control('isBillable').checked,
-    photoCount: numberOrAbsent(control('photoCount').value),
     expectedVersion: shownOrder.version,
   };
 }
@@ -546,4 +596,197 @@ function clearOperationErrors() {
   operationForm.querySelectorAll('[data-error]').forEach(slot => {
     slot.textContent = '';
   });
+}
+
+// --- Photos: the upload both dialogs share, and the gallery.
+
+function uploadPhotos(orderNumber, operationId, version, files) {
+  const form = new FormData();
+  form.append('version', version);
+  for (const file of files) {
+    form.append('files', file);
+  }
+
+  const order = encodeURIComponent(orderNumber);
+  const operation = encodeURIComponent(operationId);
+  return postForm(`/api/v1/orders/${order}/operations/${operation}/photos`, form);
+}
+
+// The limits the API checks, said before sending; the API still decides by the bytes. A type the
+// browser does not know is left to the API.
+function photoFilesError(files) {
+  if (files.length === 0) {
+    return format.CHOOSE_PHOTOS;
+  }
+
+  if (files.length > PHOTO_UPLOAD.maxFiles) {
+    return format.tooManyPhotos(files.length);
+  }
+
+  const tooLarge = files.find(file => file.size > PHOTO_UPLOAD.maxSizeBytes);
+  if (tooLarge) {
+    return format.photoTooLarge(tooLarge.name);
+  }
+
+  const notAPhoto = files.find(file => file.type && !PHOTO_UPLOAD.contentTypes.includes(file.type));
+  return notAPhoto ? format.notAPhoto(notAPhoto.name) : '';
+}
+
+function closesMissingPhoto(attached) {
+  return attached.resolvedAlertTypes.includes(ALERT_TYPE.MissingPhoto);
+}
+
+function announceResolvedAlerts(attached) {
+  if (closesMissingPhoto(attached)) {
+    showToast(format.MISSING_PHOTO_CLOSED);
+  }
+}
+
+function photoUrl(photo) {
+  const order = encodeURIComponent(shownOrder.number);
+  return `/api/v1/orders/${order}/photos/${encodeURIComponent(photo.id)}`;
+}
+
+// Like the operation dialog, the gallery refuses Escape while an upload is in flight, so its
+// outcome lands where it was sent. Closing returns the focus to the button that opened it, or to
+// its successor once a refetch has replaced that button.
+function initGallery() {
+  const input = galleryForm.elements.namedItem('files');
+  input.accept = PHOTO_UPLOAD.contentTypes.join(',');
+  galleryField('photo-limits').textContent = format.PHOTO_LIMITS;
+  galleryField('close').addEventListener('click', () => galleryDialog.close());
+  galleryDialog.addEventListener('cancel', event => {
+    if (galleryField('upload').disabled) {
+      event.preventDefault();
+    }
+  });
+  galleryDialog.addEventListener('close', focusGalleryOpener);
+  galleryForm.addEventListener('submit', addPhotos);
+}
+
+function openGallery(operationId) {
+  galleryOperationId = operationId;
+  galleryForm.reset();
+  clearGalleryMessages();
+  const operation = operationId ? findOperation(operationId) : null;
+  document.getElementById('gallery-title').textContent = operation
+    ? format.operationGalleryTitle(operation.shipment.label, operation.type)
+    : format.orderGalleryTitle(shownOrder.number);
+  galleryForm.hidden = !operation || !ACTIVE_STATUSES.includes(shownOrder.status);
+  galleryField('groups').replaceChildren(stateBox(format.LOADING));
+  galleryDialog.showModal();
+  loadGallery();
+}
+
+// The operation with its shipment, from the order the page shows.
+function findOperation(operationId) {
+  for (const shipment of shownOrder?.shipments ?? []) {
+    const operation = shipment.operations.find(candidate => candidate.id === operationId);
+    if (operation) {
+      return { ...operation, shipment };
+    }
+  }
+
+  return null;
+}
+
+async function loadGallery() {
+  const groups = galleryField('groups');
+  try {
+    const photos = await getJson(`/api/v1/orders/${encodeURIComponent(shownOrder.number)}/photos`);
+    const shown = galleryOperationId
+      ? photos.filter(photo => photo.operationId === galleryOperationId)
+      : photos;
+    groups.replaceChildren(
+      ...(shown.length === 0 ? [stateBox(format.NO_PHOTOS)] : renderPhotoGroups(shown)));
+  } catch (error) {
+    groups.replaceChildren(errorBox(error));
+  }
+}
+
+// The list comes in the order of the page, so the photos of one operation are next to each other.
+function renderPhotoGroups(photos) {
+  const sections = [];
+  let grid = null;
+  let operationId = null;
+  for (const photo of photos) {
+    if (photo.operationId !== operationId) {
+      operationId = photo.operationId;
+      const section = cloneTemplate('gallery-group');
+      const field = fieldsOf(section);
+      const appliedAt = findOperation(operationId)?.appliedAt;
+      field('title').textContent = format.photoGroupTitle(
+        photo.shipmentLabel, photo.operationType, appliedAt, shownOrder.hub.timeZone);
+      grid = field('photos');
+      sections.push(section);
+    }
+
+    grid.append(galleryPhoto(photo, grid.childElementCount + 1));
+  }
+
+  return sections;
+}
+
+function galleryPhoto(photo, position) {
+  const link = cloneTemplate('gallery-photo').firstElementChild;
+  link.href = photoUrl(photo);
+  const image = link.querySelector('img');
+  image.src = link.href;
+  image.alt = format.photoAlt(position, photo.shipmentLabel, photo.operationType);
+  return link;
+}
+
+async function addPhotos(event) {
+  event.preventDefault();
+  clearGalleryMessages();
+  const input = galleryForm.elements.namedItem('files');
+  const files = [...input.files];
+  const filesError = photoFilesError(files);
+  if (filesError) {
+    galleryField('add-error').textContent = filesError;
+    return;
+  }
+
+  setGalleryInFlight(true);
+  try {
+    const attached = await uploadPhotos(
+      shownOrder.number, galleryOperationId, shownOrder.version, files);
+    galleryForm.reset();
+    galleryField('add-status').textContent =
+      format.photosAdded(attached.photos.length, closesMissingPhoto(attached));
+    announceResolvedAlerts(attached);
+    await Promise.all([loadOrder(), loadMe(), loadGallery()]);
+  } catch (error) {
+    galleryField('add-error').textContent = galleryErrorText(error);
+    if (error.code === VERSION_CONFLICT) {
+      await loadOrder();
+    }
+  } finally {
+    setGalleryInFlight(false);
+  }
+}
+
+function setGalleryInFlight(inFlight) {
+  galleryField('upload').disabled = inFlight;
+  galleryField('close').disabled = inFlight;
+}
+
+function galleryErrorText(error) {
+  const { title, detail } = describeError(error);
+  const fieldErrors = error.errors ?? [];
+  return fieldErrors.length > 0
+    ? fieldErrors.map(fieldError => fieldError.reason).join(' ')
+    : detail || title;
+}
+
+function clearGalleryMessages() {
+  galleryField('add-error').textContent = '';
+  galleryField('add-status').textContent = '';
+}
+
+function focusGalleryOpener() {
+  const opener = galleryOperationId
+    ? document.querySelector(`#order [data-operation-id="${CSS.escape(galleryOperationId)}"]`)
+    : document.querySelector('#order [data-field="open-gallery"]');
+  opener?.focus();
 }

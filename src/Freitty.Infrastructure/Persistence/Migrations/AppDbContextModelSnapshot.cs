@@ -582,6 +582,48 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                     b.ToTable("order_services", (string)null);
                 });
 
+            modelBuilder.Entity("Freitty.Domain.Orders.Photo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("content_type");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_photos");
+
+                    b.HasIndex("OperationId")
+                        .HasDatabaseName("ix_photos_operation_id");
+
+                    b.ToTable("photos", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_photos_size_bytes", "size_bytes > 0");
+                        });
+                });
+
             modelBuilder.Entity("Freitty.Domain.Orders.Shipment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -836,6 +878,16 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                     b.Navigation("Service");
                 });
 
+            modelBuilder.Entity("Freitty.Domain.Orders.Photo", b =>
+                {
+                    b.HasOne("Freitty.Domain.Orders.Operation", null)
+                        .WithMany("Photos")
+                        .HasForeignKey("OperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_photos_operations_operation_id");
+                });
+
             modelBuilder.Entity("Freitty.Domain.Orders.Shipment", b =>
                 {
                     b.HasOne("Freitty.Domain.Orders.Order", null)
@@ -863,6 +915,11 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_supply_lines_supply_items_supply_item_id");
 
                     b.Navigation("SupplyItem");
+                });
+
+            modelBuilder.Entity("Freitty.Domain.Orders.Operation", b =>
+                {
+                    b.Navigation("Photos");
                 });
 
             modelBuilder.Entity("Freitty.Domain.Orders.Order", b =>

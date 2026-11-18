@@ -14,6 +14,5 @@ public sealed record RecordOperationCommand(
     int Quantity,
     string? TrailerNumber,
     bool IsBillable,
-    int PhotoCount,
     int ExpectedVersion)
     : ICommand<Result<RecordedOperationDto>>;

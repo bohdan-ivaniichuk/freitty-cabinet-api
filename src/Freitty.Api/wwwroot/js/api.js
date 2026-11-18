@@ -37,6 +37,15 @@ export function postJson(path, body) {
   });
 }
 
+// A multipart form: the browser sets its Content-Type with the boundary.
+export function postForm(path, formData) {
+  return request(new URL(path, location.href), {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+    body: formData,
+  });
+}
+
 async function request(url, init) {
   let response;
   try {

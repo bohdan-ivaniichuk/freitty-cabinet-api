@@ -25,7 +25,12 @@ internal sealed class CabinetApi : IAsyncDisposable
     private HttpClient? client;
     private bool referenceDataSaved;
 
-    public CabinetApi(string connectionString, DateTimeOffset? now = null, string? reportingTimeZone = null)
+    public CabinetApi(
+        string connectionString,
+        DateTimeOffset? now = null,
+        string? reportingTimeZone = null,
+        IPhotoStorage? photoStorage = null,
+        bool photoUploadsEnabled = true)
     {
         Data = TestData.Create();
         Orders = new OrderBuilder(Data);
@@ -34,7 +39,9 @@ internal sealed class CabinetApi : IAsyncDisposable
             clock: new FakeTimeProvider(now ?? Now),
             currentUser: new FixedCurrentUser(new CurrentUser(Data.User.Id, Data.Company.Id)),
             reportingTimeZone: reportingTimeZone,
-            saveInterceptor: CompetingSave);
+            saveInterceptor: CompetingSave,
+            photoStorage: photoStorage,
+            photoUploadsEnabled: photoUploadsEnabled);
         database = new TestDatabase(factory);
     }
 
@@ -100,6 +107,26 @@ internal sealed class CabinetApi : IAsyncDisposable
     public Task<HttpResponseMessage> SubmitAsync(string orderNumber, int expectedVersion)
     {
         return SendPostAsync(ApiUrls.Submit(orderNumber), new SubmitRequest(expectedVersion));
+    }
+
+    public async Task<HttpResponseMessage> UploadAsync(
+        string orderNumber,
+        Guid operationId,
+        int? version,
+        params PhotoUpload[] files)
+    {
+        using MultipartFormDataContent form = PhotoUpload.Form(version, files);
+        return await SendFormAsync(ApiUrls.OperationPhotos(orderNumber, operationId), form);
+    }
+
+    public Task<HttpResponseMessage> SendFormAsync(string url, MultipartFormDataContent form)
+    {
+        return Client.PostAsync(url, form, CancellationToken);
+    }
+
+    public Task<string[]> StoredUploadsAsync()
+    {
+        return StoredUploads.ListAsync(factory.Services);
     }
 
     public Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)

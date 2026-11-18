@@ -29,8 +29,9 @@ internal sealed class RecordOperationEndpoint : Endpoint<RecordOperationRequest,
                 "Appends an Unloading, Disposal, Restack or Loading to the ledger of one shipment of a Ready or " +
                 "InProgress order. The aggregate decides the rest in the same transaction: the first operation " +
                 "starts the order, an Unloading opens or resolves a Quantity delta alert, an Unloading or a " +
-                "Disposal without a photo opens a Missing photo alert. expectedVersion is the version the caller " +
-                "loaded; any other version is refused, so a repeated request is never recorded twice.";
+                "Disposal opens a Missing photo alert, which uploading a photo to it closes. expectedVersion is the " +
+                "version the caller loaded; any other version is refused, so a repeated request is never recorded " +
+                "twice.";
             summary.RequestParam(
                 request => request.Quantity,
                 $"Pallets, from 1 to {RecordOperationCommandValidator.MaxQuantity}.");
@@ -39,9 +40,6 @@ internal sealed class RecordOperationEndpoint : Endpoint<RecordOperationRequest,
                 "Required for Unloading and Loading, at most " +
                 $"{Operation.MaxTrailerNumberLength} characters; null or left out for " +
                 "Disposal and Restack.");
-            summary.RequestParam(
-                request => request.PhotoCount,
-                $"From 0 to {RecordOperationCommandValidator.MaxPhotoCount}; 0 when left out.");
             summary.RequestParam(request => request.IsBillable, "False when left out.");
             summary.RequestParam(
                 request => request.ExpectedVersion,

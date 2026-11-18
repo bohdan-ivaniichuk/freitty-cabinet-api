@@ -1,6 +1,6 @@
 # The container template of the deployed app; applied by the runbook (docs/deployment.md).
-# CD changes only the image. Secrets are not here: the connection string is the app secret
-# postgres-connection.
+# CD changes only the image. Secrets are not here: the connection strings are the app secrets
+# postgres-connection and storage-connection.
 properties:
   template:
     containers:
@@ -12,6 +12,8 @@ properties:
         env:
           - name: ConnectionStrings__Postgres
             secretRef: postgres-connection
+          - name: ConnectionStrings__PhotoStorage
+            secretRef: storage-connection
           - name: Seed__Enabled
             value: "true"
           - name: Seed__Refresh

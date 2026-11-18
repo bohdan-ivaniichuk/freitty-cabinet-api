@@ -15,7 +15,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 | PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, a composite index for the default list and its date filter and one for the pipeline board, `EXPLAIN ANALYZE` before/after in `docs/`, two writes — recording an operation and submitting a draft — each in a transaction with optimistic concurrency |
 | EF Core: change tracking, N+1, eager loading, query optimization | `AsNoTracking` + projections in read handlers, `AsSplitQuery` on the detail query, no lazy loading |
 | API: contracts, versioning, error handling | `/api/v1/...`, `ProblemDetails` everywhere, OpenAPI + Scalar |
-| Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for the whole local stack (API + Postgres), GitHub Actions: build → test → image → deploy |
+| Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for the whole local stack (API + Postgres + Azurite for the photos), GitHub Actions: build → test → image → deploy |
 | Tests: unit for domain, integration for critical paths | xUnit; domain unit tests; integration tests on filters/search/pagination with Testcontainers (real Postgres) |
 | AI tools as part of the workflow | `CLAUDE.md`, hooks/skills in repo; one presentation slide on the workflow |
 | Bonus: Dapper, OpenAPI/Swagger, xUnit, logistics domain | Dapper for dashboard analytics SQL; Scalar; logistics-aware domain model |
@@ -70,6 +70,7 @@ Settled in the grooming of step 2: [`steps/02-domain.md`](steps/02-domain.md) is
 | **Shipment** | OrderId, Position (`-1`), RefNumber, WarehouseNote, arrival (trailer type, truck, trailer, ArrivedAt), ReceivedAt, dock assignment |
 | **CargoLine** | ShipmentId, UnitType (Standard 48×40 / XL), Quantity — the declared quantity |
 | **Operation** | ShipmentId, Type (Unloading / Disposal / Restack / Loading), UnitType, Quantity, TrailerNumber, AppliedAt, IsBillable, PhotoCount, CommentCount — the ledger of actual quantities |
+| **Photo** | OperationId, StorageKey, ContentType, SizeBytes, UploadedAt — the bytes live in blob storage; PhotoCount is kept equal to the photos (step 12) |
 | **Alert** | ShipmentId, Type (QuantityDelta / MissingPhoto), RaisedAt, ResolvedAt |
 | **Service** (M:N) | Transload, Restock & Rework |
 | **SupplyItem** + **SupplyLine** | SKU, Category, UnitPrice; SupplyLine keeps Quantity + **UnitPrice snapshot** |
@@ -100,6 +101,9 @@ GET  /api/v1/orders/pipeline?type=&status=&hasOpenAlerts=&hubId=&datePreset=&sea
 GET  /api/v1/orders/{number}              detail: shipments, cargo, services, operations, supplies
 POST /api/v1/orders/{number}/operations   the write flow (see below)
 POST /api/v1/orders/{number}/submit       a draft to Ready under the next official number (step 11)
+GET  /api/v1/orders/{number}/photos       every photo of the order, in the order of the page (step 12)
+GET  /api/v1/orders/{number}/photos/{photoId}   the image bytes, streamed from blob storage
+POST /api/v1/orders/{number}/operations/{operationId}/photos   upload photos of an operation (multipart)
 GET  /api/v1/hubs                         options of the Hub filter
 GET  /api/v1/me                           the shell: user, company balance, attention badge
 ```
@@ -157,5 +161,6 @@ Mention that the mockup data was inconsistent and how it was normalized ([mockup
 9. Deploy + CD
 10. Docs: README, ADRs, ER, EXPLAIN, presentation
 11. Pipeline view and submitting a draft — beyond the brief
+12. Photos of an operation: blob storage (Azurite locally) behind the API — beyond the brief
 
 If time is short, cut in this order: Dapper (do dashboard in EF), write flow. Do **not** cut CI/CD, query plans or tests — the role emphasizes them.

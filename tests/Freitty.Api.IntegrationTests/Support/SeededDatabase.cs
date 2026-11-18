@@ -39,13 +39,23 @@ public sealed class SeededDatabase(PostgresFixture postgres) : IAsyncLifetime
         return Database.InContextAsync(action);
     }
 
+    public Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)
+    {
+        return Database.InScopeAsync(action);
+    }
+
     // As the API that seeded the database answers: its clock and its current user, the seeded Admin.
     public async Task<T> GetAsync<T>(string url)
     {
+        using HttpResponseMessage response = await SendGetAsync(url);
+        return await ApiJson.ReadAsync<T>(response, HttpStatusCode.OK);
+    }
+
+    public Task<HttpResponseMessage> SendGetAsync(string url)
+    {
         HttpClient started = client
             ?? throw new InvalidOperationException("The seeded API is started in InitializeAsync.");
-        using HttpResponseMessage response = await started.GetAsync(url, TestContext.Current.CancellationToken);
-        return await ApiJson.ReadAsync<T>(response, HttpStatusCode.OK);
+        return started.GetAsync(url, TestContext.Current.CancellationToken);
     }
 
     public Task<Order> LoadOrderAsync(string number)

@@ -67,15 +67,16 @@
         <div class="field-error" data-error="quantity"></div>
       </div>
       <div class="field">
-        <label for="operation-photos">Photos</label>
-        <input id="operation-photos" name="photoCount" type="number" min="0" max="99" step="1" value="0">
-        <div class="field-error" data-error="photoCount"></div>
+        <label for="operation-trailer">Trailer</label>
+        <input id="operation-trailer" name="trailerNumber" type="text" maxlength="20">
+        <div class="field-error" data-error="trailerNumber"></div>
       </div>
     </div>
     <div class="field">
-      <label for="operation-trailer">Trailer</label>
-      <input id="operation-trailer" name="trailerNumber" type="text" maxlength="20">
-      <div class="field-error" data-error="trailerNumber"></div>
+      <label for="operation-photos">Photos</label>
+      <input id="operation-photos" name="files" type="file" multiple aria-describedby="operation-photos-limits">
+      <div class="field-hint" id="operation-photos-limits" data-field="photo-limits"></div>
+      <div class="field-error" data-error="files"></div>
     </div>
     <div class="field">
       <label><input name="isBillable" type="checkbox"> Billable</label>
@@ -88,6 +89,37 @@
     </div>
   </form>
 </dialog>
+
+<dialog id="gallery-dialog" class="dialog-wide" aria-labelledby="gallery-title">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+    <h2 style="font-size:16px;font-weight:700;color:#1F2A3A" id="gallery-title"></h2>
+    <button type="button" class="btn btn-secondary" data-field="close">Close</button>
+  </div>
+  <div data-field="groups"></div>
+  <form data-field="add-form" novalidate style="margin-top:14px;padding-top:14px;border-top:1px solid #E5E7EB">
+    <div class="field">
+      <label for="gallery-files">Add photos</label>
+      <input id="gallery-files" name="files" type="file" multiple aria-describedby="gallery-files-limits">
+      <div class="field-hint" id="gallery-files-limits" data-field="photo-limits"></div>
+    </div>
+    <div class="field-error" role="alert" data-field="add-error"></div>
+    <div class="field-status" role="status" data-field="add-status"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px">
+      <button type="submit" class="btn btn-primary" data-field="upload">Upload</button>
+    </div>
+  </form>
+</dialog>
+
+<template id="gallery-group">
+  <section class="gallery-group">
+    <h3 data-field="title"></h3>
+    <div class="gallery-grid" data-field="photos"></div>
+  </section>
+</template>
+
+<template id="gallery-photo">
+  <a class="gallery-photo" target="_blank" rel="noopener"><img loading="lazy" alt=""></a>
+</template>
 
 <template id="order-view">
   <div style="display:flex;align-items:center;gap:12px;padding:8px 0 14px;border-bottom:1px solid #E5E7EB;margin-bottom:14px">
@@ -114,7 +146,7 @@
 
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
     <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">💬 <span style="color:#9CA3AF" data-field="comments"></span></button>
-    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">📷 <span style="color:#9CA3AF" data-field="photos"></span></button>
+    <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" title="Photos of the order" data-field="open-gallery">📷 <span style="color:#9CA3AF" data-field="photos"></span></button>
     <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">$</button>
     <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">🖨</button>
     <button type="button" class="btn btn-secondary" style="padding:7px 12px;font-size:12px" aria-disabled="true" data-out-of-scope title="Not part of this assignment">📦</button>
@@ -291,7 +323,7 @@
     <td class="op-qty" style="padding:10px 6px;text-align:right;font-weight:600" data-field="quantity"></td>
     <td style="padding:10px 6px" data-field="unit"></td>
     <td style="padding:10px 6px;color:#6B7280" data-field="applied"></td>
-    <td style="padding:10px 6px;color:#9CA3AF" data-field="counters"></td>
+    <td style="padding:10px 6px;color:#9CA3AF"><span data-field="comments"></span> · <button type="button" class="link-button" data-field="photos"></button> · ⧉ · 🗑</td>
   </tr>
 </template>
 

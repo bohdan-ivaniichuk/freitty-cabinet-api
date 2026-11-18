@@ -24,6 +24,9 @@ the OpenAPI document at http://localhost:8080/openapi/v1.json. The endpoints:
 | `GET` | `/api/v1/orders/{number}` | The detail of an order |
 | `POST` | `/api/v1/orders/{number}/operations` | Records an operation on a shipment |
 | `POST` | `/api/v1/orders/{number}/submit` | Submits a draft: Ready, under the next official number |
+| `GET` | `/api/v1/orders/{number}/photos` | Every photo of an order, in the order of its page |
+| `GET` | `/api/v1/orders/{number}/photos/{photoId}` | The image of a photo, streamed from blob storage |
+| `POST` | `/api/v1/orders/{number}/operations/{operationId}/photos` | Uploads one to five photos of an operation (multipart) |
 | `GET` | `/api/v1/dashboard` | The tiles, the first active orders and the activity chart |
 | `GET` | `/api/v1/hubs` | The options of the Hub filter |
 | `GET` | `/api/v1/me` | The current user, the company and the number on the Orders badge |
@@ -42,8 +45,8 @@ the OpenAPI document at http://localhost:8080/openapi/v1.json. The endpoints:
 docker compose up -d --build --wait
 ```
 
-This starts PostgreSQL and the API; host ports 5432 and 8080 must be free. When the command returns,
-both are healthy:
+This starts PostgreSQL, Azurite — the Azure Blob Storage emulator, which keeps the photos — and the
+API; host ports 5432, 10000 and 8080 must be free. When the command returns, all three are healthy:
 
 | URL | What |
 |---|---|
@@ -57,19 +60,29 @@ The API applies pending database migrations at startup, before it listens. If it
 unreachable or a migration fails — the process exits instead of serving requests. The database itself must
 already exist (Compose creates it); instances starting together take turns to migrate it.
 
+Photos are blobs of the private container `photos`, which the API creates at startup and serves
+itself ([ADR 0017](docs/adr/0017-photos-in-blob-storage-behind-the-api.md)). The API reads the
+storage's connection string from `ConnectionStrings__PhotoStorage` and does not start without it;
+Compose points it at Azurite with the emulator's well-known development account, published on
+loopback only. `Photos__UploadsEnabled` set to `false` switches uploads off (`503`); stored photos
+are still served.
+
 The API reads its reporting time zone — where "today" and "this week" begin — from `Cabinet__TimeZone`
 (`America/Toronto` by default, in `appsettings.json`). It must be an IANA id; any other value stops the startup.
 
-Stop with `docker compose down`; add `-v` to delete the database as well.
+Stop with `docker compose down`; add `-v` to delete the database and the stored photos as well.
 
 ### The API from source
 
-Start only the database, then run the API:
+Start only the database and the photo storage, then run the API:
 
 ```bash
-docker compose up -d --wait postgres
+docker compose up -d --wait postgres azurite
 dotnet run --project src/Freitty.Api
 ```
+
+`appsettings.Development.json` points the API at both: PostgreSQL on port 5432 and Azurite on
+10000 (`UseDevelopmentStorage=true`).
 
 The API listens on http://localhost:5080 (for example, http://localhost:5080/health/ready): the cabinet
 at http://localhost:5080/ and the API reference at http://localhost:5080/scalar. In Development the SQL
@@ -86,7 +99,11 @@ sample data at startup, right after the migrations:
   demo rely on — among them two drafts: DRAFT-003, which lacks what a submit needs, and DRAFT-004,
   which can be submitted from the Pipeline layout of the Order List;
 - sixty completed orders over the last three months, for the dashboard figures and the chart;
-- an invoice for every completed order, one of them unpaid.
+- an invoice for every completed order, one of them unpaid;
+- a photo for every photo an operation counts: each is a row that points at one of four sample
+  images — flat placeholder pictures drawn by
+  `src/Freitty.Infrastructure/Persistence/Seed/Images/draw_sample_photos.py`, not photographs —
+  which the API uploads to the photo storage whenever it seeds.
 
 The setting is on in `appsettings.Development.json` and in `docker-compose.yml`, and off everywhere
 else. Every order is built through the domain model, so the data obeys the same rules as an order
@@ -96,7 +113,9 @@ Dates are relative to the day before the database was seeded. The Docker stack �
 them fresh: `Seed__Refresh` is `true` in `docker-compose.yml`, so the API rebuilds the sample data at
 every start and again soon after midnight in Toronto, when that day changes (it checks every 15
 minutes). A rebuild deletes everything in the database, operations recorded from an order page
-included, and seeds again in one transaction; requests wait for it, well under a second. To keep
+included, and seeds again in one transaction; requests wait for it, well under a second. Photos
+uploaded from an order page are deleted with it, one blob at a time, which adds a little to that
+wait; the sample images stay. To keep
 what you recorded, set `Seed__Refresh` to `"false"` in `docker-compose.yml`, or remove it.
 
 Without `Seed:Refresh` — as with `dotnet run`, where `appsettings.Development.json` turns on only
@@ -112,7 +131,7 @@ or, running the API from source:
 
 ```bash
 docker compose down -v
-docker compose up -d --wait postgres
+docker compose up -d --wait postgres azurite
 dotnet run --project src/Freitty.Api
 ```
 
@@ -137,8 +156,8 @@ reads its migrations history table before it has created it. The migrations foll
 dotnet test
 ```
 
-Integration tests start their own PostgreSQL container through Testcontainers, so Docker must be
-running; the compose stack does not need to be.
+Integration tests start their own PostgreSQL and Azurite containers through Testcontainers, so
+Docker must be running; the compose stack does not need to be.
 
 ## Deployment
 
@@ -151,6 +170,7 @@ The demo runs on Azure, in one resource group in North Europe
 - an Azure Database for PostgreSQL flexible server, PostgreSQL 18, which the app reaches over
   verified TLS;
 - an Azure Container Registry that holds the images, pulled by the app with a managed identity;
+- a storage account with one private container for the photos, which only the API reads;
 - a Log Analytics workspace for the logs.
 
 A release is a push to `main`. CI runs the tests and the Compose stack; the image the stack job

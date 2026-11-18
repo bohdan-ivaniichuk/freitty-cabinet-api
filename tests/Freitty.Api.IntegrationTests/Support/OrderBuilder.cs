@@ -15,6 +15,8 @@ internal sealed class OrderBuilder(TestData data)
     public const string FloorLead = "User 6";
     public const string DestinationCity = "Montreal";
     public const string DestinationRegion = "QC";
+    public const string PhotoContentType = "image/png";
+    public const long PhotoSizeBytes = 1024;
 
     public static readonly DateTimeOffset BuiltAt = new(2026, 3, 2, 13, 0, 0, TimeSpan.Zero);
 
@@ -208,8 +210,16 @@ internal sealed class OrderBuilder(TestData data)
             quantity,
             trailerNumber,
             isBillable,
-            PhotoCount: photos,
+            Photos(photos),
             CommentCount: comments);
         order.RecordOperation(shipment.Id, operation, at ?? BuiltAt).MustSucceed();
+    }
+
+    // Rows only: no bytes are stored under these keys. A test that reads a photo back uploads it through the API.
+    public static IReadOnlyList<NewPhoto> Photos(int photoCount)
+    {
+        return Enumerable.Range(0, photoCount)
+            .Select(_ => new NewPhoto(TestData.Unique("test/photo-"), PhotoContentType, PhotoSizeBytes))
+            .ToList();
     }
 }

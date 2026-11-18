@@ -1,3 +1,4 @@
+using Freitty.Application.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +23,9 @@ public static class DatabaseSeed
             return;
         }
 
+        // The images first: a seeded photo is a row that names one. A database that is kept keeps its uploads.
+        IPhotoStorage photoStorage = scope.ServiceProvider.GetRequiredService<IPhotoStorage>();
+        await SamplePhotos.UploadAsync(photoStorage, cancellationToken);
         DatabaseSeeder seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
         await seeder.SeedAsync(cancellationToken);
     }

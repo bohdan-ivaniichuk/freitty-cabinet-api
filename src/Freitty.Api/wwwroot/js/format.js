@@ -2,7 +2,7 @@
 // dates, numbers become money and chart coordinates, and the pages' fixed texts are named here.
 // Nothing here touches the DOM.
 
-import { ORDER_TYPE, PERIOD, ROLE, STATUS, TRANSPORT_KIND } from './codes.js';
+import { ORDER_TYPE, PERIOD, PHOTO_UPLOAD, ROLE, STATUS, TRANSPORT_KIND } from './codes.js';
 
 export const DASH = '—';
 
@@ -16,6 +16,15 @@ export const CHART_NO_DATA = 'No data';
 export const HUB_FILTER_UNAVAILABLE = 'Hub: unavailable';
 export const ORDER_NOT_ACTIVE = 'The order is not active';
 export const OUT_OF_SCOPE = 'Not part of this assignment';
+export const NO_PHOTOS = 'No photos yet';
+export const CHOOSE_PHOTOS = 'Choose at least one photo.';
+export const MISSING_PHOTO_CLOSED = 'Missing photo alert closed';
+export const LOADING = 'Loading…';
+
+const BYTES_PER_MB = 1024 * 1024;
+const MAX_PHOTO_SIZE = `${PHOTO_UPLOAD.maxSizeBytes / BYTES_PER_MB} MB`;
+export const PHOTO_LIMITS =
+  `Up to ${PHOTO_UPLOAD.maxFiles} JPEG, PNG or WebP files, at most ${MAX_PHOTO_SIZE} each`;
 
 const MINUS = '−';
 const DATE_LOCALE = 'en-GB';
@@ -648,8 +657,66 @@ export function warehouseNote(note) {
   return note ? `"${note}"` : DASH;
 }
 
-export function operationCounters(operation) {
-  return `💬 ${operation.commentCount} · 📷 ${operation.photoCount} · ⧉ · 🗑`;
+export function commentCounter(operation) {
+  return `💬 ${operation.commentCount}`;
+}
+
+export function photoCounter(operation) {
+  return `📷 ${operation.photoCount}`;
+}
+
+export function photoCounterLabel(operation) {
+  return `Photos of this ${operationLabel(operation.type)}: ${operation.photoCount}`;
+}
+
+export function tooManyPhotos(count) {
+  return `At most ${PHOTO_UPLOAD.maxFiles} photos can be uploaded at once; ${count} were chosen.`;
+}
+
+export function photoTooLarge(fileName) {
+  return `${fileName} is larger than ${MAX_PHOTO_SIZE}.`;
+}
+
+export function notAPhoto(fileName) {
+  return `${fileName} is not a JPEG, PNG or WebP image.`;
+}
+
+// After recording an operation with its photos: the Missing photo alert it raised for an instant was
+// never shown, so the message says what happened instead.
+export function operationRecordedWithPhotos(count) {
+  return `Operation recorded · ${count === 1 ? '1 photo' : `${count} photos`} added`;
+}
+
+export function photosNotUploaded(reason) {
+  return `The operation was recorded, but its photos were not uploaded: ${reason}`;
+}
+
+// Said inside the gallery, where the toast is behind the dialog's backdrop.
+export function photosAdded(count, closedMissingPhoto) {
+  const added = count === 1 ? '1 photo added' : `${count} photos added`;
+  return closedMissingPhoto ? `${added}. ${MISSING_PHOTO_CLOSED}.` : `${added}.`;
+}
+
+export function orderGalleryTitle(orderNumber) {
+  return `Photos of ${orderNumber}`;
+}
+
+export function operationGalleryTitle(shipmentLabel, operationType) {
+  return `Photos of ${shipmentLabel} · ${operationLabel(operationType)}`;
+}
+
+// "FR001383-1 · Unloading · 17 Apr · 08:55"; the time is left out when the page does not know it.
+export function photoGroupTitle(shipmentLabel, operationType, appliedAt, timeZone) {
+  const parts = [shipmentLabel, operationLabel(operationType)];
+  if (appliedAt) {
+    parts.push(formatDayDotTime(appliedAt, timeZone));
+  }
+
+  return parts.join(' · ');
+}
+
+export function photoAlt(position, shipmentLabel, operationType) {
+  return `Photo ${position} of the ${operationLabel(operationType)} of ${shipmentLabel}`;
 }
 
 export function openAlertTypes(shipment) {

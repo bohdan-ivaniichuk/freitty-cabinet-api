@@ -40,7 +40,8 @@ for photos as optional; this step is beyond it.
 
 - `Photo`: `Id`, `OperationId`, `StorageKey`, `ContentType`, `SizeBytes`, `UploadedAt`.
 - `NewPhoto(StorageKey, ContentType, SizeBytes)`; `NewOperation.Photos` replaces
-  `NewOperation.PhotoCount`.
+  `NewOperation.PhotoCount`. The key of an upload is made before the photo exists, so it is a
+  UUID of its own, not the photo's id.
 - `Operation.MaxPhotoCount = 10`. `Order.AttachPhotos` returns the photos added or an error:
   the order is not active, the shipment's operation is not found, the limit would be exceeded.
 
@@ -78,6 +79,11 @@ is dropped; `operations.photo_count` stays.
 - `409` — a stale version; the order is not active; the operation would have more than ten
   photos; the demo already holds 200 uploaded photos (they are deleted at the next rebuild).
 - `415` — the body is not `multipart/form-data`.
+- `429` — more than four uploads are in flight; the route has a concurrency limit and no queue.
+- `503` — uploads are switched off (`Photos:UploadsEnabled` is `false`).
+
+The request body is limited to what five files of 5 MB need. A photo or operation id that is not
+a UUID is a `400`. Every refusal comes before a byte reaches storage.
 
 ### `GET /api/v1/orders/{number}/photos`
 
@@ -95,8 +101,10 @@ carries its `id` if it did not.
 ### `GET /api/v1/orders/{number}/photos/{photoId}`
 
 `200` with the image bytes, `Content-Type` as stored, `Content-Length`, and
-`Cache-Control: private, max-age=86400, immutable` (a photo never changes). `404` — no such order
-or photo on it.
+`Cache-Control: private, max-age=86400, immutable` (a photo never changes) and
+`Cross-Origin-Resource-Policy: same-origin`, so another site cannot embed it. `404` — no such
+order or photo on it. `429` — more than 120 requests in a minute: the route has a fixed window,
+since its responses are the only large ones the API sends.
 
 ### Routes
 

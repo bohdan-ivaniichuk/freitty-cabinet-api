@@ -33,6 +33,9 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
                 (ApiUrls.OrderTemplate, "get"),
                 (ApiUrls.OperationsTemplate, "post"),
                 (ApiUrls.SubmitTemplate, "post"),
+                (ApiUrls.PhotosTemplate, "get"),
+                (ApiUrls.PhotoTemplate, "get"),
+                (ApiUrls.OperationPhotosTemplate, "post"),
                 (ApiUrls.Hubs, "get"),
                 (ApiUrls.Me, "get"),
                 (ApiUrls.Dashboard, "get"),
@@ -90,6 +93,38 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
         Assert.Equal(
             ["shipmentPosition", "type", "unitType", "quantity", "expectedVersion"],
             request.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesUploadingPhotosAsAForm()
+    {
+        JsonElement document = await ReadOpenApiDocumentAsync();
+
+        JsonElement post = document.GetProperty("paths").GetProperty(ApiUrls.OperationPhotosTemplate)
+            .GetProperty("post");
+        JsonElement content = post.GetProperty("requestBody").GetProperty("content");
+        Assert.True(content.TryGetProperty("multipart/form-data", out _));
+        JsonElement responses = post.GetProperty("responses");
+        Assert.Equal(
+            ["201", "400", "404", "409", "415", "429", "503"],
+            responses.EnumerateObject().Select(status => status.Name));
+        Assert.Equal(
+            "#/components/schemas/AttachedPhotosDto",
+            responses.GetProperty("201").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesThePhotoAsAnImage()
+    {
+        JsonElement document = await ReadOpenApiDocumentAsync();
+
+        JsonElement responses = document.GetProperty("paths").GetProperty(ApiUrls.PhotoTemplate)
+            .GetProperty("get").GetProperty("responses");
+        Assert.Equal(["200", "400", "404", "429"], responses.EnumerateObject().Select(status => status.Name));
+        Assert.Equal(
+            ["image/jpeg", "image/png", "image/webp"],
+            responses.GetProperty("200").GetProperty("content").EnumerateObject().Select(content => content.Name));
     }
 
     [Fact]

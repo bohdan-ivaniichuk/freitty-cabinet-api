@@ -45,7 +45,7 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
     }
 
     [Fact]
-    public async Task OperationAndSupplyLineAddedToLoadedSubmittedOrderAreInsertedAlone()
+    public async Task OperationWithItsPhotoAndSupplyLineAddedToLoadedSubmittedOrderAreInsertedAlone()
     {
         TestData data = TestData.Create();
         Order order = new OrderBuilder(data).Ready();
@@ -60,7 +60,7 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
         });
 
         Order reloaded = await database.InContextAsync(db => db.LoadOrderAsync(order.Id));
-        Assert.Equivalent(new[] { typeof(Operation), typeof(SupplyLine) }, addedTypes, strict: true);
+        Assert.Equivalent(new[] { typeof(Operation), typeof(Photo), typeof(SupplyLine) }, addedTypes, strict: true);
         Assert.Single(reloaded.Shipments.Single().Operations);
         Assert.Single(reloaded.SupplyLines);
     }
@@ -104,7 +104,7 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
             Quantity: 12,
             TrailerNumber: "tl-88",
             IsBillable: true,
-            PhotoCount: 0,
+            Photos: [],
             CommentCount: 2);
         var restack = new NewOperation(
             OperationType.Restack,
@@ -112,7 +112,7 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
             Quantity: 4,
             TrailerNumber: null,
             IsBillable: false,
-            PhotoCount: 1,
+            OrderBuilder.Photos(1),
             CommentCount: 0);
         order.RecordOperation(first.Id, excessWithoutPhoto, hubWork.AddMinutes(10)).MustSucceed();
         order.RecordOperation(first.Id, restack, hubWork.AddMinutes(20)).MustSucceed();
@@ -133,7 +133,9 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
             .Include(order => order.TransferHub)
             .Include(order => order.Carrier)
             .Include(order => order.Shipments).ThenInclude(shipment => shipment.CargoLines)
-            .Include(order => order.Shipments).ThenInclude(shipment => shipment.Operations)
+            .Include(order => order.Shipments)
+                .ThenInclude(shipment => shipment.Operations)
+                .ThenInclude(operation => operation.Photos)
             .Include(order => order.Shipments).ThenInclude(shipment => shipment.Alerts)
             .Include(order => order.SupplyLines).ThenInclude(line => line.SupplyItem)
             .Include(order => order.Services).ThenInclude(service => service.Service)

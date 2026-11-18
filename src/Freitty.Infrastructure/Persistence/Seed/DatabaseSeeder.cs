@@ -75,12 +75,14 @@ internal sealed class DatabaseSeeder(AppDbContext db, TimeProvider clock, ILogge
     }
 
     // One statement for every table of the model, so their foreign keys need no order; the migrations history is not
-    // in the model and survives. TRUNCATE holds its lock until the commit: a reader of another process waits for the
-    // new rows instead of seeing none. Identifiers cannot be parameters, so the names are quoted here.
+    // in the model and survives. CASCADE empties as well a table this version does not know that refers to one of
+    // these: during a rolling deploy the older version rebuilds on the newer schema, and it is all sample data.
+    // TRUNCATE holds its lock until the commit: a reader of another process waits for the new rows instead of seeing
+    // none. Identifiers cannot be parameters, so the names are quoted here.
     private async Task TruncateEveryTableAsync(CancellationToken cancellationToken)
     {
         IEnumerable<string> tableNames = db.Model.GetRelationalModel().Tables.Select(QualifiedName);
-        string truncate = $"TRUNCATE TABLE {string.Join(", ", tableNames)}";
+        string truncate = $"TRUNCATE TABLE {string.Join(", ", tableNames)} CASCADE";
         await db.Database.ExecuteSqlRawAsync(truncate, cancellationToken);
     }
 

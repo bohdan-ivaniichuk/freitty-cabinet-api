@@ -111,6 +111,20 @@ internal static class TestOrders
         int photoCount = 1)
     {
         string? trailerNumber = type is OperationType.Unloading or OperationType.Loading ? TrailerNumber : null;
-        return new NewOperation(type, unitType, quantity, trailerNumber, IsBillable: true, photoCount, CommentCount: 0);
+        return new NewOperation(
+            type,
+            unitType,
+            quantity,
+            trailerNumber,
+            IsBillable: true,
+            Photos(photoCount),
+            CommentCount: 0);
+    }
+
+    public static IReadOnlyList<NewPhoto> Photos(int photoCount)
+    {
+        return Enumerable.Range(1, photoCount)
+            .Select(_ => new NewPhoto($"uploads/test-{Guid.NewGuid()}", "image/png", SizeBytes: 1024))
+            .ToList();
     }
 }

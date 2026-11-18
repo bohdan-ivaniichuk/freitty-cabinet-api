@@ -10,6 +10,8 @@ public static class OrderErrors
     public const string NotActiveCode = "order.not_active";
     public const string ShipmentNotFoundCode = "shipment.not_found";
     public const string ExceedsStockCode = "operation.exceeds_stock";
+    public const string OperationNotFoundCode = "operation.not_found";
+    public const string PhotoLimitCode = "operation.photo_limit";
 
     public static DomainError NotDraft(string orderNumber, OrderStatus status)
     {
@@ -129,6 +131,26 @@ public static class OrderErrors
         return DomainError.Conflict(
             ExceedsStockCode,
             $"Cannot {Verb(operationType)} {quantity} {unitType} on {shipmentLabel}: {onStock} on stock.");
+    }
+
+    public static DomainError OperationNotFound(string orderNumber, Guid operationId)
+    {
+        return DomainError.NotFound(
+            OperationNotFoundCode,
+            $"Order {orderNumber} has no operation {operationId}.");
+    }
+
+    public static DomainError PhotoLimit(
+        string shipmentLabel,
+        OperationType operationType,
+        int photoCount,
+        int addedCount)
+    {
+        return DomainError.Conflict(
+            PhotoLimitCode,
+            $"The {operationType} of {shipmentLabel} has {photoCount} photo{(photoCount == 1 ? string.Empty : "s")}; " +
+            $"{addedCount} more would exceed the " +
+            $"limit of {Operation.MaxPhotoCount}.");
     }
 
     public static DomainError AlertNotFound(string orderNumber, Guid alertId)

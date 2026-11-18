@@ -11,7 +11,6 @@ public sealed class RecordOperationCommandValidator : AbstractValidator<RecordOp
 {
     // The ledger sums quantities as int, and the endpoint is public.
     public const int MaxQuantity = 10_000;
-    public const int MaxPhotoCount = 99;
 
     public RecordOperationCommandValidator()
     {
@@ -21,7 +20,6 @@ public sealed class RecordOperationCommandValidator : AbstractValidator<RecordOp
         RuleFor(command => command.Quantity)
             .InclusiveBetween(1, MaxQuantity)
             .WithMessage($"Quantity must be a whole number from 1 to {MaxQuantity}.");
-        RuleFor(command => command.PhotoCount).InclusiveBetween(0, MaxPhotoCount);
         RuleFor(command => command.ExpectedVersion).GreaterThanOrEqualTo(1);
 
         RuleFor(command => command.TrailerNumber)

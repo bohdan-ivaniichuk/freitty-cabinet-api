@@ -18,12 +18,37 @@ services:
       timeout: 3s
       retries: 10
 
+  azurite:
+    # The photo storage: Azure Blob Storage's emulator, the blob service only. Same tag as the test fixture
+    # (tests/Freitty.Api.IntegrationTests/Support/AzuriteFixture.cs); change both together. 3.38.0 is the first
+    # that accepts service version 2026-10-06, the one Azure.Storage.Blobs 12.30 sends.
+    image: mcr.microsoft.com/azure-storage/azurite:3.38.0
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--location", "/data", "--disableTelemetry"]
+    ports:
+      # Loopback only: the emulator's account key is public.
+      - "127.0.0.1:10000:10000"
+    volumes:
+      # Kept with the database's: an uploaded photo lasts as long as the row that names it.
+      - azurite-data:/data
+    healthcheck:
+      # The image has Node.js and no HTTP client; an open port is the emulator listening.
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('net').connect(10000, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build: .
     # CI pushes this image to the registry after the stack test.
     image: freitty-cabinet-api:local
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=freitty;Username=freitty;Password=freitty
+      # The emulator's well-known development account, the same in every Azurite.
+      ConnectionStrings__PhotoStorage: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;
       Seed__Enabled: "true"
       # The demo stays dated from today: rebuilt at every start and whenever the day moves on.
       Seed__Refresh: "true"
@@ -31,6 +56,8 @@ services:
       - "8080:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      azurite:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8080/health/ready || exit 1"]
@@ -40,3 +67,4 @@ services:
 
 volumes:
   postgres-data:
+  azurite-data:

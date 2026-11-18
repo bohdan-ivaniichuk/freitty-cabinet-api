@@ -108,7 +108,7 @@ public sealed class HubWorkTests
             Quantity: 1,
             trailerNumber,
             IsBillable: true,
-            PhotoCount: 1,
+            TestOrders.Photos(1),
             CommentCount: 0);
 
         Assert.ThrowsAny<ArgumentException>(() => order.RecordOperation(shipmentId, operation, TestOrders.At(1)));

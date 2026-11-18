@@ -18,6 +18,7 @@ internal sealed class OrderScript
 
     private readonly DateTimeOffset draftedAt;
     private readonly string floorLead;
+    private int samplePhotoCount;
 
     private OrderScript(Order order, DateTimeOffset draftedAt, string floorLead)
     {
@@ -181,7 +182,8 @@ internal sealed class OrderScript
         return type is OperationType.Unloading or OperationType.Loading;
     }
 
-    // Photos and comments are zero unless the script names them.
+    // Photos and comments are none unless the script names them. Each photo is the next sample image in turn, so
+    // the photos of one order differ.
     private void Record(
         Shipment shipment,
         OperationType type,
@@ -192,7 +194,25 @@ internal sealed class OrderScript
         int photos = 0,
         int comments = 0)
     {
-        var operation = new NewOperation(type, unitType, quantity, trailerNumber, IsBillable(type), photos, comments);
+        var operation = new NewOperation(
+            type,
+            unitType,
+            quantity,
+            trailerNumber,
+            IsBillable(type),
+            NextSamplePhotos(photos),
+            comments);
         Order.RecordOperation(shipment.Id, operation, appliedAt).OrThrow();
+    }
+
+    private List<NewPhoto> NextSamplePhotos(int photoCount)
+    {
+        var photos = new List<NewPhoto>();
+        for (int index = 0; index < photoCount; index++)
+        {
+            photos.Add(SamplePhotos.Photos[samplePhotoCount++ % SamplePhotos.Photos.Count]);
+        }
+
+        return photos;
     }
 }

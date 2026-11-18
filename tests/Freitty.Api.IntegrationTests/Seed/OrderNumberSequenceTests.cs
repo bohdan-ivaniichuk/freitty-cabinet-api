@@ -10,6 +10,7 @@ namespace Freitty.Api.IntegrationTests.Seed;
 
 // Each test submits the seed's complete draft, so each has a database of its own. The highest seeded official number
 // is FR001681.
+[Collection(PhotoStorageCollection.Name)]
 public sealed class OrderNumberSequenceTests(PostgresFixture postgres)
 {
     private const string SubmittableDraft = "DRAFT-004";

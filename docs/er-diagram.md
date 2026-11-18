@@ -2,7 +2,10 @@
 
 The schema created by the `InitialSchema` migration
 ([step 2](steps/02-domain.md)), with the indexes of `OrderListIndexes`
-([step 4](steps/04-order-list.md)). Terms are defined in [`CONTEXT.md`](../CONTEXT.md).
+([step 4](steps/04-order-list.md)) and the `photos` table of `OperationPhotos`
+([step 12](steps/12-photos.md)). The bytes of a photo are not in the database: `storage_key` names
+a blob of the private container `photos`
+([ADR 0017](adr/0017-photos-in-blob-storage-behind-the-api.md)). Terms are defined in [`CONTEXT.md`](../CONTEXT.md).
 
 Every `id` is a UUID v7 created by the domain. Instants are `timestamptz` in UTC. Enums are stored
 as integers, each with a `CHECK` that lists the values of its enum.
@@ -18,6 +21,7 @@ erDiagram
     shipments ||--o{ cargo_lines : "declares"
     shipments ||--o{ operations : "ledger"
     shipments ||--o{ alerts : "raises"
+    operations ||--o{ photos : "documented by"
     orders ||--o{ supply_lines : "buys"
     orders ||--o{ order_services : "includes"
 
@@ -78,8 +82,17 @@ erDiagram
         varchar trailer_number "set exactly for Unloading and Loading"
         timestamptz applied_at "when it was recorded"
         boolean is_billable
-        int photo_count
+        int photo_count "the number of its photos, kept so by the aggregate"
         int comment_count
+    }
+
+    photos {
+        uuid id PK
+        uuid operation_id FK "at most ten per operation"
+        varchar storage_key "uploads/<a UUID of its own> or samples/<name>"
+        varchar content_type "found in the bytes: image/jpeg | image/png | image/webp"
+        bigint size_bytes "> 0"
+        timestamptz uploaded_at
     }
 
     alerts {
@@ -115,7 +128,7 @@ What the diagram does not show because it is not stored:
 | "Trailers: 2 consolidated" | distinct `trailer_number` of Loading `operations` |
 | An order "has an alert" | an `alerts` row with `resolved_at IS NULL` on any of its shipments |
 | Supply line total and subtotal | `supply_lines.quantity × unit_price` |
-| Photo and comment counters in the toolbar | sums over `operations` |
+| Photo and comment counters in the toolbar | sums of `photo_count` and `comment_count` over `operations` |
 
 ## The order and what it refers to
 
@@ -195,7 +208,9 @@ erDiagram
 ## Delete behaviour
 
 - `CASCADE` for rows that only describe an order: `shipments`, `supply_lines`,
-  `order_services` follow their `orders` row; `cargo_lines` follow their `shipments` row.
+  `order_services` follow their `orders` row; `cargo_lines` follow their `shipments` row; `photos`
+  follow their `operations` row. Their blobs do not: a rebuild of the sample data deletes every
+  uploaded one.
 - `RESTRICT` for the ledger: a `shipments` row that has `operations` or `alerts` cannot be
   deleted, and so neither can its order. A draft has neither, so a draft can be deleted.
 - `RESTRICT` everywhere else: a company, user, hub, carrier, service or supply item that an order

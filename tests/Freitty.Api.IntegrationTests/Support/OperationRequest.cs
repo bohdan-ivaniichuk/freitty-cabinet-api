@@ -2,7 +2,8 @@ using Freitty.Domain.Orders;
 
 namespace Freitty.Api.IntegrationTests.Support;
 
-// The body of the request that records an operation, as a client sends it.
+// The body of the request that records an operation, as a client sends it. Photos are not part of it: they are
+// uploaded to the operation once it is recorded.
 internal sealed record OperationRequest(
     int ShipmentPosition,
     OperationType Type,
@@ -10,10 +11,9 @@ internal sealed record OperationRequest(
     int Quantity,
     string? TrailerNumber,
     bool IsBillable,
-    int PhotoCount,
     int ExpectedVersion)
 {
-    public static OperationRequest Unloading(Order order, int quantity, int photos = 1, int position = 1)
+    public static OperationRequest Unloading(Order order, int quantity, int position = 1)
     {
         return new OperationRequest(
             position,
@@ -22,12 +22,11 @@ internal sealed record OperationRequest(
             quantity,
             OrderBuilder.TrailerNumber,
             IsBillable: true,
-            photos,
             order.Version);
     }
 
     public static OperationRequest Loading(Order order, int quantity, int position = 1)
     {
-        return Unloading(order, quantity, photos: 0, position) with { Type = OperationType.Loading };
+        return Unloading(order, quantity, position) with { Type = OperationType.Loading };
     }
 }

@@ -19,8 +19,8 @@ at every start and every night ([ADR 0015](0015-the-demo-rebuilds-its-sample-dat
 - **The bytes go to blob storage; the database keeps one row per photo** — its operation, its
   storage key, the content type, the size and the instant. Azure Blob Storage in the deployment,
   the Azurite emulator under Docker Compose and in the tests: one implementation, one code path.
-- **The application sees a port**, `IPhotoStorage`, with three operations: save, open, delete the
-  uploads. `Azure.Storage.Blobs` is referenced only by Infrastructure.
+- **The application sees a port**, `IPhotoStorage`: save, open, delete, delete every upload.
+  `Azure.Storage.Blobs` is referenced only by Infrastructure.
 - **The container is private and the API serves the photos**:
   `GET /api/v1/orders/{number}/photos/{photoId}` streams the blob. No public container, no
   shared-access signatures, and the pages stay on one origin under their Content-Security-Policy.
@@ -29,11 +29,19 @@ at every start and every night ([ADR 0015](0015-the-demo-rebuilds-its-sample-dat
 - **An upload is checked by its content, not by what the client says**: JPEG, PNG or WebP by
   signature, at most 5 MB a file, 5 files a request, 10 photos an operation, and 200 uploaded
   photos in all. The content type stored and served is the one found in the bytes.
-- **The blobs are written before the row.** If the save of the order fails — a stale version —
-  the blobs just written are deleted; one that slips through is removed by the next rebuild.
-- **A rebuild of the sample data deletes every uploaded blob** and makes sure the sample images
-  exist. The seeded photos are rows that point at a handful of generated sample images, so the
+- **The blobs are written before the row**, under a key made for the upload, `uploads/<uuid>`.
+  If the save of the order fails — a stale version — the blobs just written are deleted; one
+  that slips through is removed by the next rebuild.
+- **A rebuild of the sample data deletes every uploaded blob** and uploads the sample images
+  again. The seeded photos are rows that point at a handful of generated sample images, so the
   seeded numbers and the galleries agree.
+- **The two new routes are bounded.** At most four uploads at a time and 120 photo downloads a
+  minute, for all callers together, answered with `429` beyond that; the upload's body is capped
+  at what five files need. A photo is served with `Cross-Origin-Resource-Policy: same-origin`.
+  `Photos:UploadsEnabled` switches uploads off without a release.
+- **Storage is prepared before the database is migrated, and its calls have a deadline** — two
+  retries, ten seconds each. A wrong connection string fails the new revision before the
+  schema moves, and unreachable storage cannot hold a start or a rebuild for minutes.
 - **`Operation.PhotoCount` stays as a stored column**, kept equal to the number of photo rows by
   the aggregate. The list, the detail and the totals read it as before.
 
@@ -57,11 +65,15 @@ at every start and every night ([ADR 0015](0015-the-demo-rebuilds-its-sample-dat
 
 - A second stateful dependency: Compose and the test suite start Azurite, and the deployment has a
   storage account. The API does not start without `ConnectionStrings:PhotoStorage`.
-- Readiness still means "the database answers". A storage outage fails uploads and galleries, not
-  the whole cabinet.
+- Readiness still means "the database answers". A storage outage fails uploads and galleries; it
+  also fails a start and a rebuild of the sample data, after the deadline, because both write
+  the sample images.
 - Every photo passes through the API's memory limits; the caps above keep that bounded.
 - An upload is two writes that are not one transaction. The order of the writes and the rebuild
   make the leftovers harmless, not impossible.
 - The storage account key is a long-lived secret. It lives only in the container app's secret and
   is rotated by regenerating the key and setting the secret again.
-- Without sign-in the caps are the only protection, and nightly deletion is the backstop.
+- Without sign-in the caps are the only protection, and nightly deletion is the backstop. The
+  limits are global: one caller can use them up for everyone until the window passes. A file is
+  an image by its signature only, so a few bytes that begin like a JPEG are stored and shown as
+  a broken picture; decoding every upload was left out with the imaging library.

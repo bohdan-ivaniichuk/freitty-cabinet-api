@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using FastEndpoints;
 using FluentValidation.Results;
+using Freitty.Application.Orders.AttachPhotos;
 
 namespace Freitty.Api.Endpoints;
 
@@ -18,6 +19,12 @@ internal static class ApiEndpoints
     private const string JsonPathRoot = "$";
     private const string InvalidBody = "The request body is not valid JSON for this endpoint.";
     private const string InvalidValue = "The value is not valid for this field.";
+    private const string InvalidForm = "The request body is not valid multipart form data.";
+
+
+    private static readonly string BodyTooLarge =
+        $"The request body is too large: send at most {AttachPhotosCommandValidator.MaxFileCount} files of at most " +
+        $"{PhotoFileValidator.MaxSizeText} each.";
 
     // The type ASP.NET Core gives a 400, so that every ProblemDetails of the API names its status the same way.
     private const string BadRequestType = "https://tools.ietf.org/html/rfc9110#section-15.5.1";
@@ -60,6 +67,13 @@ internal static class ApiEndpoints
                 ? new ValidationFailure(WholeBodyField, InvalidBody)
                 : new ValidationFailure(exception.Path![2..], InvalidValue);
             config.Binding.FailureMessage = (_, _, _) => InvalidValue;
+
+            // An upload over the body limit fails while the form is read, before any file can be named.
+            config.Binding.FormExceptionTransformer = exception => new ValidationFailure(
+                WholeBodyField,
+                exception is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge }
+                    ? BodyTooLarge
+                    : InvalidForm);
 
             // Validators run in the command pipeline, which camelCases the field names itself. Left on, this
             // renames FluentValidation's properties globally, and its messages would read "'page Size' must be …".

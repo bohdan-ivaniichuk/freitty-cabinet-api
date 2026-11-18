@@ -28,7 +28,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
                 OrderBuilder.TrailerNumber,
                 CabinetApi.Now,
                 IsBillable: true,
-                PhotoCount: 1,
+                PhotoCount: 0,
                 CommentCount: 0),
             recorded.Operation);
         OrderDetailDto detail = await api.DetailAsync(order.Number);
@@ -61,7 +61,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
             OperationRequest.Unloading(order, OrderBuilder.DeclaredStandard + 1));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal([AlertType.QuantityDelta], await OpenAlertsAsync(order));
+        Assert.Contains(AlertType.QuantityDelta, await OpenAlertsAsync(order));
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         using HttpResponseMessage response = await api.RecordAsync(order.Number, OperationRequest.Unloading(order, 2));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Empty(await OpenAlertsAsync(order));
+        Assert.DoesNotContain(AlertType.QuantityDelta, await OpenAlertsAsync(order));
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
 
         using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
-            OperationRequest.Unloading(order, 4, photos: 0));
+            OperationRequest.Unloading(order, 4));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal([AlertType.MissingPhoto], await OpenAlertsAsync(order));
@@ -111,11 +111,11 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
     }
 
     [Fact]
-    public async Task DisposalWithoutATrailerIsRecordedWithoutComments()
+    public async Task DisposalWithoutATrailerIsRecordedWithoutCommentsOrPhotos()
     {
         Order order = api.Orders.Received();
         await api.SaveAsync(order);
-        OperationRequest disposal = OperationRequest.Unloading(order, 1, photos: 2) with
+        OperationRequest disposal = OperationRequest.Unloading(order, 1) with
         {
             Type = OperationType.Disposal,
             TrailerNumber = null,
@@ -125,7 +125,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         RecordedOperationDto recorded = await RecordCreatedAsync(order.Number, disposal);
 
         Assert.Equal(
-            (OperationType.Disposal, (string?)null, false, 2, 0),
+            (OperationType.Disposal, (string?)null, false, 0, 0),
             (recorded.Operation.Type, recorded.Operation.TrailerNumber, recorded.Operation.IsBillable,
                 recorded.Operation.PhotoCount, recorded.Operation.CommentCount));
     }

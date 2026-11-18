@@ -26,5 +26,14 @@ internal sealed class OperationConfiguration : IEntityTypeConfiguration<Operatio
         });
         builder.Property(operation => operation.Id).ValueGeneratedNever();
         builder.Property(operation => operation.TrailerNumber).HasMaxLength(Operation.MaxTrailerNumberLength);
+
+        // A photo only documents its operation and follows it. The foreign key is named explicitly, as those of the
+        // shipment's children are: Operation has no DbSet.
+        builder.HasMany(operation => operation.Photos)
+            .WithOne()
+            .HasForeignKey(photo => photo.OperationId)
+            .HasConstraintName("fk_photos_operations_operation_id")
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.Navigation(operation => operation.Photos).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

@@ -3,6 +3,7 @@ using System.Net.Mime;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Freitty.Application.Orders;
+using Freitty.Application.Orders.GetOrderDetail;
 using Freitty.Domain.Orders;
 
 namespace Freitty.Api.IntegrationTests.Orders;
@@ -35,8 +36,6 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
     [InlineData("""{ "type": "Disposal" }""", "trailerNumber")]
     [InlineData("""{ "type": "Restack" }""", "trailerNumber")]
     [InlineData("""{ "type": "Disposal", "trailerNumber": "" }""", "trailerNumber")]
-    [InlineData("""{ "photoCount": -1 }""", "photoCount")]
-    [InlineData("""{ "photoCount": 100 }""", "photoCount")]
     [InlineData("""{ "expectedVersion": null }""", "expectedVersion")]
     [InlineData("""{ "expectedVersion": 0 }""", "expectedVersion")]
     public async Task InvalidFieldIsABadRequestNamingItAndWritesNothing(string change, string field)
@@ -123,7 +122,7 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
     {
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
-        OperationRequest atLimits = OperationRequest.Unloading(order, 10_000, photos: 99) with
+        OperationRequest atLimits = OperationRequest.Unloading(order, 10_000) with
         {
             TrailerNumber = "TRL-1234567890123456",
         };
@@ -140,7 +139,7 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
         await api.SaveAsync(order);
         JsonObject restack = Changed(
             OperationRequest.Unloading(order, 1) with { Type = OperationType.Restack, TrailerNumber = null },
-            """{ "isBillable": null, "photoCount": null, "trailerNumber": null }""");
+            """{ "isBillable": null, "trailerNumber": null }""");
 
         using HttpResponseMessage response = await api.SendPostAsync(ApiUrls.Operations(order.Number), restack);
 
@@ -149,6 +148,23 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
             Assert.Single((await api.DetailAsync(order.Number)).Shipments).Operations,
             operation => operation.Type == OperationType.Restack);
         Assert.Equal((false, 0), (operation.IsBillable, operation.PhotoCount));
+    }
+
+    // A client of the earlier contract still sends a count; without files it records no photo, and the Unloading
+    // raises its Missing photo alert as any other does.
+    [Fact]
+    public async Task PhotoCountInTheBodyAddsNoPhoto()
+    {
+        Order order = api.Orders.Ready();
+        await api.SaveAsync(order);
+        JsonObject unloading = Changed(OperationRequest.Unloading(order, 1), """{ "photoCount": 3 }""");
+
+        using HttpResponseMessage response = await api.SendPostAsync(ApiUrls.Operations(order.Number), unloading);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        DetailShipmentDto shipment = Assert.Single((await api.DetailAsync(order.Number)).Shipments);
+        Assert.Equal(0, Assert.Single(shipment.Operations).PhotoCount);
+        Assert.Equal(AlertType.MissingPhoto, Assert.Single(shipment.Alerts).Type);
     }
 
     public async ValueTask DisposeAsync()

@@ -69,6 +69,7 @@ ID_GITHUB=id-freitty-github
 PG=freitty-demo-$SUFFIX
 PG_ADMIN=freittyadmin
 PG_DB=freitty
+ST=stfreittydemo$SUFFIX              # the storage account of the photos
 CAE=cae-freitty-demo                # not ENV: that name is special to POSIX shells
 APP=freitty-cabinet
 GITHUB_OWNER=<owner>
@@ -107,7 +108,8 @@ FQDN="$(value az containerapp show --resource-group "$RG" --name "$APP" --query 
 
 ```bash
 for ns in Microsoft.App Microsoft.OperationalInsights Microsoft.ContainerRegistry \
-  Microsoft.DBforPostgreSQL Microsoft.ManagedIdentity Microsoft.Consumption; do
+  Microsoft.DBforPostgreSQL Microsoft.ManagedIdentity Microsoft.Consumption \
+  Microsoft.Storage; do
   az provider register --namespace "$ns" --wait
 done
 # PostgreSQL: the region is open to this subscription, B1ms and version 18 are offered.
@@ -249,6 +251,22 @@ az postgres flexible-server db list --resource-group "$RG" --server-name "$PG" \
 
 Expected: `Ready`, `18`, `Standard_B1ms`, `32`; `pg_trgm`; the list contains `freitty`.
 
+**Stage 6a — Photo storage.** One storage account; the API creates its `photos` container at
+startup. The container is private and only the API reads it
+([ADR 0017](adr/0017-photos-in-blob-storage-behind-the-api.md)).
+
+```bash
+exists az storage account show --resource-group "$RG" --name "$ST" || \
+  az storage account create --resource-group "$RG" --name "$ST" --location "$LOCATION" \
+    --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 --https-only true \
+    --allow-blob-public-access false --output none
+```
+
+Check: `az storage account show --resource-group "$RG" --name "$ST" --query
+"{sku:sku.name, publicBlobs:allowBlobPublicAccess, tls:minimumTlsVersion}" --output table`
+says `Standard_LRS`, `False`, `TLS1_2`. The account key never appears on screen: stage 8 reads
+the connection string straight into the app's secret.
+
 **Stage 7 — GitHub variables and the first image (owner, in GitHub).** Wait a few minutes after
 stage 5 for the role assignments to propagate. Print the values (none is secret) and set the first
 five variables of the table above; leave `AZURE_CONTAINER_APP` unset.
@@ -289,6 +307,8 @@ the subshell.
   PG_PASSWORD="$(new_password)"
   az postgres flexible-server update --resource-group "$RG" --name "$PG" \
     --admin-password "$PG_PASSWORD" --output none
+  STORAGE_CONNECTION="$(az storage account show-connection-string --resource-group "$RG" \
+    --name "$ST" --query connectionString --output tsv)"
   # The secret name has 19 characters of the 20 allowed: do not lengthen it.
   az containerapp create --resource-group "$RG" --name "$APP" --environment "$CAE" \
     --image "$IMAGE" --container-name api --cpu 0.25 --memory 0.5Gi \
@@ -296,7 +316,9 @@ the subshell.
     --ingress external --target-port 8080 --transport auto \
     --user-assigned "$PULL_ID" --registry-server "$ACR.azurecr.io" --registry-identity "$PULL_ID" \
     --secrets "postgres-connection=Host=$PG.postgres.database.azure.com;Port=5432;Database=$PG_DB;Username=$PG_ADMIN;Password=$PG_PASSWORD;SSL Mode=VerifyFull" \
-    --env-vars ConnectionStrings__Postgres=secretref:postgres-connection Seed__Enabled=true \
+      "storage-connection=$STORAGE_CONNECTION" \
+    --env-vars ConnectionStrings__Postgres=secretref:postgres-connection \
+      ConnectionStrings__PhotoStorage=secretref:storage-connection Seed__Enabled=true \
       Seed__Refresh=true ASPNETCORE_FORWARDEDHEADERS_ENABLED=true \
     --output none
 
@@ -380,7 +402,8 @@ says what to do if it fails.
    throughout, and the broken revision must end deactivated.
 7. **Cost by meter, 24 hours after the app is created — mandatory.** *Cost Management → Cost
    analysis*, scope the subscription, last 7 days, group by *Meter*. Only the PostgreSQL compute
-   meter (`B1MS`), the PostgreSQL storage meter and `Basic Registry Unit` may carry cost (the
+   meter (`B1MS`), the PostgreSQL storage meter, `Basic Registry Unit` and a cent or two of
+   Storage for the photos may carry cost (the
    Container Apps meters are inside the grant). **Any `Environment …` line means tear down at
    once.** Expected daily total: about 0.73 USD.
 8. **The idle rate, after day 9** (the grant is spent): Container Apps should cost about 0.19 USD a
@@ -397,7 +420,10 @@ Each block starts with the stage 2 variables.
   leaves the old version running on the new schema until the next deploy. So every migration must
   work with the version that is running: additive only — new tables, nullable columns or columns
   with defaults, new indexes. A rename or a drop is two releases: stop using it, then remove it
-  ([ADR 0007](adr/0007-migrations-applied-at-startup.md)).
+  ([ADR 0007](adr/0007-migrations-applied-at-startup.md)). The old revision serves on the new
+  schema; its rebuild of the sample data empties the tables it knows with `TRUNCATE … CASCADE`,
+  so a new table that references them is emptied too. Revisions older than the photos release
+  truncate without `CASCADE` and cannot rebuild once `photos` exists.
 - **Rollback:** list the revisions with their images, then deploy an earlier image:
 
   ```bash
@@ -457,6 +483,37 @@ Each block starts with the stage 2 variables.
   ```
 
   then restart the revision as above (a secret is read at start).
+- **Switch uploads off** (something unwanted was uploaded, or the limits are being used up): add
+  `Photos__UploadsEnabled` with the value `"false"` to `deploy/containerapp.yaml` and apply it
+  with the *Change the template* block; the upload then answers `503`. The restart also deletes
+  everything uploaded. Remove the variable and apply again to switch them back on.
+- **Add the photo storage to an app that already runs** (the app was created before stage 6a
+  existed). The order matters: the secret must exist before the template names it, and the
+  template before the release that needs it.
+
+  ```bash
+  # 1. Stage 6a: the storage account.
+  # 2. The secret, straight from the account — nothing on screen.
+  az containerapp secret set --resource-group "$RG" --name "$APP" --output none \
+    --secrets "storage-connection=$(az storage account show-connection-string \
+      --resource-group "$RG" --name "$ST" --query connectionString --output tsv)"
+  # 3. The template, with the image now running (it ignores the new variable): the
+  #    "Change the template" block below.
+  # 4. Push the release to main.
+  ```
+- **Rotate the storage key:** regenerate it and hand the new connection string to the app, then
+  restart the revision.
+
+  ```bash
+  (
+    set -euo pipefail
+    az storage account keys renew --resource-group "$RG" --account-name "$ST" --key primary \
+      --output none
+    az containerapp secret set --resource-group "$RG" --name "$APP" --output none \
+      --secrets "storage-connection=$(az storage account show-connection-string \
+        --resource-group "$RG" --name "$ST" --query connectionString --output tsv)"
+  )
+  ```
 - **Change the template** (a probe, a variable, the size): edit `deploy/containerapp.yaml`, then
   apply it with the image now running:
 
