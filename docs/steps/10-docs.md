@@ -50,6 +50,37 @@ fifteen minutes.
 
 - New features, refactoring, anything that changes behaviour.
 
+## Proposed outline
+
+A proposal for the grooming session, in the order of the talk. The slides are written after the
+deployment: the public URL and the screenshots come from it.
+
+1. **Live demo** on the deployed address: the Dashboard, the Order List with its tabs, filters,
+   search and pages, an order, and an operation recorded on it — after which the Orders badge and
+   the dashboard tiles change.
+2. **Domain model**: the ER diagram; why an alert follows a change of the quantity delta and not
+   its presence; why the operations of a shipment are an append-only ledger.
+3. **Architecture**: the layers, the command pipeline, one error format, why FastEndpoints and
+   why the application layer does not depend on it.
+4. **Database**: the indexes with `EXPLAIN ANALYZE` before and after; the transaction and the
+   optimistic concurrency of the write flow.
+5. **Tests and CI/CD**: the integration tests against a real PostgreSQL; the image that passed
+   the checks is the image that is deployed.
+6. **Beyond the brief**: the CSV export, the table layout of the list, sample data that keeps its
+   dates fresh, the API reference behind the Help button.
+7. **Left out on purpose, and why** — one slide:
+   - the controls outside the three screens (New Order, Settings, Edit, BOL PDF, Share QR and the
+     like) are marked in the pages as not part of the assignment;
+   - photos and comments are stored as counts; file storage is the next step;
+   - there is no sign-in: the current user is one seeded user;
+   - resolving an alert by hand is a domain operation that no endpoint exposes;
+   - one instance, no rate limiter.
+8. **The AI workflow**: a step spec, the implementation, an independent review, the author's own
+   check — who decides and what is delegated.
+9. **The mockup's inconsistencies** and how the sample data was normalised.
+
+The answers to the questions of *Open questions* 3 are prepared apart from the slides.
+
 ## Open questions
 
 1. **Slide format.** Marp or Slidev from Markdown, or a plain deck outside the repository?
