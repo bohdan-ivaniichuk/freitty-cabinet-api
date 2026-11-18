@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Freitty — Order</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app.css">
+<script type="module" src="js/order.js"></script>
+</head>
+<body>
+<div class="fc-shell">
+  <!-- shell -->
+  <aside class="fc-sidebar">
+    <a class="fc-logo" href="index.html">FREITT<span>Y</span></a>
+    <ul class="fc-nav">
+      <li class="active"><a href="orders.html"><span><span aria-hidden="true">📦</span> Orders</span> <span class="badge" id="nav-attention" hidden></span></a></li>
+      <li aria-disabled="true" title="Not part of this assignment">⚙️ Settings</li>
+    </ul>
+    <div style="padding: 20px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,.1)">
+      <button class="btn btn-primary" style="width:100%" disabled title="Not part of this assignment">+ New Order</button>
+    </div>
+  </aside>
+  <main class="fc-main">
+    <div class="fc-topbar">
+      <div class="fc-search"><span aria-hidden="true">🔍</span> <input id="search" type="search" placeholder="Search orders…" maxlength="50" autocomplete="off" aria-label="Search orders"></div>
+      <div class="spacer"></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" aria-disabled="true" title="Not part of this assignment">Top up →</span></div>
+      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Notifications">🔔</div>
+      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Help">❓</div>
+      <div class="fc-user"><div class="avatar" id="user-initials"></div><div class="name" id="user-name"></div></div>
+    </div>
+    <!-- /shell -->
+    <div class="fc-content">
+      <div class="fc-crumbs" id="crumbs"><a href="orders.html">Orders</a> <span>›</span> </div>
+      <div id="order">
+        <div class="state">Loading…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<template id="order-view">
+  <div style="display:flex;align-items:center;gap:12px;padding:8px 0 14px;border-bottom:1px solid #E5E7EB;margin-bottom:14px">
+    <div style="width:40px;height:40px;background:#ED1C2E;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:22px">F</div>
+    <div style="font-size:18px;font-weight:700;color:#1F2A3A" data-field="management"></div>
+    <div style="margin-left:auto;width:36px;height:36px;background:#F3F4F6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6B7280" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Menu">☰</div>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+    <a class="btn btn-secondary" href="orders.html" style="padding:6px 10px;font-size:14px" aria-label="Back to the orders">←</a>
+    <span style="color:#2563EB;font-size:20px" aria-hidden="true">📦</span>
+    <span style="font-size:13px;color:#6B7280">Order#:</span>
+    <strong style="font-size:15px;color:#1F2A3A" data-field="number"></strong>
+    <span style="color:#16A34A;font-size:16px;font-weight:700" data-field="invoiced">$</span>
+    <span style="color:#6B7280;font-size:16px" data-field="transport">🚚</span>
+    <span class="badge" style="background:#DBEAFE;color:#1E40AF" data-field="type"></span>
+    <span class="badge" style="background:#D1FAE5;color:#065F46" data-field="on-stock">● On Stock</span>
+    <span class="badge" data-field="stage"></span>
+    <span class="ref-n-inline" data-field="ref-single"><span class="lbl">Ref N:</span><span class="val" data-field="ref"></span></span>
+    <span style="font-size:13px;color:#6B7280" data-field="sub-orders"></span>
+    <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;background:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;font-size:11.5px;font-weight:700;color:#1F2A3A"><span style="color:#9CA3AF;font-weight:500">by</span><span class="ava" style="width:18px;height:18px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800" data-field="initials"></span><span style="font-size:9px;padding:1px 5px;border-radius:3px;font-weight:800;letter-spacing:.3px" data-field="role"></span></span>
+    <span class="badge" style="background:#FEF3C7;color:#92400E" data-field="delta">⚠ Actual ≠ Expected</span>
+    <span class="badge badge-alert" data-field="missing-photo">⚠ Missing photo</span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">💬 <span style="color:#9CA3AF" data-field="comments"></span></button>
+    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">📷 <span style="color:#9CA3AF" data-field="photos"></span></button>
+    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">$</button>
+    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">🖨</button>
+    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">📦</button>
+    <button class="btn btn-secondary" style="padding:7px 12px;font-size:12px" disabled title="Not part of this assignment">🕘</button>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn btn-secondary" style="font-size:12px;padding:7px 12px" disabled title="Not part of this assignment">📷 Share QR</button>
+      <button class="btn btn-primary" style="font-size:12px;padding:7px 12px" disabled title="Not part of this assignment">📥 BOL PDF</button>
+      <button class="btn btn-primary" style="padding:7px 14px;font-size:12px" disabled title="Not part of this assignment">✏️ Edit</button>
+    </div>
+  </div>
+
+  <div style="margin:10px 0 14px;background:#FFFBEB;border:1px solid #FDE68A;border-left:3px solid #F59E0B;border-radius:8px;padding:10px 14px;font-size:12px;color:#78350F;display:flex;align-items:center;gap:10px" data-field="transfer-banner">
+    <span style="font-size:16px" aria-hidden="true">ℹ️</span>
+    <span><strong>Read-only:</strong> transfers between hubs are arranged by the call center.</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:14px;position:relative" data-field="meta">
+    <div style="display:grid;grid-template-columns:130px 1fr;gap:6px 14px;font-size:13px">
+      <div style="color:#6B7280">Customer</div><div style="font-weight:600" data-field="customer"></div>
+      <div style="color:#6B7280">Hub</div><div data-field="hub"></div>
+      <div style="color:#6B7280">Services</div><div data-field="services"></div>
+      <div style="color:#6B7280">Date</div><div data-field="date"></div>
+      <div style="color:#6B7280">Declared q-ty</div><div style="font-weight:600" data-field="declared"></div>
+      <div style="color:#6B7280">Actual q-ty</div><div style="font-weight:600" data-field="actual"></div>
+      <div style="color:#6B7280" data-crossdock>Trailer type</div><div data-crossdock data-fact="trailer-type"><span class="badge" style="background:#F3F4F6;color:#374151"></span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:130px 1fr;gap:6px 14px;font-size:13px">
+      <div style="color:#6B7280">Carrier</div><div style="font-weight:600" data-field="carrier"></div>
+      <div style="color:#6B7280">Phone</div><div data-field="phone"></div>
+      <div style="color:#6B7280">Destination</div><div data-field="destination"></div>
+      <div style="color:#6B7280" data-crossdock>Truck / trailer</div><div data-crossdock data-fact="truck"></div>
+      <div style="color:#6B7280" data-crossdock>Dock</div><div data-crossdock data-fact="dock"><strong style="color:#ED1C2E"></strong></div>
+      <div style="color:#6B7280" data-crossdock>Assigned to</div><div data-crossdock data-fact="floor-lead"><span style="color:#ED1C2E;font-weight:600"></span></div>
+      <div style="color:#6B7280">Status flow</div><div><span style="font-size:11px;color:#374151"><span data-status="Draft"></span> → <span data-status="Ready"></span> → <span data-status="InProgress"></span> → <span data-status="Completed"></span></span></div>
+      <div style="color:#6B7280">Deltas detected</div><div><span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10px" data-field="deltas"></span> <a style="color:#2563EB;font-size:11px;font-weight:700;text-decoration:none;margin-left:6px" aria-disabled="true" title="Not part of this assignment">View all →</a></div>
+    </div>
+  </div>
+
+  <div data-field="shipments"></div>
+
+  <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #E5E7EB">
+      <div style="display:flex;align-items:center;gap:8px">
+        <strong style="color:#1F2A3A">Supplies</strong>
+        <span style="font-size:11px;color:#6B7280">mandatory stock items purchased as Platform Sale</span>
+      </div>
+      <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled title="Not part of this assignment">+ Supply</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#F9FAFB;font-size:11px;text-transform:uppercase;color:#6B7280">
+        <tr>
+          <th style="text-align:left;padding:8px 14px">SKU</th>
+          <th style="text-align:left;padding:8px 6px">Category</th>
+          <th style="text-align:right;padding:8px 6px">Q-ty</th>
+          <th style="text-align:right;padding:8px 6px">Unit $</th>
+          <th style="text-align:right;padding:8px 6px">Line total</th>
+          <th style="text-align:left;padding:8px 14px">Action</th>
+        </tr>
+      </thead>
+      <tbody data-field="supplies"></tbody>
+      <tfoot style="background:#F9FAFB;font-size:12px">
+        <tr style="border-top:1px solid #E5E7EB">
+          <td colspan="4" style="padding:10px 14px;text-align:right;color:#6B7280;font-weight:600">Supply subtotal</td>
+          <td style="padding:10px 6px;text-align:right;font-weight:700;color:#1F2A3A" data-field="subtotal"></td>
+          <td style="padding:10px 14px;color:#6B7280;font-size:11px"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;margin-top:14px" data-field="invoices">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #E5E7EB">
+      <strong style="color:#1F2A3A">Invoices</strong>
+    </div>
+    <div data-field="invoice-lines"></div>
+  </div>
+</template>
+
+<template id="shipment-block">
+  <div>
+    <div data-field="header">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <strong style="font-size:15px;color:#1F2A3A" data-field="label"></strong>
+        <span class="ref-n-inline"><span class="lbl">Ref N:</span><span class="val" data-field="ref"></span></span>
+        <span class="badge" data-field="receipt"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:6px 14px;font-size:13px;margin-bottom:14px">
+        <div style="color:#6B7280">Trailer type</div><div data-fact="trailer-type"><span class="badge" style="background:#F3F4F6;color:#374151"></span></div>
+        <div style="color:#6B7280">Truck / trailer</div><div data-fact="truck"></div>
+        <div style="color:#6B7280">Dock</div><div data-fact="dock"><strong style="color:#ED1C2E"></strong></div>
+        <div style="color:#6B7280">Assigned to</div><div data-fact="floor-lead"><span style="color:#ED1C2E;font-weight:600"></span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;margin-bottom:16px">
+      <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:14px">
+        <div style="font-size:11px;text-transform:uppercase;color:#6B7280;font-weight:700;margin-bottom:10px">Your assigned dock</div>
+        <div style="background:linear-gradient(180deg,#F9FAFB,#E5E7EB);border-radius:8px;padding:14px;position:relative;height:150px;overflow:hidden" data-field="dock-schematic">
+          <div style="position:absolute;top:12px;left:12px;right:12px;height:22px;background:#1F2A3A;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px" data-field="dock-wall"></div>
+          <div style="position:absolute;top:44px;left:50%;transform:translateX(-50%);width:70px;height:50px;background:#ED1C2E;border:2px solid #991B1B;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700" data-field="dock-door"></div>
+          <div style="position:absolute;top:44px;left:30px;width:38px;height:50px;background:#9CA3AF;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px"></div>
+          <div style="position:absolute;top:44px;right:30px;width:38px;height:50px;background:#9CA3AF;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px"></div>
+          <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);width:56px;height:28px;background:#fff;border:2px solid #1F2A3A;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700" data-field="dock-trailer"></div>
+        </div>
+        <div style="background:linear-gradient(180deg,#F9FAFB,#E5E7EB);border-radius:8px;height:150px;display:flex;align-items:center;justify-content:center;font-size:12px;color:#6B7280" data-field="no-dock">No dock assigned</div>
+        <div style="font-size:12px;margin-top:10px;line-height:1.55">
+          <div data-field="dock-name"><strong></strong></div>
+          <div style="color:#6B7280" data-field="dock-assigned"></div>
+          <div style="color:#16A34A;font-weight:600;margin-top:4px" data-field="dock-status"></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:12px" data-field="expected">
+          <div style="font-size:10px;text-transform:uppercase;color:#6B7280;font-weight:700;margin-bottom:6px">Expected (BOL)</div>
+        </div>
+        <div class="actual-card" style="border-radius:10px;padding:12px;position:relative" data-field="actual">
+          <div class="actual-title" style="font-size:10px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Actual (warehouse)</div>
+          <div class="actual-note" style="font-size:11px" data-field="actual-note"></div>
+        </div>
+        <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:12px">
+          <div style="font-size:10px;text-transform:uppercase;color:#6B7280;font-weight:700;margin-bottom:6px">Warehouse note</div>
+          <div style="font-size:12px;color:#1F2A3A;line-height:1.5" data-field="note"></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #E5E7EB">
+        <div style="display:flex;align-items:center;gap:10px" data-field="operations-title">
+          <div style="font-weight:700;color:#1F2A3A">Operations</div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled title="Not part of this assignment" data-field="add-operation">+ Operation</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead style="background:#F9FAFB;font-size:11px;text-transform:uppercase;color:#6B7280">
+          <tr>
+            <th style="text-align:left;padding:8px 14px">Operation</th>
+            <th style="text-align:left;padding:8px 6px">Trailer</th>
+            <th style="text-align:right;padding:8px 6px">Q-ty</th>
+            <th style="text-align:left;padding:8px 6px">Unit</th>
+            <th style="text-align:left;padding:8px 6px">Applied at</th>
+            <th style="text-align:left;padding:8px 6px">Action</th>
+          </tr>
+        </thead>
+        <tbody data-field="operations"></tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<template id="cargo-line">
+  <div style="font-size:28px;font-weight:700;color:#1F2A3A" data-field="quantity"></div>
+  <div style="font-size:11px;color:#6B7280" data-field="unit"></div>
+</template>
+
+<template id="actual-line">
+  <div class="actual-value" style="font-size:28px;font-weight:700;display:flex;align-items:baseline;gap:6px" data-field="quantity"><span style="font-size:12px;background:#FB923C;color:#fff;padding:2px 8px;border-radius:10px" data-field="delta"></span></div>
+  <div class="actual-unit" style="font-size:11px" data-field="unit"></div>
+</template>
+
+<template id="meta-quantity">
+  <span style="font-size:11px;color:#6B7280;font-weight:500"></span>
+</template>
+
+<template id="meta-delta">
+  <span class="badge" style="background:#FB923C;color:#fff;font-size:10px"></span>
+</template>
+
+<template id="operation-row">
+  <tr style="border-top:1px solid #F3F4F6">
+    <td style="padding:10px 14px"><span style="color:#059669;font-weight:700" data-field="billable">$</span> <span class="badge" style="background:#FEE2E2;color:#991B1B" data-field="disposal">Disposal</span></td>
+    <td style="padding:10px 6px" data-field="trailer"></td>
+    <td class="op-qty" style="padding:10px 6px;text-align:right;font-weight:600" data-field="quantity"></td>
+    <td style="padding:10px 6px" data-field="unit"></td>
+    <td style="padding:10px 6px;color:#6B7280" data-field="applied"></td>
+    <td style="padding:10px 6px;color:#9CA3AF" data-field="counters"></td>
+  </tr>
+</template>
+
+<template id="supply-row">
+  <tr style="border-top:1px solid #F3F4F6">
+    <td style="padding:10px 14px" data-field="sku"></td>
+    <td style="padding:10px 6px"><span class="badge" style="font-size:10px" data-field="category"></span></td>
+    <td style="padding:10px 6px;text-align:right;color:#1F2A3A;font-weight:600" data-field="quantity"></td>
+    <td style="padding:10px 6px;text-align:right" data-field="unit-price"></td>
+    <td style="padding:10px 6px;text-align:right;font-weight:600" data-field="line-total"></td>
+    <td style="padding:10px 14px;color:#9CA3AF">✏️ · 🗑</td>
+  </tr>
+</template>
+
+<template id="empty-row">
+  <tr style="border-top:1px solid #F3F4F6">
+    <td colspan="6" style="padding:14px;text-align:center;color:#6B7280"></td>
+  </tr>
+</template>
+
+<template id="invoice-line">
+  <div style="padding:10px 14px;font-size:13px;border-top:1px solid #F3F4F6;color:#1F2A3A"></div>
+</template>
+
+<template id="order-not-found">
+  <div class="state state-error"><strong>Order not found</strong><span data-field="detail"></span> <a href="orders.html">Back to the orders</a></div>
+</template>
+</body>
+</html>

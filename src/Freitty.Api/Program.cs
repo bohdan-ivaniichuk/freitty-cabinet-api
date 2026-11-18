@@ -3,6 +3,7 @@ using Freitty.Api.Errors;
 using Freitty.Api.Health;
 using Freitty.Api.Logging;
 using Freitty.Api.OpenApi;
+using Freitty.Api.Pages;
 using Freitty.Api.Pipeline;
 using Freitty.Api.Reporting;
 using Freitty.Application;
@@ -32,6 +33,7 @@ await app.Services.MigrateDatabaseAsync(app.Lifetime.ApplicationStopping);
 await app.Services.SeedDatabaseAsync(app.Lifetime.ApplicationStopping);
 
 app.UseErrorResponses();
+app.UseStaticPages();
 app.UseRequestLogging();
 app.MapHealthEndpoints();
 app.UseApiEndpoints();

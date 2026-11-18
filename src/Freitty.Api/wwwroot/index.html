@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Freitty — Dashboard</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app.css">
+<script type="module" src="js/dashboard.js"></script>
+</head>
+<body>
+<div class="fc-shell">
+  <!-- shell -->
+  <aside class="fc-sidebar">
+    <a class="fc-logo" href="index.html">FREITT<span>Y</span></a>
+    <ul class="fc-nav">
+      <li class="active"><a href="orders.html"><span><span aria-hidden="true">📦</span> Orders</span> <span class="badge" id="nav-attention" hidden></span></a></li>
+      <li aria-disabled="true" title="Not part of this assignment">⚙️ Settings</li>
+    </ul>
+    <div style="padding: 20px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,.1)">
+      <button class="btn btn-primary" style="width:100%" disabled title="Not part of this assignment">+ New Order</button>
+    </div>
+  </aside>
+  <main class="fc-main">
+    <div class="fc-topbar">
+      <div class="fc-search"><span aria-hidden="true">🔍</span> <input id="search" type="search" placeholder="Search orders…" maxlength="50" autocomplete="off" aria-label="Search orders"></div>
+      <div class="spacer"></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" aria-disabled="true" title="Not part of this assignment">Top up →</span></div>
+      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Notifications">🔔</div>
+      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Help">❓</div>
+      <div class="fc-user"><div class="avatar" id="user-initials"></div><div class="name" id="user-name"></div></div>
+    </div>
+    <!-- /shell -->
+    <div class="fc-content">
+      <div class="fc-crumbs"><a href="index.html">Home</a> <span>›</span> Dashboard</div>
+      <div class="fc-page-title"><h1 id="welcome">Welcome 👋</h1></div>
+
+      <div class="state" id="dashboard-state">Loading…</div>
+
+      <div id="dashboard" hidden>
+        <div class="kpi-grid">
+          <div class="kpi kpi-accent-blue">
+            <div class="label">Active Orders</div>
+            <div class="value" id="active-count"></div>
+            <div class="trend" id="active-trend"></div>
+          </div>
+          <div class="kpi kpi-accent-green">
+            <div class="label">Completed (30 d)</div>
+            <div class="value" id="completed-count"></div>
+            <div class="trend" id="completed-trend"></div>
+          </div>
+          <a class="kpi kpi-accent-red" href="orders.html?tab=alerts" style="cursor:pointer;position:relative;grid-column:span 2;background:linear-gradient(90deg,#FEF2F2 0%,#FEE2E2 100%)">
+            <div class="label" style="color:#B8142A;display:flex;align-items:center;gap:8px">
+              <span>⚠ Need Attention</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:18px;margin-top:2px">
+              <div>
+                <div class="value" style="color:#B8142A" id="attention-total"></div>
+                <div style="font-size:10px;color:#991B1B;font-weight:700;text-transform:uppercase;letter-spacing:0.06em">Total</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:3px 8px;border-radius:8px;font-weight:700" id="attention-awaiting"></span>
+                <span style="font-size:11px;background:#FECACA;color:#7F1D1D;padding:3px 8px;border-radius:8px;font-weight:700" id="attention-alerts"></span>
+              </div>
+            </div>
+            <div style="position:absolute;bottom:10px;right:12px;font-size:11px;color:#B8142A;font-weight:800">Open list →</div>
+          </a>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 12px">
+          <h2 style="font-size:16px;color:#1F2A3A;font-weight:700">Active Orders</h2>
+          <a href="orders.html" style="font-size:12px;color:#2E75B6;text-decoration:none;font-weight:600">View all →</a>
+        </div>
+
+        <div class="cards-grid" id="active-orders"></div>
+
+        <div style="margin-top:24px;padding:20px;background:#fff;border:1px solid #E2E8F0;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h2 style="font-size:16px;color:#1F2A3A;font-weight:700;margin:0;display:flex;align-items:center;gap:8px">📊 Your activity </h2>
+            <div style="display:flex;gap:6px">
+              <a class="period-btn" data-period="day" href="index.html?period=day">Day</a>
+              <a class="period-btn" data-period="week" href="index.html?period=week">CW</a>
+              <a class="period-btn" data-period="month" href="index.html?period=month">Month</a>
+              <a class="period-btn" data-period="quarter" href="index.html?period=quarter">Quarter</a>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+                <span style="font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Completed orders</span>
+                <span style="font-size:20px;font-weight:800;color:#16A34A"><span id="completed-figure"></span> <span style="font-size:11px;color:#64748B;font-weight:600">last 30d</span></span>
+              </div>
+              <svg id="completed-chart" viewBox="0 0 400 120" style="width:100%;height:120px">
+                <line x1="0" y1="30" x2="400" y2="30" stroke="#F1F5F9" stroke-width="1"/>
+                <line x1="0" y1="60" x2="400" y2="60" stroke="#F1F5F9" stroke-width="1"/>
+                <line x1="0" y1="90" x2="400" y2="90" stroke="#F1F5F9" stroke-width="1"/>
+                <g data-plot></g>
+              </svg>
+            </div>
+
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+                <span style="font-size:12px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Spend</span>
+                <span style="font-size:20px;font-weight:800;color:#ED1C2E"><span id="spend-figure"></span> <span style="font-size:11px;color:#64748B;font-weight:600">last 30d</span></span>
+              </div>
+              <svg id="spend-chart" viewBox="0 0 400 120" style="width:100%;height:120px">
+                <line x1="0" y1="30" x2="400" y2="30" stroke="#F1F5F9" stroke-width="1"/>
+                <line x1="0" y1="60" x2="400" y2="60" stroke="#F1F5F9" stroke-width="1"/>
+                <line x1="0" y1="90" x2="400" y2="90" stroke="#F1F5F9" stroke-width="1"/>
+                <g data-plot></g>
+              </svg>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;padding:10px 14px;background:#F1F5F9;border-radius:6px;font-size:12px;color:#475569;display:flex;gap:16px;flex-wrap:wrap">
+            <span id="summary-completed"></span>
+            <span id="summary-spend"></span>
+            <span id="summary-best"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- card -->
+<template id="order-card">
+  <div class="order-card">
+    <div class="oc-head">
+      <div>
+        <div class="oc-id-row">
+          <a class="oc-num" data-field="number"></a>
+          <div class="ref-n-inline" data-field="ref-single"><span class="lbl">Ref N:</span><span class="val" data-field="ref"></span></div>
+          <details class="ref-n-multi" data-field="ref-multi">
+            <summary><span class="lbl">Ref N</span><span class="count" data-field="ref-count"></span></summary>
+            <div class="ref-list" data-field="ref-list"></div>
+          </details>
+        </div>
+        <div class="oc-type" data-field="type-line"></div>
+        <div class="oc-by"><span class="lbl">by</span><span class="chip"><span class="ava" data-field="initials"></span></span><span class="role" data-field="role"></span></div>
+      </div>
+      <div><span class="badge" data-field="type-badge"></span> <span class="badge" data-field="status-badge"></span></div>
+    </div>
+    <div class="oc-body">
+      <div><div class="k">Hub</div><div class="v" data-field="hub"></div></div>
+      <div><div class="k">Date</div><div class="v" data-field="date"></div></div>
+      <div><div class="k">Q-ty</div><div class="v" data-field="quantity"></div></div>
+      <div><div class="k">Carrier</div><div class="v" data-field="carrier"></div></div>
+      <div data-field="destination-cell"><div class="k">Destination </div><div class="v" data-field="destination"></div></div>
+      <div data-field="trailers-cell"><div class="k">Trailers </div><div class="v"><span style="background:#EDE9FE;color:#5B21B6;padding:1px 8px;border-radius:8px;font-weight:800;font-size:11px" data-field="trailers"></span></div></div>
+    </div>
+    <div class="oc-footer">
+      <div data-field="next"></div>
+      <div class="oc-icons" data-field="order-icons" aria-hidden="true"><span>💬</span><span>📷</span><span>📄</span><span>🖨</span><span>⏱</span></div>
+      <div class="oc-icons" data-field="draft-icons" aria-hidden="true"><span>🗑</span></div>
+    </div>
+  </div>
+</template>
+<template id="ref-item">
+  <div class="ref-item"><span class="sub-id"></span><span class="sub-ref"></span><span class="sub-desc"><em style="color:#DC2626"></em></span></div>
+</template>
+<!-- /card -->
+</body>
+</html>

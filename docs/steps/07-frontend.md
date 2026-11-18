@@ -52,7 +52,7 @@ which is read and never edited: sections `#dashboard`, `#orderlist` and `#crossd
 
   | Shape | How |
   |---|---|
-  | `12 Apr, 09:00` | `{ timeZone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }` |
+  | `12 Apr, 09:00` | `{ timeZone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }`; the month is cut to three letters everywhere — `en-GB` writes "Sept" |
   | `17 Apr 2026` | `{ timeZone, day: 'numeric', month: 'short', year: 'numeric' }` — also the "paid" date of an invoice |
   | `17 Apr · 08:55` | the day-and-month part and the time part of two formatters, joined by " · " |
   | "today" | the date in the hub's zone equals today's date in the hub's zone, both as `en-CA` `{ timeZone, dateStyle: 'short' }` strings |
@@ -156,13 +156,15 @@ an unknown one, the page sends `Week`.
     mockup's red style.
   - Header figures: `summary.completedLast30Days` and `summary.spendLast30Days`, each followed by
     "last 30d".
-  - Both charts use the mockup's `0 0 400 120` view box: the baseline is y = 115, labels sit at
-    y = 118. SVG nodes are created with `createElementNS('http://www.w3.org/2000/svg', …)`.
+  - Both charts use the mockup's `0 0 400 120` view box. The baseline is y = 104 and the labels
+    sit at y = 117: the mockup draws its baseline at 115, under the labels, which real data — a
+    zero in the current bucket — turns into a dot drawn through its own label. SVG nodes are
+    created with `createElementNS('http://www.w3.org/2000/svg', …)`.
   - Completed orders, for n buckets: slot = 380 / n; bar i at x = 10 + i·slot, width 0.7·slot,
-    height 110·value/max, y = 115 − height, `rx` 3, opacity 0.3 + 0.7·value/max; no rect for a
+    height 99·value/max, y = 104 − height, `rx` 3, opacity 0.3 + 0.7·value/max; no rect for a
     zero.
-  - Spend: point i at x = 10 + i·360/(n − 1), y = 115 − 100·value/max; the line through the
-    points, the area closed down to y = 115, a dot per point; the highest point gets the mockup's
+  - Spend: point i at x = 10 + i·360/(n − 1), y = 104 − 92·value/max; the line through the
+    points, the area closed down to y = 104, a dot per point; the highest point gets the mockup's
     larger dot with the white stroke.
   - Axis labels on the last bucket and every third before it (n − 1, n − 4, …), centred on the bar
     or the point: `Day` and `Week` — the start date as `12 Apr`; `Month` — `Apr`; `Quarter` —
@@ -210,8 +212,12 @@ Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GE
 - Badges: `badge-simple` "Cross-Dock" or `badge-consol` "Consolidation"; then `badge-new` "New",
   `badge-prog` "In progress", `badge-done` "Completed", or `badge-alert` "Alert" when any Alert is
   open.
-- Ref N: one shipment → inline. Several → the `<details>` list, its count "{n} refs", open when a
-  shipment has an open Alert. Each row: the sub-order label, the Ref N, "{n} pallets" — the actual
+- Ref N: one shipment → inline. Several → the `<details>` list, its count "{n} refs". On the
+  dashboard it is open when a shipment has an open Alert, as the mockup draws it; on the list it
+  starts closed, as the mockup's list does — an open list is wider than a third of the page. The
+  list's grid is `repeat(3, minmax(0, 1fr))`, and inside it the Ref N list may shrink and its
+  description wrap, so a list the user opens does not push the columns apart; a Ref N itself never
+  wraps. Each row: the sub-order label, the Ref N, "{n} pallets" — the actual
   quantity once anything was unloaded, the declared one before — and, for an open Alert,
   " · ⚠ missing photo" or " · ⚠ quantity delta" (both, comma-separated, when both are open).
 - Type line: "Cross-Dock · Storage", "Cross-Dock · Pickup", "Consolidation · {n} sub-orders"

@@ -22,6 +22,7 @@ This starts PostgreSQL and the API. When the command returns, both are healthy:
 
 | URL | What |
 |---|---|
+| http://localhost:8080/ | The cabinet: the Dashboard, the order list (`/orders.html`) and an order (`/order.html?n=FR001383`) |
 | http://localhost:8080/health/live | Liveness — `200` while the process serves requests |
 | http://localhost:8080/health/ready | Readiness — `200` when the API reaches PostgreSQL, `503` otherwise |
 | http://localhost:8080/scalar | The API reference (Scalar), with requests that can be sent from the page |

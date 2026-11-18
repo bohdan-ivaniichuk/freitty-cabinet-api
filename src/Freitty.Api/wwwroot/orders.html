@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Freitty — Orders</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="app.css">
+<script type="module" src="js/orders.js"></script>
+</head>
+<body>
+<div class="fc-shell">
+  <!-- shell -->
+  <aside class="fc-sidebar">
+    <a class="fc-logo" href="index.html">FREITT<span>Y</span></a>
+    <ul class="fc-nav">
+      <li class="active"><a href="orders.html"><span><span aria-hidden="true">📦</span> Orders</span> <span class="badge" id="nav-attention" hidden></span></a></li>
+      <li aria-disabled="true" title="Not part of this assignment">⚙️ Settings</li>
+    </ul>
+    <div style="padding: 20px; margin-top: 20px; border-top: 1px solid rgba(255,255,255,.1)">
+      <button class="btn btn-primary" style="width:100%" disabled title="Not part of this assignment">+ New Order</button>
+    </div>
+  </aside>
+  <main class="fc-main">
+    <div class="fc-topbar">
+      <div class="fc-search"><span aria-hidden="true">🔍</span> <input id="search" type="search" placeholder="Search orders…" maxlength="50" autocomplete="off" aria-label="Search orders"></div>
+      <div class="spacer"></div>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:999px;font-size:12px;font-weight:700;color:#B8142A;margin-right:4px"><span><span aria-hidden="true">💳</span> <span id="balance"></span></span> <span style="font-size:10px;font-weight:600;color:#DC2626" aria-disabled="true" title="Not part of this assignment">Top up →</span></div>
+      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Notifications">🔔</div>
+      <div class="fc-topbar-btn" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Help">❓</div>
+      <div class="fc-user"><div class="avatar" id="user-initials"></div><div class="name" id="user-name"></div></div>
+    </div>
+    <!-- /shell -->
+    <div class="fc-content">
+      <div class="fc-crumbs"><a href="index.html">Home</a> <span>›</span> Orders</div>
+      <div class="fc-page-title">
+        <h1>All Orders</h1>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-secondary" disabled title="Not part of this assignment">📥 Export CSV</button>
+          <button class="btn btn-primary" disabled title="Not part of this assignment">+ New Order</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <a class="tab" data-tab="all">All <span class="count">…</span></a>
+        <a class="tab" data-tab="crossdock">Cross-Dock <span class="count">…</span></a>
+        <a class="tab" data-tab="consolidation">Consolidation <span class="count">…</span></a>
+        <a class="tab" data-tab="alerts">Alerts <span class="count" style="background:#FEE2E2;color:#991B1B">…</span></a>
+        <a class="tab" data-tab="drafts">Drafts <span class="count">…</span></a>
+      </div>
+      <div id="counts-error" style="margin-bottom:16px" hidden></div>
+
+      <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+        <select id="filter-hub" autocomplete="off" aria-label="Hub" style="padding:6px 10px;border:1px solid #D0D7DE;border-radius:6px;font-size:12px"><option value="">Hub: All</option></select>
+        <select id="filter-date" autocomplete="off" aria-label="Date" style="padding:6px 10px;border:1px solid #D0D7DE;border-radius:6px;font-size:12px"><option value="">Date: Any</option><option value="today">Today</option><option value="week">This week</option><option value="last30">Last 30 days</option></select>
+        <select id="filter-status" autocomplete="off" aria-label="Status" style="padding:6px 10px;border:1px solid #D0D7DE;border-radius:6px;font-size:12px"><option value="">Status: Any</option><option value="ready">New</option><option value="inprogress">In progress</option><option value="completed">Completed</option></select>
+        <div style="margin-left:auto;display:flex;gap:4px;padding:3px;background:#F0F2F5;border-radius:6px">
+          <button style="padding:4px 10px;background:#fff;border:none;border-radius:4px;font-size:12px;font-weight:600" aria-pressed="true">⊞ Cards</button>
+          <button style="padding:4px 10px;background:transparent;border:none;font-size:12px;color:#6B7280" disabled title="Not part of this assignment">☰ Table</button>
+          <button style="padding:4px 10px;background:transparent;border:none;font-size:12px;color:#6B7280;position:relative" disabled title="Not part of this assignment">⎔ Pipeline </button>
+        </div>
+      </div>
+
+      <div class="cards-grid order-list" id="order-cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="state">Loading…</div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;font-size:12px;color:#6B7280">
+        <div id="showing"></div>
+        <div style="display:flex;gap:4px"><a class="btn btn-secondary" id="page-prev" style="padding:4px 10px" aria-disabled="true">← Prev</a><a class="btn btn-secondary" id="page-next" style="padding:4px 10px" aria-disabled="true">Next →</a></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- card -->
+<template id="order-card">
+  <div class="order-card">
+    <div class="oc-head">
+      <div>
+        <div class="oc-id-row">
+          <a class="oc-num" data-field="number"></a>
+          <div class="ref-n-inline" data-field="ref-single"><span class="lbl">Ref N:</span><span class="val" data-field="ref"></span></div>
+          <details class="ref-n-multi" data-field="ref-multi">
+            <summary><span class="lbl">Ref N</span><span class="count" data-field="ref-count"></span></summary>
+            <div class="ref-list" data-field="ref-list"></div>
+          </details>
+        </div>
+        <div class="oc-type" data-field="type-line"></div>
+        <div class="oc-by"><span class="lbl">by</span><span class="chip"><span class="ava" data-field="initials"></span></span><span class="role" data-field="role"></span></div>
+      </div>
+      <div><span class="badge" data-field="type-badge"></span> <span class="badge" data-field="status-badge"></span></div>
+    </div>
+    <div class="oc-body">
+      <div><div class="k">Hub</div><div class="v" data-field="hub"></div></div>
+      <div><div class="k">Date</div><div class="v" data-field="date"></div></div>
+      <div><div class="k">Q-ty</div><div class="v" data-field="quantity"></div></div>
+      <div><div class="k">Carrier</div><div class="v" data-field="carrier"></div></div>
+      <div data-field="destination-cell"><div class="k">Destination </div><div class="v" data-field="destination"></div></div>
+      <div data-field="trailers-cell"><div class="k">Trailers </div><div class="v"><span style="background:#EDE9FE;color:#5B21B6;padding:1px 8px;border-radius:8px;font-weight:800;font-size:11px" data-field="trailers"></span></div></div>
+    </div>
+    <div class="oc-footer">
+      <div data-field="next"></div>
+      <div class="oc-icons" data-field="order-icons" aria-hidden="true"><span>💬</span><span>📷</span><span>📄</span><span>🖨</span><span>⏱</span></div>
+      <div class="oc-icons" data-field="draft-icons" aria-hidden="true"><span>🗑</span></div>
+    </div>
+  </div>
+</template>
+<template id="ref-item">
+  <div class="ref-item"><span class="sub-id"></span><span class="sub-ref"></span><span class="sub-desc"><em style="color:#DC2626"></em></span></div>
+</template>
+<!-- /card -->
+</body>
+</html>
