@@ -164,8 +164,9 @@ scripts, styles, images and requests, inline `style` attributes, and no framing
   every page, as in the mockup; its badge shows `needAttentionCount` of `GET /api/v1/me` and is
   hidden at zero. "Settings" and "+ New Order" are out of scope.
 - Top bar: the balance, the user's initials and name. "Top up →" and the bell are out of scope;
-  the bell's red dot is removed. The help button "❓" is a link to the API reference, `/scalar/`,
-  opened in a new tab (`target="_blank" rel="noopener"`, `title="API reference"`).
+  the bell's red dot is removed. The help button, relabelled "API", is a link to the API
+  reference, `/scalar/`, opened in a new tab (`target="_blank" rel="noopener"`,
+  `title="API reference"`).
 - The toast: `<div class="toast" id="toast" role="status" aria-live="polite">`, the last element
   of the shell block, so every page has it.
 - The search box stays the mockup's `.fc-search` element with a borderless `<input>` inside it,
