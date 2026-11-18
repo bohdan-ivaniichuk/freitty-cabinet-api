@@ -6,8 +6,8 @@
 ## Context
 
 The behaviour most worth testing here lives in the database: `ILIKE` search backed by `pg_trgm`,
-filters and pagination translated to SQL, `xmin` optimistic concurrency, Dapper queries with
-`date_trunc` and `FILTER`. A test that does not run that SQL on PostgreSQL does not test it.
+filters and pagination translated to SQL, optimistic concurrency on a version column, Dapper
+queries with `date_trunc` and `FILTER`. A test that does not run that SQL on PostgreSQL does not test it.
 
 ## Decision
 
@@ -19,8 +19,8 @@ in `docker-compose.yml`. No other database provider is used in tests.
 
 - **EF Core InMemory provider** — not relational: no SQL translation, no constraints, no
   transactions. Queries that fail on PostgreSQL pass, and Dapper cannot run at all.
-- **SQLite in-memory** — relational, but a different dialect: no `ILIKE`, no `pg_trgm`, no `xmin`,
-  different collation and date handling. The tests would cover a database the app never runs on.
+- **SQLite in-memory** — relational, but a different dialect: no `ILIKE`, no `pg_trgm`, no
+  sequences, different collation and date handling. The tests would cover a database the app never runs on.
 - **A shared PostgreSQL from docker-compose** — real, but the tests would depend on a stack started
   by hand and on whatever state the last run left behind. Testcontainers gives each run a clean
   database and needs nothing but Docker.

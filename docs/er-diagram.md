@@ -232,4 +232,13 @@ The Order List has three of its own (migration `OrderListIndexes`, which also en
 | `ix_shipments_ref_number_trgm` | `shipments (ref_number)`, GIN, `gin_trgm_ops` | the search's `ref_number ILIKE '%…%'` |
 | `ix_orders_company_id_scheduled_at_id` | `orders (company_id, scheduled_at DESC, id DESC)` | the default list of a company, newest Scheduled date first, without a sort |
 
-Their query plans, before and after, are in [`explain/`](explain/README.md).
+The Pipeline board has one more (migration `PipelineIndex`):
+
+| Index | On | Serves |
+|---|---|---|
+| `ix_orders_company_id_status_scheduled_at_id` | `orders (company_id, status, scheduled_at DESC, id DESC)` | the board's totals per status and its pick of the first orders of each, as index-only scans; the list filtered by status |
+
+Official order numbers come from the sequence `order_number_seq` (migration
+`OrderNumberSequence`, [ADR 0016](adr/0016-official-order-numbers-from-a-sequence.md)).
+
+The query plans, before and after, are in [`explain/`](explain/README.md).
