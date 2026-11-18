@@ -2,36 +2,60 @@
 
 Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail) — .NET 10, FastEndpoints, EF Core, PostgreSQL.
 
-**Live demo:** https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/ —
-the API reference is at
-https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/.
+A test assignment: three screens of a finished mockup, fed by a backend — deployed, with the
+decisions written down.
 
-A test assignment: three screens of a finished mockup, fed by a backend. The plan and the
-decisions are in [`docs/plan.md`](docs/plan.md) and [`docs/adr/`](docs/adr), the vocabulary in
-[`CONTEXT.md`](CONTEXT.md), the schema in [`docs/er-diagram.md`](docs/er-diagram.md).
+## See it running
 
-## What is in the box
+Everything below opens on the deployed demo. Its sample data is rebuilt every night and at every
+release, so anything you record there is yours to break.
 
-Three pages, served by the API — under Docker Compose, the Dashboard at http://localhost:8080/, the
-Order List at http://localhost:8080/orders.html and an order at
-http://localhost:8080/order.html?n=FR001383 — the API reference at http://localhost:8080/scalar/ and
-the OpenAPI document at http://localhost:8080/openapi/v1.json. The endpoints:
+| Open | What it shows |
+|---|---|
+| [Dashboard](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/) | The tiles, the first active orders, the activity chart with its four periods |
+| [Order List](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html) | Tabs with counters, filters, search, pages — as [cards](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html), a [table](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=table) or a [pipeline board](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=pipeline), where a draft is submitted by dragging it to New |
+| [Order FR001383](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001383) | An order in progress with a quantity delta: record an operation with **+ Operation**, open the photos with 📷 |
+| [Order FR001674](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001674) | An order with a missing photo: uploading one to its Unloading closes the alert |
+| [API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/) | Every endpoint with its request, responses and errors; requests can be sent from the page |
+| [OpenAPI document](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/openapi/v1.json) | The same contract as JSON |
+
+Where the decisions are:
+
+| Read | What it is |
+|---|---|
+| [`docs/plan.md`](docs/plan.md) | The plan made before the first line of code, and the order of work |
+| [`CONTEXT.md`](CONTEXT.md) | The vocabulary: what an Order, a Shipment, an Operation and an Alert are |
+| [`docs/er-diagram.md`](docs/er-diagram.md) | The schema and what references what |
+| [`docs/adr/`](docs/adr) | Seventeen decisions, each with its alternatives and what it costs |
+| [`docs/steps/`](docs/steps) | The spec of every step, written before its code |
+| [`docs/explain/`](docs/explain) | Query plans before and after each index, on a volume data set |
+| [`docs/mockup-analysis.md`](docs/mockup-analysis.md) | Where the mockup contradicts itself and how the model settles it |
+| [`docs/engineering/code-rules.md`](docs/engineering/code-rules.md) | The rules every C# file follows |
+| [`docs/deployment.md`](docs/deployment.md) | The runbook: provisioning, operations, teardown |
+
+## The API
+
+All under `/api/v1`; a `GET` below opens on the demo, the writes are best tried from the
+[API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/).
 
 | Method | Route | What |
 |---|---|---|
-| `GET` | `/api/v1/orders` | One page of order cards, with the tabs, filters and search of the Order List |
-| `GET` | `/api/v1/orders/counts` | The counter of each Order List tab, under the same filters |
-| `GET` | `/api/v1/orders/export` | The whole filtered Order List as a CSV file |
-| `GET` | `/api/v1/orders/pipeline` | The Order List as a board: every status with its total and first cards |
-| `GET` | `/api/v1/orders/{number}` | The detail of an order |
+| `GET` | [`/api/v1/orders`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/orders) | One page of order cards, with the tabs, filters and search of the Order List |
+| `GET` | [`/api/v1/orders/counts`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/orders/counts) | The counter of each Order List tab, under the same filters |
+| `GET` | [`/api/v1/orders/export`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/orders/export) | The whole filtered Order List as a CSV file |
+| `GET` | [`/api/v1/orders/pipeline`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/orders/pipeline) | The Order List as a board: every status with its total and first cards |
+| `GET` | [`/api/v1/orders/{number}`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/orders/FR001383) | The detail of an order |
 | `POST` | `/api/v1/orders/{number}/operations` | Records an operation on a shipment |
 | `POST` | `/api/v1/orders/{number}/submit` | Submits a draft: Ready, under the next official number |
-| `GET` | `/api/v1/orders/{number}/photos` | Every photo of an order, in the order of its page |
+| `GET` | [`/api/v1/orders/{number}/photos`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/orders/FR001383/photos) | Every photo of an order, in the order of its page |
 | `GET` | `/api/v1/orders/{number}/photos/{photoId}` | The image of a photo, streamed from blob storage |
 | `POST` | `/api/v1/orders/{number}/operations/{operationId}/photos` | Uploads one to five photos of an operation (multipart) |
-| `GET` | `/api/v1/dashboard` | The tiles, the first active orders and the activity chart |
-| `GET` | `/api/v1/hubs` | The options of the Hub filter |
-| `GET` | `/api/v1/me` | The current user, the company and the number on the Orders badge |
+| `GET` | [`/api/v1/dashboard`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/dashboard) | The tiles, the first active orders and the activity chart |
+| `GET` | [`/api/v1/hubs`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/hubs) | The options of the Hub filter |
+| `GET` | [`/api/v1/me`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/me) | The current user, the company and the number on the Orders badge |
+
+The demo is temporary. Once it is taken down these links stop working, and
+`docker compose up` below gives the same application on `localhost:8080`.
 
 ## Run locally
 
