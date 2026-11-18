@@ -28,4 +28,8 @@ public interface IAppDbContext
     DbSet<SupplyItem> SupplyItems { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+
+    // False when another writer changed the same order first; any other failure is thrown. After false the context
+    // still tracks the refused changes and must not be saved again.
+    Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken);
 }

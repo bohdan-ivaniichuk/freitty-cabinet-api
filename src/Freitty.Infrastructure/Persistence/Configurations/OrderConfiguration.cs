@@ -20,6 +20,9 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(order => order.DestinationRegion).HasMaxLength(3);
         builder.Property(order => order.DriverName).HasMaxLength(200);
 
+        // Every change of the aggregate increments it, so a write that read an older version updates no row.
+        builder.Property(order => order.Version).IsConcurrencyToken();
+
         // Draft numbers are the company's own; official numbers are unique across the platform.
         builder.HasIndex(order => new { order.CompanyId, order.Number }).IsUnique();
         builder.HasIndex(order => order.Number).IsUnique().HasFilter($"status <> {Draft}");

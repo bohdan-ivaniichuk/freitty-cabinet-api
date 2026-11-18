@@ -10,12 +10,11 @@ namespace Freitty.Api.Endpoints.Orders.Detail;
 internal sealed class GetOrderDetailEndpoint : EndpointWithoutRequest<OrderDetailDto>
 {
     private const string NumberParameter = "number";
-    private const string ProblemJson = "application/problem+json";
 
     public override void Configure()
     {
         Get($"orders/{{{NumberParameter}}}");
-        Description(endpoint => endpoint.Produces<DomainProblemDetails>(StatusCodes.Status404NotFound, ProblemJson));
+        Description(endpoint => endpoint.ProducesDomainProblem(StatusCodes.Status404NotFound));
         Summary(summary =>
         {
             summary.Summary = "Get the detail of an order";

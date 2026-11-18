@@ -57,3 +57,9 @@ The transaction stays at `READ COMMITTED`, and nothing retries inside the reques
   a concern; a queue per order would be the answer if it became one.
 - The rule that every method of the aggregate increments `Version` is now load-bearing: a change
   that forgot to would not be protected.
+- The aggregate also requires each change to be no earlier than the last one, and the handler
+  reads the clock after it has loaded the order. With one instance and a clock that does not step
+  back that always holds. A clock that jumps backwards — or two instances whose clocks differ by
+  more than the gap between two writes — makes the aggregate reject the instant as a broken
+  contract, which is a `500`, not a `409`. Accepted for one instance; several instances need a
+  shared time source or a rule that takes the later of the two instants.

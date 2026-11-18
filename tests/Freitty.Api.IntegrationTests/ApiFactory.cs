@@ -1,7 +1,10 @@
 using Freitty.Application.Abstractions;
+using Freitty.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -14,7 +17,8 @@ internal sealed class ApiFactory(
     bool seedEnabled = false,
     TimeProvider? clock = null,
     ICurrentUser? currentUser = null,
-    string? reportingTimeZone = null)
+    string? reportingTimeZone = null,
+    IInterceptor? saveInterceptor = null)
     : WebApplicationFactory<Program>
 {
     private const string ConnectionStringKey = "ConnectionStrings:Postgres";
@@ -53,6 +57,11 @@ internal sealed class ApiFactory(
             if (currentUser is not null)
             {
                 services.AddSingleton(currentUser);
+            }
+
+            if (saveInterceptor is not null)
+            {
+                services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(saveInterceptor));
             }
         });
     }

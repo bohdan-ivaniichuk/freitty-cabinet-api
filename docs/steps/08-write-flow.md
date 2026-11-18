@@ -101,12 +101,13 @@ aggregate that it would reject as a broken contract, which would be a `500`:
 | `shipmentPosition` | required; 1 or more |
 | `type`, `unitType` | required; a defined member of the enum (`IsInEnum`) — a number outside it passes the JSON converter |
 | `quantity` | required; 1 to 10 000, a named limit: the sums of the ledger are `int`, and the endpoint is public |
-| `trailerNumber` | for Unloading and Loading: not empty or white space, at most 20 characters. For Disposal and Restack: must be `null` or absent — an empty string is refused |
+| `trailerNumber` | for Unloading and Loading: not empty or white space, at most 20 characters, no control character — PostgreSQL cannot store one. For Disposal and Restack: must be `null` or absent — an empty string is refused |
 | `photoCount` | 0 to 99 |
 | `expectedVersion` | required; 1 or more |
 
 An unknown enum name or a malformed number never reaches the validator: the binder refuses it
-with the same `400`.
+with the same `400`, naming the field. Its messages are replaced with plain ones — the defaults of
+`System.Text.Json` and of the binder name .NET types.
 
 **Then, in this order:**
 
@@ -175,8 +176,11 @@ width: min(440px, 90vw) }`, `dialog::backdrop { background: rgba(31, 42, 58, .4)
   and is disabled while the request is in flight.
 - On `201` the dialog closes and the page refetches the order and `/me` — the sidebar badge
   changes when an Alert opens or closes.
-- On an error the dialog stays open and shows the `detail` of the `ProblemDetails`; the field
-  errors of a `400` are shown next to their fields, matched by `errors[].name`. After a `409`
+- On an error the dialog stays open. A field error of a `400` is shown once: next to its field,
+  matched by `errors[].name`, or in the general line when the form has no such field. A refusal
+  without field errors shows the `detail` of the `ProblemDetails` in the general line.
+- While a request is in flight "Record" and "Cancel" are disabled and Escape does not close the
+  dialog: the answer must land in the dialog that asked. After a `409`
   `order.version_conflict` the page refetches the order behind the dialog, so "Record" can be
   pressed again with the new version.
 - On a `Draft` and on a `Completed` order the buttons are disabled with the title "The order is

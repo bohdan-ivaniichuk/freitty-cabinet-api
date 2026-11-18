@@ -278,8 +278,8 @@ export function nextStep(next) {
   return { ...(NEXT_STEPS[next.code] ?? { text: next.code, tone: null }), invoice: null };
 }
 
-// A stable number for a text, so a person or a supply category always gets the same colour: the sum
-// of its character codes. Not a hash for anything else — two texts may share a colour.
+// A stable number for a text, so a person always gets the same colour: the sum of its character
+// codes. Not a hash for anything else — two texts may share a colour.
 function codeSum(text) {
   return [...text].reduce((total, character) => total + character.codePointAt(0), 0);
 }
@@ -534,11 +534,13 @@ export function openAlertTypes(shipment) {
   return [...new Set(open)];
 }
 
-// One supply category keeps one of the mockup's three badge styles.
+// Supply categories take the mockup's three badge styles in turn, by their position among the
+// distinct categories of the order in the order they are listed: one category keeps one style on
+// a page, and neighbouring categories differ.
 const SUPPLY_BADGES = ['badge-warn', 'badge-prog', 'badge-green'];
 
-export function supplyBadge(category) {
-  return SUPPLY_BADGES[codeSum(category) % SUPPLY_BADGES.length];
+export function supplyBadge(categoryIndex) {
+  return SUPPLY_BADGES[categoryIndex % SUPPLY_BADGES.length];
 }
 
 // Services alternate the mockup's two badge styles.

@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Mime;
+using System.Text;
 using Freitty.Api.IntegrationTests.Orders;
 using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Abstractions;
 using Freitty.Application.Orders.GetOrderDetail;
 using Freitty.Application.Orders.ListOrders;
+using Freitty.Infrastructure.Persistence;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Freitty.Api.IntegrationTests;
@@ -28,7 +31,8 @@ internal sealed class CabinetApi : IAsyncDisposable
             connectionString,
             clock: new FakeTimeProvider(now ?? Now),
             currentUser: new FixedCurrentUser(new CurrentUser(Data.User.Id, Data.Company.Id)),
-            reportingTimeZone: reportingTimeZone);
+            reportingTimeZone: reportingTimeZone,
+            saveInterceptor: CompetingSave);
         database = new TestDatabase(factory);
         client = factory.CreateClient();
     }
@@ -36,6 +40,9 @@ internal sealed class CabinetApi : IAsyncDisposable
     public TestData Data { get; }
 
     public OrderBuilder Orders { get; }
+
+    // Unarmed until a test arms it: then the next save of the API runs the test's competing write first.
+    public CompetingSaveInterceptor CompetingSave { get; } = new();
 
     // The first save brings the test's reference data along.
     public Task SaveAsync(params object[] entities)
@@ -74,9 +81,26 @@ internal sealed class CabinetApi : IAsyncDisposable
         return database.InScopeAsync(action);
     }
 
+    public Task InContextAsync(Func<AppDbContext, Task> action)
+    {
+        return database.InContextAsync(action);
+    }
+
     public Task<HttpResponseMessage> SendGetAsync(string url)
     {
         return client.GetAsync(url, CancellationToken);
+    }
+
+    public Task<HttpResponseMessage> SendPostAsync(string url, object body)
+    {
+        return client.PostAsJsonAsync(url, body, ApiJson.Options, CancellationToken);
+    }
+
+    // A body as it is written, also one that is not what the endpoint expects.
+    public async Task<HttpResponseMessage> SendPostAsync(string url, string json)
+    {
+        using var content = new StringContent(json, Encoding.UTF8, MediaTypeNames.Application.Json);
+        return await client.PostAsync(url, content, CancellationToken);
     }
 
     public async ValueTask DisposeAsync()

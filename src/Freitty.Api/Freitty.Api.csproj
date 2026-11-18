@@ -6,6 +6,8 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
+    <!-- A source generator: nothing of it ships with the application. -->
+    <PackageReference Include="Riok.Mapperly" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>

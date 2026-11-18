@@ -25,6 +25,14 @@ export function getJson(path, parameters = {}) {
   return request(url, { headers: { Accept: 'application/json' } });
 }
 
+export function postJson(path, body) {
+  return request(new URL(path, location.href), {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 async function request(url, init) {
   let response;
   try {

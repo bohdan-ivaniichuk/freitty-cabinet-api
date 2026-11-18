@@ -1,18 +1,35 @@
 // order.html?n={number}: GET /api/v1/orders/{number}. The whole order is rendered into #order from
-// <template id="order-view">, so a refetch re-renders it in one replaceChildren.
+// <template id="order-view">, so a refetch re-renders it in one replaceChildren. The "+ Operation"
+// button of a shipment opens the dialog that records an Operation: POST
+// /api/v1/orders/{number}/operations with the version the page shows.
 
-import { getJson } from './api.js';
+import { getJson, postJson } from './api.js';
 import * as format from './format.js';
-import { errorBox, fieldsOf, initShell, loadMe, stateBox } from './shell.js';
+import { describeError, errorBox, fieldsOf, initShell, loadMe, stateBox } from './shell.js';
 
 const NOT_FOUND = 404;
 // The URL parser folds /api/v1/orders/. and /.. into other endpoints: no order has such a number.
 const UNREACHABLE_NUMBERS = ['.', '..'];
 
+// The hub works only on these; on the others the "+ Operation" buttons are disabled.
+const ACTIVE_STATUSES = ['Ready', 'InProgress'];
+const NOT_ACTIVE = 'The order is not active';
+// These move freight through a trailer: they take its number and are billable by default.
+const TRAILER_TYPES = ['Unloading', 'Loading'];
+const VERSION_CONFLICT = 'order.version_conflict';
+
 const number = new URLSearchParams(location.search).get('n')?.trim();
+const operationDialog = document.getElementById('operation-dialog');
+const operationForm = document.getElementById('operation-form');
+const operationField = fieldsOf(operationForm);
+const control = name => operationForm.elements.namedItem(name);
+
+// The order as the page shows it: the dialog reads its shipments and sends its version.
+let shownOrder = null;
 
 if (number) {
   initShell();
+  initOperationForm();
   document.getElementById('crumbs').append(number);
   loadMe();
   loadOrder();
@@ -31,6 +48,7 @@ async function loadOrder() {
   try {
     const order = await getJson(`/api/v1/orders/${encodeURIComponent(number)}`);
     const isOrder = typeof order?.number === 'string';
+    shownOrder = isOrder ? order : null;
     region.replaceChildren(isOrder ? renderOrder(order) : notFound(notFoundDetail()));
   } catch (error) {
     region.replaceChildren(error.status === NOT_FOUND ? notFound(error.detail) : errorBox(error));
@@ -238,7 +256,19 @@ function renderShipment(order, shipment, isCrossDock) {
   renderCargo(field, shipment);
   field('note').textContent = format.warehouseNote(shipment.warehouseNote);
   renderOperations(field, shipment, timeZone);
+  prepareAddOperation(field('add-operation'), order.status, shipment.position);
   return block;
+}
+
+function prepareAddOperation(button, status, position) {
+  if (!ACTIVE_STATUSES.includes(status)) {
+    button.title = NOT_ACTIVE;
+    return;
+  }
+
+  button.disabled = false;
+  button.removeAttribute('title');
+  button.addEventListener('click', () => openOperationDialog(position));
 }
 
 function renderDock(field, order, shipment) {
@@ -348,12 +378,13 @@ function emptyRow(message) {
 }
 
 function renderSupplies(field, supplies) {
+  const categories = [...new Set(supplies.lines.map(line => line.category))];
   const rows = supplies.lines.map(line => {
     const row = cloneTemplate('supply-row');
     const cell = fieldsOf(row);
     cell('sku').textContent = line.sku;
     cell('category').textContent = line.category;
-    cell('category').classList.add(format.supplyBadge(line.category));
+    cell('category').classList.add(format.supplyBadge(categories.indexOf(line.category)));
     cell('quantity').textContent = line.quantity;
     cell('unit-price').textContent = format.formatMoney(line.unitPrice);
     cell('line-total').textContent = format.formatMoney(line.lineTotal);
@@ -374,4 +405,128 @@ function renderInvoices(field, invoices, timeZone) {
     line.textContent = format.invoiceLine(invoice, timeZone);
     return line;
   }));
+}
+
+// --- The dialog that records an Operation. It lives outside #order, so a refetch behind it keeps
+// what was typed.
+
+// While a request is in flight the dialog cannot be closed, so its outcome lands in the dialog
+// that sent it; Escape is refused like Cancel.
+function initOperationForm() {
+  control('shipmentPosition').addEventListener('change', applyShipmentDefaults);
+  control('type').addEventListener('change', applyTypeDefaults);
+  operationField('cancel').addEventListener('click', () => operationDialog.close());
+  operationDialog.addEventListener('cancel', event => {
+    if (operationField('record').disabled) {
+      event.preventDefault();
+    }
+  });
+  operationForm.addEventListener('submit', recordOperation);
+}
+
+function openOperationDialog(position) {
+  operationForm.reset();
+  clearOperationErrors();
+  const shipmentSelect = control('shipmentPosition');
+  const options = shownOrder.shipments.map(shipment => new Option(shipment.label, shipment.position));
+  shipmentSelect.replaceChildren(...options);
+  shipmentSelect.value = String(position);
+  operationField('shipment-field').hidden = shownOrder.shipments.length === 1;
+  applyShipmentDefaults();
+  applyTypeDefaults();
+  operationDialog.showModal();
+}
+
+function selectedShipment() {
+  const position = Number(control('shipmentPosition').value);
+  return shownOrder.shipments.find(shipment => shipment.position === position);
+}
+
+// The trailer the shipment arrived on, when it has arrived.
+function applyShipmentDefaults() {
+  control('trailerNumber').value = selectedShipment()?.arrival?.trailerNumber ?? '';
+}
+
+function applyTypeDefaults() {
+  const movesThroughTrailer = TRAILER_TYPES.includes(control('type').value);
+  control('trailerNumber').disabled = !movesThroughTrailer;
+  control('isBillable').checked = movesThroughTrailer;
+}
+
+async function recordOperation(event) {
+  event.preventDefault();
+  const request = operationRequest();
+  setInFlight(true);
+  clearOperationErrors();
+  try {
+    await postJson(`/api/v1/orders/${encodeURIComponent(shownOrder.number)}/operations`, request);
+    operationDialog.close();
+    await Promise.all([loadOrder(), loadMe()]);
+    focusAddOperation(request.shipmentPosition);
+  } catch (error) {
+    showOperationError(error);
+    if (error.code === VERSION_CONFLICT) {
+      await loadOrder();
+    }
+  } finally {
+    setInFlight(false);
+  }
+}
+
+function setInFlight(inFlight) {
+  operationField('record').disabled = inFlight;
+  operationField('cancel').disabled = inFlight;
+}
+
+// The button that opened the dialog was replaced by the refetch; its successor takes the focus.
+function focusAddOperation(position) {
+  const index = shownOrder?.shipments.findIndex(shipment => shipment.position === position) ?? -1;
+  document.querySelectorAll('#order [data-field="add-operation"]')[index]?.focus();
+}
+
+// An empty number box is left out of the request, so the API names the field that is missing.
+function operationRequest() {
+  const trailer = control('trailerNumber');
+  return {
+    shipmentPosition: Number(control('shipmentPosition').value),
+    type: control('type').value,
+    unitType: control('unitType').value,
+    quantity: numberOrAbsent(control('quantity').value),
+    trailerNumber: trailer.disabled ? null : trailer.value,
+    isBillable: control('isBillable').checked,
+    photoCount: numberOrAbsent(control('photoCount').value),
+    expectedVersion: shownOrder.version,
+  };
+}
+
+function numberOrAbsent(text) {
+  return text.trim() === '' ? undefined : Number(text);
+}
+
+// Each reason is shown once: a field error under its field when the form has that field, otherwise
+// under the fields; a refusal without field errors shows its detail there.
+function showOperationError(error) {
+  const { title, detail } = describeError(error);
+  const fieldErrors = error.errors ?? [];
+  const unplaced = fieldErrors.filter(fieldError => !showFieldError(fieldError));
+  operationField('operation-error').textContent = fieldErrors.length > 0
+    ? unplaced.map(fieldError => fieldError.reason).join(' ')
+    : detail || title;
+}
+
+// True when the form has a slot for the field.
+function showFieldError(fieldError) {
+  const slot = operationForm.querySelector(`[data-error="${CSS.escape(fieldError.name)}"]`);
+  if (slot) {
+    slot.textContent = fieldError.reason;
+  }
+
+  return slot !== null;
+}
+
+function clearOperationErrors() {
+  operationField('operation-error').textContent = '';
+  operationForm.querySelectorAll('[data-error]').forEach(slot => {
+    slot.textContent = '';
+  });
 }

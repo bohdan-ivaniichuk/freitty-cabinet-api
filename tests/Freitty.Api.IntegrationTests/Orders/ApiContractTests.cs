@@ -43,6 +43,8 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
         Assert.Equal(
             problem.GetProperty("errors")[0].GetProperty("reason").GetString(),
             problem.GetProperty("detail").GetString());
+        Assert.DoesNotContain("Freitty.", problem.GetRawText());
+        Assert.DoesNotContain("Int32", problem.GetRawText());
     }
 
     [Fact]
@@ -105,6 +107,38 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
             .GetProperty("DomainProblemDetails");
         Assert.True(problem.GetProperty("properties").TryGetProperty("code", out _));
         Assert.Contains("code", problem.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesRecordingAnOperation()
+    {
+        using HttpResponseMessage response = await api.SendGetAsync("/openapi/v1.json");
+        using JsonDocument document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        JsonElement post = document.RootElement.GetProperty("paths").GetProperty("/api/v1/orders/{number}/operations")
+            .GetProperty("post");
+        Assert.Equal(
+            "#/components/schemas/RecordOperationRequest",
+            post.GetProperty("requestBody").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+        JsonElement responses = post.GetProperty("responses");
+        Assert.Equal(["201", "400", "404", "409"], responses.EnumerateObject().Select(status => status.Name));
+        Assert.Equal(
+            "#/components/schemas/RecordedOperationDto",
+            responses.GetProperty("201").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+        Assert.All(
+            new[] { "404", "409" },
+            status => Assert.Equal(
+                "#/components/schemas/DomainProblemDetails",
+                responses.GetProperty(status).GetProperty("content").GetProperty(ProblemResponse.ContentType)
+                    .GetProperty("schema").GetProperty("$ref").GetString()));
+        JsonElement request = document.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty("RecordOperationRequest");
+        Assert.Equal(
+            ["shipmentPosition", "type", "unitType", "quantity", "expectedVersion"],
+            request.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
     }
 
     [Fact]

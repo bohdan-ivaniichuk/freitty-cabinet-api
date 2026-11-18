@@ -39,6 +39,63 @@
   </main>
 </div>
 
+<dialog id="operation-dialog" aria-labelledby="operation-title">
+  <form id="operation-form" novalidate autocomplete="off">
+    <div style="font-size:16px;font-weight:700;color:#1F2A3A;margin-bottom:14px" id="operation-title">Record an operation</div>
+    <div class="field" data-field="shipment-field">
+      <label for="operation-shipment">Sub-order</label>
+      <select id="operation-shipment" name="shipmentPosition"></select>
+      <div class="field-error" data-error="shipmentPosition"></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="operation-type">Operation</label>
+        <select id="operation-type" name="type">
+          <option value="Unloading">Unloading</option>
+          <option value="Disposal">Disposal</option>
+          <option value="Restack">Restack</option>
+          <option value="Loading">Loading</option>
+        </select>
+        <div class="field-error" data-error="type"></div>
+      </div>
+      <div class="field">
+        <label for="operation-unit">Unit</label>
+        <select id="operation-unit" name="unitType">
+          <option value="Standard">Standard (48×40)</option>
+          <option value="ExtraLarge">XL</option>
+        </select>
+        <div class="field-error" data-error="unitType"></div>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="operation-quantity">Q-ty</label>
+        <input id="operation-quantity" name="quantity" type="number" min="1" max="10000" step="1" autofocus>
+        <div class="field-error" data-error="quantity"></div>
+      </div>
+      <div class="field">
+        <label for="operation-photos">Photos</label>
+        <input id="operation-photos" name="photoCount" type="number" min="0" max="99" step="1" value="0">
+        <div class="field-error" data-error="photoCount"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="operation-trailer">Trailer</label>
+      <input id="operation-trailer" name="trailerNumber" type="text" maxlength="20">
+      <div class="field-error" data-error="trailerNumber"></div>
+    </div>
+    <div class="field">
+      <label><input name="isBillable" type="checkbox"> Billable</label>
+      <div class="field-error" data-error="isBillable"></div>
+    </div>
+    <div class="field-error" role="alert" data-field="operation-error"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px">
+      <button type="button" class="btn btn-secondary" data-field="cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" data-field="record">Record</button>
+    </div>
+  </form>
+</dialog>
+
 <template id="order-view">
   <div style="display:flex;align-items:center;gap:12px;padding:8px 0 14px;border-bottom:1px solid #E5E7EB;margin-bottom:14px">
     <div style="width:40px;height:40px;background:#ED1C2E;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:22px">F</div>

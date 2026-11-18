@@ -7,6 +7,8 @@
     <!-- AsSplitQuery: relational, not a provider; Application still cannot see Npgsql. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <!-- A source generator: nothing of it ships with the application. -->
+    <PackageReference Include="Riok.Mapperly" PrivateAssets="all" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
