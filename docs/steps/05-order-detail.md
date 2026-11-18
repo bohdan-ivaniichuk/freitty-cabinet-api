@@ -134,6 +134,8 @@ The last four are the conditions of the same names in the `next` table of step 4
 |---|---|
 | Unknown number, or an order of another company | `404` `ProblemDetails` with `code` `order.not_found` and the detail `Order fr009999 not found.` — the number as the route gave it |
 
+The number comes from the route alone: a `number` in the query string does not replace it.
+
 ### Code
 
 ```

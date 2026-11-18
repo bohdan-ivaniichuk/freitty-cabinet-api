@@ -1,3 +1,3 @@
-namespace Freitty.Application.Orders.Cards;
+namespace Freitty.Application.Orders;
 
 public sealed record TransferHubDto(string Name, string ShortName);

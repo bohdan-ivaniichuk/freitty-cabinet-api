@@ -4,6 +4,8 @@
     <PackageReference Include="FastEndpoints.Messaging.Core" />
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- AsSplitQuery: relational, not a provider; Application still cannot see Npgsql. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 

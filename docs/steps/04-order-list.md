@@ -262,8 +262,10 @@ src/Freitty.Application/
 ├── DependencyInjection.cs   AddApplication(): the application's own services
 ├── Abstractions/     IAppDbContext, ICurrentUser, CurrentUser, IOrderSearch
 ├── Common/           ReportingCalendar, ReportingTimeZone, DatePreset
-├── Orders/           OrderFilter — the hub, date, status and search filters applied to a query
-├── Orders/Cards/     OrderCardDto and its parts, OrderCardReader, ShipmentQuantities, OrderProgress
+├── Orders/           OrderFilter — the hub, date, status and search filters applied to a query;
+│                     the read model shared with the detail of step 5: UnitTypeSums,
+│                     ShipmentQuantities, ShipmentProgress, OrderProgress, OrderStage, ShipmentLabel
+├── Orders/Cards/     OrderCardDto and its parts, OrderCardReader
 ├── Orders/ListOrders/    ListOrdersQuery, its handler and validator, the paged result
 ├── Orders/CountOrders/   CountOrdersQuery, its handler and validator, OrderCountsDto
 ├── Hubs/ListHubs/        ListHubsQuery, its handler, HubDto

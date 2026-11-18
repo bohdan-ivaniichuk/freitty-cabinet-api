@@ -57,7 +57,13 @@ resolves, all or nothing.
 ### `POST /api/v1/orders/{number}/operations`
 
 `{number}` is matched as in step 5: the whole number, case-insensitively, within the current
-company.
+company. It is read from the route alone: FastEndpoints binds a request record from the route and
+then from the query string, and the later one wins, so `?number=…` would redirect the write. The
+endpoint takes the number with `Route<string>(…)` and binds only the JSON body to its request
+record, as the detail endpoint of step 5 does; a test proves a query-string `number` is ignored.
+
+A refusal is documented and sent as the `DomainProblemDetails` of step 5 — `ProblemDetails` plus
+`code` — for `404` and `409`.
 
 ```jsonc
 {

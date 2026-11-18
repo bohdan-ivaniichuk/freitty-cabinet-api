@@ -5,8 +5,6 @@ namespace Freitty.Api.IntegrationTests.Orders;
 
 public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposable
 {
-    private const string ProblemJson = "application/problem+json";
-
     private readonly CabinetApi api = new(postgres.ConnectionString);
 
     [Theory]
@@ -35,7 +33,7 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
     public async Task InvalidParameterIsABadRequestNamingTheField(string url, string field)
     {
         using HttpResponseMessage response = await api.SendGetAsync(url);
-        JsonElement problem = await ReadProblemAsync(response);
+        JsonElement problem = await ProblemResponse.ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(400, problem.GetProperty("status").GetInt32());
@@ -57,14 +55,14 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
     public async Task UnknownRouteUnderApiIsANotFoundProblem()
     {
         using HttpResponseMessage response = await api.SendGetAsync("/api/v1/nothing-here");
-        JsonElement problem = await ReadProblemAsync(response);
+        JsonElement problem = await ProblemResponse.ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(404, problem.GetProperty("status").GetInt32());
     }
 
     [Fact]
-    public async Task OpenApiDocumentListsTheFourEndpoints()
+    public async Task OpenApiDocumentListsTheFiveEndpoints()
     {
         using HttpResponseMessage response = await api.SendGetAsync("/openapi/v1.json");
         using JsonDocument document = JsonDocument.Parse(
@@ -75,9 +73,35 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
             .Select(path => path.Name)
             .ToArray();
         Assert.Equivalent(
-            new[] { "/api/v1/orders", "/api/v1/orders/counts", "/api/v1/hubs", "/api/v1/me" },
+            new[]
+            {
+                "/api/v1/orders", "/api/v1/orders/counts", "/api/v1/orders/{number}", "/api/v1/hubs", "/api/v1/me",
+            },
             paths,
             strict: true);
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesTheDetailAndItsNotFoundProblem()
+    {
+        using HttpResponseMessage response = await api.SendGetAsync("/openapi/v1.json");
+        using JsonDocument document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        JsonElement responses = document.RootElement.GetProperty("paths").GetProperty("/api/v1/orders/{number}")
+            .GetProperty("get").GetProperty("responses");
+        Assert.Equal(
+            "#/components/schemas/OrderDetailDto",
+            responses.GetProperty("200").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+        Assert.Equal(
+            "#/components/schemas/DomainProblemDetails",
+            responses.GetProperty("404").GetProperty("content").GetProperty(ProblemResponse.ContentType)
+                .GetProperty("schema").GetProperty("$ref").GetString());
+        JsonElement problem = document.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty("DomainProblemDetails");
+        Assert.True(problem.GetProperty("properties").TryGetProperty("code", out _));
+        Assert.Contains("code", problem.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
     }
 
     [Fact]
@@ -132,19 +156,12 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal(ProblemJson, response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(ProblemResponse.ContentType, response.Content.Headers.ContentType?.MediaType);
         Assert.DoesNotContain("Seed", body);
     }
 
     public async ValueTask DisposeAsync()
     {
         await api.DisposeAsync();
-    }
-
-    private static async Task<JsonElement> ReadProblemAsync(HttpResponseMessage response)
-    {
-        Assert.Equal(ProblemJson, response.Content.Headers.ContentType?.MediaType);
-        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        return JsonDocument.Parse(body).RootElement.Clone();
     }
 }

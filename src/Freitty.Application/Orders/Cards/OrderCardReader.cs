@@ -31,7 +31,7 @@ public sealed class OrderCardReader(IAppDbContext db)
 
         var lookups = new ShipmentLookups(
             shipments.ToLookup(shipment => shipment.OrderId),
-            QuantitiesByShipment(shipments, sums),
+            ShipmentQuantities.ByShipment(sums, ReceivedShipmentIds(shipments)),
             openAlerts.ToLookup(alert => alert.ShipmentId, alert => alert.Type));
         return orderIds
             .Where(orders.ContainsKey)
@@ -39,16 +39,9 @@ public sealed class OrderCardReader(IAppDbContext db)
             .ToList();
     }
 
-    private static ILookup<Guid, ShipmentQuantities> QuantitiesByShipment(
-        List<ShipmentRow> shipments,
-        List<UnitTypeSums> sums)
+    private static HashSet<Guid> ReceivedShipmentIds(List<ShipmentRow> shipments)
     {
-        Dictionary<Guid, bool> isReceived = shipments.ToDictionary(
-            shipment => shipment.Id,
-            shipment => shipment.IsReceived);
-        return sums.ToLookup(
-            row => row.ShipmentId,
-            row => new ShipmentQuantities(row, isReceived[row.ShipmentId]));
+        return shipments.Where(shipment => shipment.IsReceived).Select(shipment => shipment.Id).ToHashSet();
     }
 
     private static OrderCardDto ToCard(OrderRow order, ShipmentLookups lookups)
@@ -103,7 +96,7 @@ public sealed class OrderCardReader(IAppDbContext db)
     {
         IEnumerable<ShipmentQuantities> quantities = lookups.Quantities[shipment.Id];
         return new CardShipmentDto(
-            $"{orderNumber}-{shipment.Position}",
+            ShipmentLabel.Of(orderNumber, shipment.Position),
             shipment.RefNumber,
             quantities.Sum(quantity => quantity.Declared),
             quantities.Sum(quantity => quantity.Actual),
@@ -112,8 +105,11 @@ public sealed class OrderCardReader(IAppDbContext db)
 
     private static ShipmentProgress ProgressOf(ShipmentRow shipment, ShipmentLookups lookups)
     {
-        bool hasStock = lookups.Quantities[shipment.Id].Any(quantity => quantity.OnStock > 0);
-        return new ShipmentProgress(shipment.HasArrived, shipment.HasOperation, shipment.IsReceived, hasStock);
+        return ShipmentProgress.Of(
+            hasArrived: shipment.HasArrived,
+            hasOperation: shipment.HasOperation,
+            isReceived: shipment.IsReceived,
+            lookups.Quantities[shipment.Id]);
     }
 
     private IQueryable<Order> OrdersOf(Guid companyId, IReadOnlyCollection<Guid> orderIds)
@@ -142,7 +138,7 @@ public sealed class OrderCardReader(IAppDbContext db)
                 order.Status,
                 order.CreatedBy.Name,
                 order.CreatedBy.Role,
-                new OrderHubDto(order.Hub.Name, order.Hub.ShortName, order.Hub.TimeZone),
+                new CardHubDto(order.Hub.Name, order.Hub.ShortName, order.Hub.TimeZone),
                 order.TransferHub == null
                     ? null
                     : new TransferHubDto(order.TransferHub.Name, order.TransferHub.ShortName),
@@ -152,7 +148,7 @@ public sealed class OrderCardReader(IAppDbContext db)
                     : new DestinationDto(order.DestinationCity, order.DestinationRegion!),
                 order.TransportKind == null
                     ? null
-                    : new TransportDto(
+                    : new CardTransportDto(
                         order.TransportKind.Value,
                         order.Carrier == null ? null : order.Carrier.Name,
                         order.DriverName),
@@ -207,11 +203,11 @@ public sealed class OrderCardReader(IAppDbContext db)
         OrderStatus Status,
         string CreatedByName,
         UserRole CreatedByRole,
-        OrderHubDto Hub,
+        CardHubDto Hub,
         TransferHubDto? TransferHub,
         DateTimeOffset? ScheduledAt,
         DestinationDto? Destination,
-        TransportDto? Transport,
+        CardTransportDto? Transport,
         int OutboundTrailers,
         InvoiceSummary? FirstUnpaidInvoice,
         InvoiceSummary? LastInvoice);

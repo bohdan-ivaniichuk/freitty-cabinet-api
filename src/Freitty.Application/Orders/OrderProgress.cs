@@ -1,6 +1,7 @@
+using Freitty.Application.Orders.Cards;
 using Freitty.Domain.Orders;
 
-namespace Freitty.Application.Orders.Cards;
+namespace Freitty.Application.Orders;
 
 // The stage of the freight and, from it, the card's "Next" line. Each takes the first rule that applies.
 public static class OrderProgress

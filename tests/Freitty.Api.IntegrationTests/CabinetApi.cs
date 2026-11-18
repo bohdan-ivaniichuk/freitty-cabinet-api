@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Freitty.Api.IntegrationTests.Orders;
 using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Abstractions;
+using Freitty.Application.Orders.GetOrderDetail;
 using Freitty.Application.Orders.ListOrders;
 using Microsoft.Extensions.Time.Testing;
 
@@ -55,6 +56,11 @@ internal sealed class CabinetApi : IAsyncDisposable
     public Task<OrderPageDto> ListAsync(string query = "")
     {
         return GetAsync<OrderPageDto>($"/api/v1/orders{query}");
+    }
+
+    public Task<OrderDetailDto> DetailAsync(string number)
+    {
+        return GetAsync<OrderDetailDto>($"/api/v1/orders/{number}");
     }
 
     public async Task<string[]> ListNumbersAsync(string query = "")

@@ -7,11 +7,14 @@ using Freitty.Domain.Orders;
 namespace Freitty.Api.IntegrationTests.Orders;
 
 // Builds a test's orders through the aggregate under its own company. Every change happens at TestData.Now, before
-// the API's clock; a scheduled date is a value and may be anything.
+// the API's clock, unless the test names a later instant; a scheduled date is a value and may be anything.
 internal sealed class OrderBuilder(TestData data)
 {
     public const int DeclaredStandard = 10;
     public const string TrailerNumber = "TL-1";
+    public const string TruckNumber = "TR-1";
+    public const string Bay = "B";
+    public const string FloorLead = "User 6";
 
     private static readonly DateTimeOffset Now = TestData.Now;
 
@@ -87,9 +90,14 @@ internal sealed class OrderBuilder(TestData data)
         return shipment;
     }
 
-    public static void Arrive(Order order, Shipment shipment)
+    public static void Arrive(Order order, Shipment shipment, DateTimeOffset? at = null)
     {
-        Succeed(order.RecordArrival(shipment.Id, TrailerType.DryVan53, "TR-1", TrailerNumber, Now));
+        Succeed(order.RecordArrival(shipment.Id, TrailerType.DryVan53, TruckNumber, TrailerNumber, at ?? Now));
+    }
+
+    public static void AssignDock(Order order, Shipment shipment, string dock, DateTimeOffset? at = null)
+    {
+        Succeed(order.AssignDock(shipment.Id, dock, Bay, FloorLead, at ?? Now));
     }
 
     public static void Unload(
@@ -97,22 +105,34 @@ internal sealed class OrderBuilder(TestData data)
         Shipment shipment,
         int quantity,
         UnitType unitType = UnitType.Standard,
-        int photos = 1)
+        int photos = 1,
+        DateTimeOffset? at = null)
     {
-        Record(order, shipment, OperationType.Unloading, unitType, quantity, TrailerNumber, photos);
+        Record(order, shipment, OperationType.Unloading, quantity, unitType, TrailerNumber, photos: photos, at: at);
     }
 
-    public static void DisposeOf(Order order, Shipment shipment, int quantity)
+    public static void DisposeOf(
+        Order order,
+        Shipment shipment,
+        int quantity,
+        int photos = 1,
+        int comments = 0,
+        DateTimeOffset? at = null)
     {
-        var operation = new NewOperation(
+        Record(
+            order,
+            shipment,
             OperationType.Disposal,
-            UnitType.Standard,
             quantity,
-            TrailerNumber: null,
-            IsBillable: false,
-            PhotoCount: 1,
-            CommentCount: 0);
-        Value(order.RecordOperation(shipment.Id, operation, Now));
+            isBillable: false,
+            photos: photos,
+            comments: comments,
+            at: at);
+    }
+
+    public static void Restack(Order order, Shipment shipment, int quantity, int photos = 0, DateTimeOffset? at = null)
+    {
+        Record(order, shipment, OperationType.Restack, quantity, isBillable: false, photos: photos, at: at);
     }
 
     public static void Load(
@@ -120,14 +140,15 @@ internal sealed class OrderBuilder(TestData data)
         Shipment shipment,
         int quantity,
         UnitType unitType = UnitType.Standard,
-        string trailerNumber = TrailerNumber)
+        string trailerNumber = TrailerNumber,
+        DateTimeOffset? at = null)
     {
-        Record(order, shipment, OperationType.Loading, unitType, quantity, trailerNumber, photos: 0);
+        Record(order, shipment, OperationType.Loading, quantity, unitType, trailerNumber, at: at);
     }
 
-    public static void Receive(Order order, Shipment shipment)
+    public static void Receive(Order order, Shipment shipment, DateTimeOffset? at = null)
     {
-        Succeed(order.FinishReceiving(shipment.Id, Now));
+        Succeed(order.FinishReceiving(shipment.Id, at ?? Now));
     }
 
     public static void ResolveAlerts(Order order)
@@ -153,20 +174,23 @@ internal sealed class OrderBuilder(TestData data)
         Order order,
         Shipment shipment,
         OperationType type,
-        UnitType unitType,
         int quantity,
-        string trailerNumber,
-        int photos)
+        UnitType unitType = UnitType.Standard,
+        string? trailerNumber = null,
+        bool isBillable = true,
+        int photos = 0,
+        int comments = 0,
+        DateTimeOffset? at = null)
     {
         var operation = new NewOperation(
             type,
             unitType,
             quantity,
             trailerNumber,
-            IsBillable: true,
+            isBillable,
             PhotoCount: photos,
-            CommentCount: 0);
-        Value(order.RecordOperation(shipment.Id, operation, Now));
+            CommentCount: comments);
+        Value(order.RecordOperation(shipment.Id, operation, at ?? Now));
     }
 
     private static void Succeed(Result result)

@@ -1,5 +1,6 @@
 using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Common;
+using Freitty.Application.Orders;
 using Freitty.Application.Orders.Cards;
 using Freitty.Domain.Billing;
 using Freitty.Domain.Companies;
@@ -25,11 +26,11 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
         Assert.Equal(CrossDockKind.Storage, card.CrossDockKind);
         Assert.Equal(OrderStatus.Ready, card.Status);
         Assert.Equal(new UserDto("User 1", "U1", UserRole.Admin), card.CreatedBy);
-        Assert.Equal(new OrderHubDto(api.Data.Hub.Name, "Mark", "America/Toronto"), card.Hub);
+        Assert.Equal(new CardHubDto(api.Data.Hub.Name, "Mark", "America/Toronto"), card.Hub);
         Assert.Equal(new TransferHubDto(api.Data.OtherHub.Name, "Tor"), card.TransferHub);
         Assert.Equal(CabinetApi.Now, card.ScheduledAt);
         Assert.Equal(new DestinationDto("Montreal", "QC"), card.Destination);
-        Assert.Equal(new TransportDto(TransportKind.Carrier, api.Data.Carrier.Name, null), card.Transport);
+        Assert.Equal(new CardTransportDto(TransportKind.Carrier, api.Data.Carrier.Name, null), card.Transport);
     }
 
     [Fact]
@@ -58,7 +59,7 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
 
         OrderCardDto card = await CardAsync(order);
 
-        Assert.Equal(new TransportDto(TransportKind.OwnDriver, null, "User 5"), card.Transport);
+        Assert.Equal(new CardTransportDto(TransportKind.OwnDriver, null, "User 5"), card.Transport);
     }
 
     [Fact]

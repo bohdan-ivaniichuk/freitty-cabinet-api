@@ -1,4 +1,4 @@
-namespace Freitty.Application.Orders.Cards;
+namespace Freitty.Application.Orders;
 
 // Where the freight of an order is. Unlike the status, it tells the hub's work apart; alerts do not change it.
 public enum OrderStage
