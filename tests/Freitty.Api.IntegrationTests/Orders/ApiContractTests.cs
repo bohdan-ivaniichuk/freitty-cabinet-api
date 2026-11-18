@@ -30,6 +30,8 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
     [InlineData("/api/v1/orders/counts?hub=", "hub")]
     [InlineData("/api/v1/orders/counts?q=ab", "q")]
     [InlineData("/api/v1/orders/counts?q=ab%00c", "q")]
+    [InlineData("/api/v1/dashboard?period=Year", "period")]
+    [InlineData("/api/v1/dashboard?period=9", "period")]
     public async Task InvalidParameterIsABadRequestNamingTheField(string url, string field)
     {
         using HttpResponseMessage response = await api.SendGetAsync(url);
@@ -62,7 +64,7 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
     }
 
     [Fact]
-    public async Task OpenApiDocumentListsTheFiveEndpoints()
+    public async Task OpenApiDocumentListsTheSixEndpoints()
     {
         using HttpResponseMessage response = await api.SendGetAsync("/openapi/v1.json");
         using JsonDocument document = JsonDocument.Parse(
@@ -76,6 +78,7 @@ public sealed class ApiContractTests(PostgresFixture postgres) : IAsyncDisposabl
             new[]
             {
                 "/api/v1/orders", "/api/v1/orders/counts", "/api/v1/orders/{number}", "/api/v1/hubs", "/api/v1/me",
+                "/api/v1/dashboard",
             },
             paths,
             strict: true);

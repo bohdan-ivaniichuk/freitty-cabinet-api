@@ -6,8 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Freitty.Application.Orders.ListOrders;
 
-// Two steps: the page of ids with its total, then the cards of that page only. Every sort ends with the id, so
-// pages never repeat or skip an order. Unscheduled drafts come first: PostgreSQL puts NULL first when descending.
+// Two steps: the page of ids with its total, then the cards of that page only.
 public sealed class ListOrdersQueryHandler(
     IAppDbContext db,
     ICurrentUser currentUser,
@@ -37,9 +36,7 @@ public sealed class ListOrdersQueryHandler(
         }
 
         int total = await orders.CountAsync(ct);
-        List<Guid> pageIds = await orders
-            .OrderByDescending(order => order.ScheduledAt)
-            .ThenByDescending(order => order.Id)
+        List<Guid> pageIds = await OrderListSort.Apply(orders)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(order => order.Id)

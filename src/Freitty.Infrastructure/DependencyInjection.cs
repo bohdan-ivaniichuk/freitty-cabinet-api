@@ -1,10 +1,13 @@
 using Freitty.Application.Abstractions;
+using Freitty.Application.Dashboard;
+using Freitty.Infrastructure.Dashboard;
 using Freitty.Infrastructure.Identity;
 using Freitty.Infrastructure.Persistence;
 using Freitty.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Freitty.Infrastructure;
 
@@ -15,12 +18,16 @@ public static class DependencyInjection
 
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        string connectionString = ReadConnectionString(configuration);
-        services.AddDbContext<AppDbContext>(options => options
-            .UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable(MigrationsHistoryTable))
+        // One data source for both ways to the database: EF Core and the Dapper reader of the dashboard.
+        services.AddNpgsqlDataSource(ReadConnectionString(configuration));
+        services.AddDbContext<AppDbContext>((provider, options) => options
+            .UseNpgsql(
+                provider.GetRequiredService<NpgsqlDataSource>(),
+                npgsql => npgsql.MigrationsHistoryTable(MigrationsHistoryTable))
             .UseSnakeCaseNamingConvention());
         services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddScoped<IOrderSearch, OrderSearch>();
+        services.AddScoped<IDashboardReader, DashboardReader>();
         services.AddScoped<ICurrentUser, FirstAdminCurrentUser>();
         services.AddScoped<DatabaseSeeder>();
         return services;

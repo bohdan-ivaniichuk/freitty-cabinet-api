@@ -31,7 +31,11 @@ internal sealed class OrderBuilder(TestData data)
     }
 
     // A Cross-Dock gets one shipment, a Consolidation two; each declares DeclaredStandard Standard pallets.
-    public Order Ready(OrderType type = OrderType.CrossDock, DateTimeOffset? scheduledAt = null, Hub? hub = null)
+    public Order Ready(
+        OrderType type = OrderType.CrossDock,
+        DateTimeOffset? scheduledAt = null,
+        Hub? hub = null,
+        DateTimeOffset? submittedAt = null)
     {
         Order order = Draft(type, hub);
         int shipmentCount = type == OrderType.CrossDock ? 1 : 2;
@@ -41,16 +45,16 @@ internal sealed class OrderBuilder(TestData data)
         }
 
         Succeed(order.ArrangeCarrier(data.Carrier.Id, Now));
-        Submit(order, scheduledAt ?? CabinetApi.Now.AddDays(1));
+        Submit(order, scheduledAt ?? CabinetApi.Now.AddDays(1), submittedAt);
         return order;
     }
 
     // Schedules a draft that has its shipments and transport, gives it a destination and submits it.
-    public static void Submit(Order order, DateTimeOffset scheduledAt)
+    public static void Submit(Order order, DateTimeOffset scheduledAt, DateTimeOffset? submittedAt = null)
     {
         Succeed(order.Schedule(scheduledAt, Now));
         Succeed(order.SetDestination("Montreal", "QC", Now));
-        Succeed(order.Submit(TestData.Unique("FR"), Now));
+        Succeed(order.Submit(TestData.Unique("FR"), submittedAt ?? Now));
     }
 
     // In progress, every shipment unloaded as declared with a photo, received, and still on stock.
@@ -66,7 +70,10 @@ internal sealed class OrderBuilder(TestData data)
         return order;
     }
 
-    public Order Completed(OrderType type = OrderType.CrossDock, DateTimeOffset? scheduledAt = null)
+    public Order Completed(
+        OrderType type = OrderType.CrossDock,
+        DateTimeOffset? scheduledAt = null,
+        DateTimeOffset? completedAt = null)
     {
         Order order = Received(type, scheduledAt);
         foreach (Shipment shipment in order.Shipments)
@@ -74,7 +81,7 @@ internal sealed class OrderBuilder(TestData data)
             Load(order, shipment, DeclaredStandard);
         }
 
-        Succeed(order.Complete(Now));
+        Succeed(order.Complete(completedAt ?? Now));
         return order;
     }
 

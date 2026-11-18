@@ -16,7 +16,10 @@ public sealed class GetMeTests(PostgresFixture postgres) : IAsyncDisposable
         MeDto me = await api.GetAsync<MeDto>("/api/v1/me");
 
         Assert.Equal(
-            new MeDto(new UserDto("User 1", "U1", UserRole.Admin), new CompanyDto(api.Data.Company.Name, 1250.50m)),
+            new MeDto(
+                new UserDto("User 1", "U1", UserRole.Admin),
+                new CompanyDto(api.Data.Company.Name, 1250.50m),
+                NeedAttention: 0),
             me);
     }
 

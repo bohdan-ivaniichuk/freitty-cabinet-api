@@ -11,7 +11,8 @@ internal sealed class GetMeEndpoint : EndpointWithoutRequest<MeDto>
         Summary(summary =>
         {
             summary.Summary = "Get the current user";
-            summary.Description = "The user the cabinet acts as and the user's company, for the page shell.";
+            summary.Description = "The user the cabinet acts as, the user's company, and needAttention — the number on the Orders badge, " +
+                "equal to the Need attention total of the dashboard — for the page shell.";
             summary.Responses[StatusCodes.Status200OK] = "The user and the company.";
         });
     }

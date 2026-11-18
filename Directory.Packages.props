@@ -3,6 +3,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <!-- 2.1.86 is the first that reads a date column into DateOnly. -->
+    <PackageVersion Include="Dapper" Version="2.1.89" />
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageVersion Include="FastEndpoints" Version="9.0.0" />
     <PackageVersion Include="FastEndpoints.Messaging.Core" Version="9.0.0" />
@@ -10,6 +12,8 @@
     <!-- The version FastEndpoints 9.0.0 depends on. -->
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
+    <!-- At the version of the Npgsql that the EF Core provider brings. -->
+    <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Scalar.AspNetCore" Version="3.0.1" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />

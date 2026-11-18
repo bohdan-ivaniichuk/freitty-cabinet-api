@@ -136,7 +136,8 @@ the browser's form restore does not fight the URL.
 ### `index.html`
 
 Calls `GET /api/v1/dashboard?period=…` and `GET /api/v1/me`. URL: `period` = `day`, `week`
-(default), `month`, `quarter`.
+(default), `month`, `quarter`. An empty `period=` is a `400` for the API: when the URL has none or
+an unknown one, the page sends `Week`.
 
 - "Welcome, {name} 👋".
 - **Active Orders**: the count; "▲ n this week" in the mockup's green, "▼ n this week" in

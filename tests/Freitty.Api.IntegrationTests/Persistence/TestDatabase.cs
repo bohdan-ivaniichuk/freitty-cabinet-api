@@ -30,6 +30,11 @@ internal sealed class TestDatabase(ApiFactory factory) : IAsyncDisposable
         return await action(scope.ServiceProvider);
     }
 
+    public HttpClient CreateClient()
+    {
+        return factory.CreateClient();
+    }
+
     public Task SaveAsync(params object[] entities)
     {
         return InContextAsync(async db =>

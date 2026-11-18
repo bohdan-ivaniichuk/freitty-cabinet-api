@@ -34,12 +34,15 @@ sidebar badge comes from the same SQL.
 - **Enum values go to SQL as parameters** taken from the enums — never a literal `status = 4`.
 - **Empty buckets are part of the series.** `generate_series` produces the axis, the data is
   joined to it; the page never has to invent a missing week.
-- **The axis is stepped in the reporting zone too.** `timestamptz ± interval` and the
+- **The axis is stepped in local wall-clock time.** `timestamptz ± interval` and the
   three-argument `generate_series` step in the session zone, which is UTC: across a daylight
   saving change the generated starts stop matching what `date_trunc` returns, and most buckets
-  come back empty. The form that holds, checked on PostgreSQL 18:
-  `generate_series(date_subtract(date_trunc(@unit, @now, @zone), @back, @zone), date_trunc(@unit, @now, @zone), @step, @zone)`,
-  with `start = (bucket AT TIME ZONE @zone)::date`.
+  come back empty. Stepping instants in the zone (`generate_series(…, @step, @zone)`) fixes
+  Toronto but not a zone whose clocks skip midnight: once a start lands on 01:00 it stays there.
+  The form that holds everywhere: generate local timestamps —
+  `generate_series(date_trunc(@unit, @now AT TIME ZONE @zone) - @step * (@buckets - 1), date_trunc(@unit, @now AT TIME ZONE @zone), @step)`
+  — and convert each once with `AT TIME ZONE @zone`. `start` is the local timestamp's date; the
+  data is still cut with `date_trunc(@unit, instant, @zone)` and joined on the converted start.
 - **Rounding happens in SQL** (`round`, half away from zero), so the same number comes out of
   `psql` and out of the API.
 - **The period switch works**: one statement, a different unit and length.
@@ -107,11 +110,15 @@ An unknown `period` → `400` `ProblemDetails` with the field error.
 ### Code
 
 ```
-src/Freitty.Application/Dashboard/        the query, its handler and validator, the DTOs,
-                                          IDashboardReader
-src/Freitty.Infrastructure/Dashboard/     DashboardReader (Dapper) and its SQL
-src/Freitty.Api/Endpoints/Dashboard/      the endpoint
+src/Freitty.Application/Dashboard/               IDashboardReader and what `/me` shares with it;
+                                                 the periods, limits and window as named values
+src/Freitty.Application/Dashboard/GetDashboard/  the query, its handler, the DTOs
+src/Freitty.Infrastructure/Dashboard/            DashboardReader (Dapper) and its SQL
+src/Freitty.Api/Endpoints/Dashboard/             the endpoint
 ```
+
+The query has no validator: `period` is an enum, and the binder refuses every value that is not
+one — an unknown name, an undefined number, an empty value — with the `400` of step 4.
 
 - Four statements at most per dashboard request for the aggregates: the KPIs, the series, the
   attention counts, the alert orders. `/me` runs only the attention counts. The SQL is raw string
@@ -120,8 +127,10 @@ src/Freitty.Api/Endpoints/Dashboard/      the endpoint
   Dapper setting is changed.
 - One `NpgsqlDataSource` is registered in DI (`AddNpgsqlDataSource` from
   `Npgsql.DependencyInjection`) and `AppDbContext` is configured to use it; `UseNpgsql` with a
-  connection string registers none. Dapper opens a connection from it per request and disposes
-  it; it does not share the context's connection.
+  connection string registers none. Dapper opens a connection from it per statement and disposes
+  it; it does not share the context's connection. The data source hands the host's logger to
+  Npgsql, which logs every command at `Information`; `appsettings.json` sets `Npgsql` to
+  `Warning` so the health probe and every statement do not fill the log.
 - `Directory.Packages.props` gains `Dapper` (2.1.86 or later — earlier versions do not read
   `date` into `DateOnly`) and `Npgsql.DependencyInjection` at the version of the Npgsql provider.
 - Dapper specifics, checked on 2026-11-18 and to be confirmed: every instant parameter is passed

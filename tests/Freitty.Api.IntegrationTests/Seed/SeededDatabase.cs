@@ -33,6 +33,12 @@ public sealed class SeededDatabase(PostgresFixture postgres) : IAsyncLifetime
         return Database.InContextAsync(action);
     }
 
+    // A client of the API that seeded the database: its clock and its current user, the seeded Admin.
+    public HttpClient CreateClient()
+    {
+        return Database.CreateClient();
+    }
+
     public Task<Order> LoadOrderAsync(string number)
     {
         return InContextAsync(async db =>

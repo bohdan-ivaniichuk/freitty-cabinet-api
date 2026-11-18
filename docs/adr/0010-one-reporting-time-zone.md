@@ -45,5 +45,6 @@ An instant on a card or a detail page is still shown in the zone of its hub.
   zone, already counts the 15th. Accepted until the zone moves to the company.
 - A wrong zone id is a startup failure, not a wrong chart.
 - Every step along a time axis has to be taken in the zone as well, not only the truncation: an
-  axis stepped in UTC drifts by an hour at a daylight saving change. The dashboard SQL passes the
-  zone to `generate_series` and `date_subtract` for that reason.
+  axis stepped in UTC drifts by an hour at a daylight saving change, and one stepped as instants
+  in the zone sticks at 01:00 where midnight is skipped. The dashboard SQL therefore steps local
+  timestamps and converts each to an instant once.
