@@ -11,7 +11,7 @@ rule. There is exactly as much of it as a reviewer needs to click through every 
 search, page and chart period and never see an empty result.
 
 The mockup is the starting point, not the target: where it contradicts itself
-([`mockup-analysis.md`](../../assignment/mockup-analysis.md)) or the demo needs something else, the
+([`mockup-analysis.md`](../mockup-analysis.md)) or the demo needs something else, the
 data below wins.
 
 ## Decisions

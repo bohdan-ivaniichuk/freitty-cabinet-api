@@ -6,9 +6,9 @@ The three screens of the mockup become three pages served by the API and filled 
 Dashboard, Order List and Order Detail. The markup, class names and styles are the mockup's; only
 the hardcoded data goes, replaced by what the endpoints of steps 4–6 return.
 
-The source is [`assignment/Freitty_For_Candidate.html`](../../assignment/Freitty_For_Candidate.html),
-which is read and never edited: sections `#dashboard`, `#orderlist` and `#crossdock`, and the
-`<style>` rules they need.
+The source is the mockup handed over with the assignment, `Freitty_For_Candidate.html` (not kept
+in this repository), which is read and never edited: sections `#dashboard`, `#orderlist` and
+`#crossdock`, and the `<style>` rules they need.
 
 ## Decisions
 
@@ -484,7 +484,7 @@ What the implementation session checks itself, on `docker compose up -d --build 
 - [ ] Every element with `title="Not part of this assignment"` carries `data-out-of-scope` and
       `aria-disabled="true"`, and none has `disabled`.
 - [ ] No `innerHTML`, `insertAdjacentHTML` or `document.write` in the scripts.
-- [ ] `assignment/` is unchanged.
+- [ ] The mockup file itself is unchanged.
 - [ ] Build with 0 warnings, `dotnet format --verify-no-changes` clean, `dotnet test` green.
 
 *Browser session* — checked in a real browser against the running stack after the implementation,

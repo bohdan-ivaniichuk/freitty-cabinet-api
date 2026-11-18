@@ -86,11 +86,11 @@ The answers to the questions of *Open questions* 3 are prepared apart from the s
 1. **Slide format.** Answered by the owner: a static HTML deck kept in the repository and
    published with GitHub Pages — dark background, large type, monospaced section labels, an
    accent gradient, a section bar at the bottom. The look is the deck's own; no one else's
-   logo or text. GitHub Pages on the free plan needs a public repository, which is why the
-   assignment's own materials (`assignment/`) leave the repository first: the mockup analysis
-   moves to `docs/`, and if the repository becomes public its history is rewritten without
-   that folder. The slides are in Ukrainian — the one exception, with `assignment/task.md`, to
-   the English-only rule. Their content and order are agreed with the owner before any slide
+   logo or text. GitHub Pages on the free plan needs a public repository, so the assignment's
+   own materials leave the repository first — removed by a commit, the history is not
+   rewritten — and the mockup analysis moves to `docs/`. The deck is read by the reviewers on
+   their own before the live demo, so each slide must stand without a narrator. The slides are
+   in Ukrainian — the one exception to the English-only rule. Their content and order are agreed with the owner before any slide
    is written; the outline above is a starting point, not the decision.
 2. **Which three or four files to walk through.** Candidates: `Order.cs`, the list query, the write
    handler, the CI workflow.

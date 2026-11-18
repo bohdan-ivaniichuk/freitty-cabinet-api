@@ -6,7 +6,9 @@ Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail) —
 the API reference is at
 https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/.
 
-> 🚧 Work in progress. Test assignment — see [`assignment/`](assignment) for the task and [`docs/plan.md`](docs/plan.md) for the implementation plan.
+A test assignment: three screens of a finished mockup, fed by a backend. The plan and the
+decisions are in [`docs/plan.md`](docs/plan.md) and [`docs/adr/`](docs/adr), the vocabulary in
+[`CONTEXT.md`](CONTEXT.md), the schema in [`docs/er-diagram.md`](docs/er-diagram.md).
 
 ## What is in the box
 

@@ -8,7 +8,7 @@ Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail): .N
 
 | What | Where |
 |---|---|
-| Task, original mockup, mockup analysis (read-only inputs) | `assignment/` |
+| What the mockup contains and where it contradicts itself | `docs/mockup-analysis.md` |
 | Implementation plan and agreed decisions — source of truth | `docs/plan.md` |
 | Domain vocabulary — the names used in code and docs | `CONTEXT.md` |
 | Database schema | `docs/er-diagram.md` |
@@ -24,7 +24,7 @@ Each step from `docs/plan.md` §10 goes through four stages:
 3. **Review** — the `code-reviewer` agent (pinned to Fable 5.2, high effort) reviews the diff; findings are fixed in the implementation session.
 4. **User check** — the user reviews and approves; only then commit.
 
-Open questions from `assignment/mockup-analysis.md` are settled in the grooming of the step they belong to.
+Open questions from `docs/mockup-analysis.md` are settled in the grooming of the step they belong to.
 
 ## Code rules
 
@@ -42,18 +42,15 @@ Every C# change follows [`docs/engineering/code-rules.md`](docs/engineering/code
 
 ## Hooks
 
-- `assignment-guard` — blocks edits under `assignment/`.
 - `secrets-scan` — blocks content that looks like a real secret. Local development values in `docker-compose*.yml` and `appsettings.Development.json` are exempt.
 - `dotnet-format` — formats an edited `.cs` file after every edit; do not hand-format.
 - Commit hooks — see below.
 
 ## Language
 
-Everything committed is in English: code, comments, docs, commit messages. The conversation may be in Ukrainian. The only exception is `assignment/task.md`, a copy of the original brief.
+Everything committed is in English: code, comments, docs, commit messages. The conversation may be in Ukrainian. The only exception is the slide deck in `presentation/`, which is in Ukrainian.
 
-## `assignment/` is read-only
-
-It holds the task inputs. Never edit it; put notes and decisions in `docs/`. The `assignment-guard` hook enforces this.
+The task's own materials — the brief and the original mockup — are not kept in the repository.
 
 ## Commits and pull requests
 

@@ -1,6 +1,6 @@
 # Implementation plan
 
-Decisions agreed before implementation. Source of truth for the agent and for the presentation. Inputs live in [`/assignment`](../assignment): task, original mockup, mockup analysis.
+Decisions agreed before implementation. Source of truth for the agent and for the presentation. The inputs — the brief and the original mockup — are not kept in the repository; what the mockup contains is in [`mockup-analysis.md`](mockup-analysis.md).
 
 ## 1. Goal
 
@@ -125,9 +125,9 @@ Same HTML, kept 1:1:
 ## 8. Repo layout
 
 ```
-assignment/   inputs, never modified
 docs/         plan.md, adr/, steps/ (a spec per step), engineering/ (code rules), er-diagram.md (mermaid),
-              explain/ (query plans); the presentation (Marp/Slidev) arrives in step 10
+              explain/ (query plans), mockup-analysis.md, deployment.md (the runbook)
+presentation/ the slide deck: a static HTML page, published with GitHub Pages
 src/          solution
 tests/
 .github/workflows/
@@ -146,7 +146,7 @@ Dockerfile, docker-compose.yml, README.md
 6. AI workflow (CLAUDE.md, hooks, skills) — "I design and decide, the agent speeds up the routine".
 7. Walk through 3–4 prepared files in the repo.
 
-Mention that the mockup data was inconsistent and how it was normalized ([mockup-analysis.md](../assignment/mockup-analysis.md)).
+Mention that the mockup data was inconsistent and how it was normalized ([mockup-analysis.md](mockup-analysis.md)).
 
 ## 10. Order of work
 

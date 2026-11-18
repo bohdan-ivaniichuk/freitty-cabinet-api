@@ -146,7 +146,7 @@ Multi-stage: `mcr.microsoft.com/dotnet/sdk:10.0` to restore and publish `Freitty
 `mcr.microsoft.com/dotnet/aspnet:10.0` to run it. Project files and the `Directory.*.props` /
 `global.json` files are copied and restored before the sources, so a code change does not re-download
 packages. Runs as the image's built-in non-root user, listens on `8080`. `.dockerignore` keeps
-`bin/`, `obj/`, `.git`, `tests/`, `docs/` and `assignment/` out of the build context.
+`bin/`, `obj/`, `.git`, `tests/`, `docs/` and `presentation/` out of the build context.
 
 ### CI — `.github/workflows/ci.yml`
 
