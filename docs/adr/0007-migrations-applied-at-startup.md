@@ -6,7 +6,8 @@
 ## Context
 
 The schema has to reach three places: a developer's `docker compose up`, the test container, and the
-deployed database. The app is one deployable on a free hosting tier, run as a single instance, and
+deployed database. The app is one deployable on a small paid instance
+([ADR 0014](0014-azure-container-apps-and-managed-postgresql.md)), run as a single instance, and
 the README promises a working stack from one command.
 
 ## Decision
@@ -40,7 +41,12 @@ If that fails, the process exits.
   command timeout, which also bounds every migration command, so a queued instance waits up to
   five minutes and then fails to start. A missing database is then an error, not something the
   API creates.
-- A migration must stay compatible with the version that is still running during a deploy. With one
-  instance and a restart this is not yet a constraint; it becomes one with rolling deploys.
+- A migration must stay compatible with the version that is still running during a deploy.
+- Amended 2026-11-18: the deployment is a rolling deploy even with one instance
+  ([ADR 0014](0014-azure-container-apps-and-managed-postgresql.md)). Container Apps starts the
+  new revision beside the old one, which keeps serving while the new one migrates; a revision
+  that migrates and then fails leaves the old version on the new schema until the next deploy.
+  So every migration is additive — new tables, nullable or defaulted columns, new indexes — and a
+  rename or a drop takes two releases.
 - Moving to a bundle later means removing one call from startup and adding one step to the
   pipeline. Migrations and schema do not change.

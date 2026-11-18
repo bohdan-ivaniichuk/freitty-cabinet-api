@@ -6,8 +6,9 @@
 ## Context
 
 The assignment hands over finished markup — one HTML file with three screens — and asks for the
-backend that feeds it. The result is judged by the deployed application, on a free hosting tier,
-and the code is reviewed for the backend it contains.
+backend that feeds it. The result is judged by the deployed application, on one small paid
+instance ([ADR 0014](0014-azure-container-apps-and-managed-postgresql.md)), and the code is
+reviewed for the backend it contains.
 
 ## Decision
 

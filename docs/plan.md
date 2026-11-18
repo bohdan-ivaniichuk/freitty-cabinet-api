@@ -32,7 +32,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 - **ProblemDetails**, `/api/v1`, **Scalar** (OpenAPI UI)
 - **Serilog**
 - **xUnit + Testcontainers**
-- **Docker**, **GitHub Actions**, deploy to Render / Railway / Fly.io (check current free-tier terms before choosing; Neon is an option for Postgres)
+- **Docker**, **GitHub Actions**, deploy to Azure Container Apps with Azure Database for PostgreSQL ([ADR 0014](adr/0014-azure-container-apps-and-managed-postgresql.md))
 
 ## 4. Architecture
 
