@@ -83,7 +83,15 @@ The answers to the questions of *Open questions* 3 are prepared apart from the s
 
 ## Open questions
 
-1. **Slide format.** Marp or Slidev from Markdown, or a plain deck outside the repository?
+1. **Slide format.** Answered by the owner: a static HTML deck kept in the repository and
+   published with GitHub Pages — dark background, large type, monospaced section labels, an
+   accent gradient, a section bar at the bottom. The look is the deck's own; no one else's
+   logo or text. GitHub Pages on the free plan needs a public repository, which is why the
+   assignment's own materials (`assignment/`) leave the repository first: the mockup analysis
+   moves to `docs/`, and if the repository becomes public its history is rewritten without
+   that folder. The slides are in Ukrainian — the one exception, with `assignment/task.md`, to
+   the English-only rule. Their content and order are agreed with the owner before any slide
+   is written; the outline above is a starting point, not the decision.
 2. **Which three or four files to walk through.** Candidates: `Order.cs`, the list query, the write
    handler, the CI workflow.
 3. **Questions to prepare for.** The reviews of step 2 predicted these:
