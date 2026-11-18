@@ -78,7 +78,8 @@ public sealed class OrderCardReader(IAppDbContext db)
             quantities.Exists(quantity => quantity.HasQuantityDelta),
             order.OutboundTrailerCount,
             shipments.Select(shipment => ToCardShipment(order.Number, shipment, lookups)).ToList(),
-            OrderProgress.NextStepOf(stage, openAlertTypes, order.FirstUnpaidInvoice, order.LastInvoice));
+            OrderProgress.NextStepOf(stage, openAlertTypes, order.FirstUnpaidInvoice, order.LastInvoice),
+            order.Version);
     }
 
     // A Unit Type that was unloaded but never declared has quantities with nothing declared; it is no declared line.
@@ -166,7 +167,8 @@ public sealed class OrderCardReader(IAppDbContext db)
                     .OrderByDescending(invoice => invoice.IssuedAt)
                     .ThenByDescending(invoice => invoice.Id)
                     .Select(invoice => new InvoiceSummary(invoice.Number, invoice.Amount))
-                    .FirstOrDefault()));
+                    .FirstOrDefault(),
+                order.Version));
     }
 
     private IQueryable<ShipmentRow> ReadShipments(Guid companyId, IReadOnlyCollection<Guid> orderIds)
@@ -207,7 +209,8 @@ public sealed class OrderCardReader(IAppDbContext db)
         CardTransportDto? Transport,
         int OutboundTrailerCount,
         InvoiceSummary? FirstUnpaidInvoice,
-        InvoiceSummary? LastInvoice);
+        InvoiceSummary? LastInvoice,
+        int Version);
 
     private sealed record ShipmentRow(
         Guid Id,

@@ -199,6 +199,29 @@ details.ref-n-multi .sub-ref { white-space: nowrap; }
 /* An order without a shipment has no Ref N: its dash is plain text like the other empty cells. */
 .ref-cell.is-empty { font: inherit; color: inherit; }
 
+/* Order List: the Pipeline layout. Four columns side by side, in the grey of the layout switch, with
+   compact cards in the look of the list's. While a draft is dragged the Ready column is outlined as
+   the place it can go. */
+.pipeline-board { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.pipeline-column { background: #F0F2F5; border: 2px solid transparent; border-radius: 10px; padding: 10px; }
+.pipeline-column.is-drop-target { border: 2px dashed #16A34A; background: #DCFCE7; }
+.pipeline-column-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 12px; font-weight: 700; color: #1F2A3A; text-transform: uppercase; letter-spacing: .4px; }
+.pipeline-column-head .count { background: #E5E7EB; color: #374151; padding: 1px 6px; border-radius: 8px; font-size: 10px; }
+.pipeline-cards { display: flex; flex-direction: column; gap: 8px; }
+.pipeline-cards .state { padding: 12px; }
+.pipeline-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.pipeline-card:hover { border-color: #2E75B6; box-shadow: 0 4px 12px rgba(31,78,121,.08); }
+.pipeline-card.has-alert { border-top: 2px solid #DC2626; }
+.pipeline-card.is-draft { border-style: dashed; cursor: grab; }
+.pipeline-card.is-dragging { opacity: .5; }
+.pipeline-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.pipeline-card .oc-num { font-size: 13px; }
+.pipeline-alerts { font-size: 10.5px; font-weight: 700; color: #DC2626; }
+.pipeline-facts { color: #1F2A3A; font-weight: 600; }
+.pipeline-facts.qty-actual { color: #EA580C; }
+.pipeline-submit { align-self: flex-start; margin-top: 4px; padding: 4px 10px; font-size: 12px; }
+.pipeline-more { font-size: 12px; font-weight: 600; color: #2E75B6; text-decoration: none; text-align: center; padding: 4px; }
+
 /* Dashboard. */
 .trend-up { color: #16A34A; }
 .trend-down { color: #DC2626; }

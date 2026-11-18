@@ -104,7 +104,7 @@ public sealed class ScriptedOrderTests(SeededDatabase seeded)
     }
 
     [Fact]
-    public async Task DraftHasNoShipmentDestinationOrTransport()
+    public async Task DRAFT003HasNoShipmentDestinationOrTransport()
     {
         Order order = await seeded.LoadOrderAsync("DRAFT-003");
 
@@ -112,6 +112,18 @@ public sealed class ScriptedOrderTests(SeededDatabase seeded)
         Assert.Empty(order.Shipments);
         Assert.Null(order.DestinationCity);
         Assert.Null(order.TransportKind);
+    }
+
+    [Fact]
+    public async Task DRAFT004HasEverythingSubmitNeedsAndIsNotSubmitted()
+    {
+        Order order = await seeded.LoadOrderAsync("DRAFT-004");
+
+        Assert.Equal((OrderStatus.Draft, OrderType.CrossDock), (order.Status, order.Type));
+        Assert.Equal(12, Assert.Single(order.Shipments).DeclaredQuantity(UnitType.Standard));
+        Assert.Equal(("London", TransportKind.Carrier), (order.DestinationCity, order.TransportKind));
+        Assert.True(order.ScheduledAt > SeededDatabase.Now);
+        Assert.Null(order.SubmittedAt);
     }
 
     [Fact]

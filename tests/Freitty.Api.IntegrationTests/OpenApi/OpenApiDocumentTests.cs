@@ -10,7 +10,8 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
 
     private readonly CabinetApi api = new(postgres.ConnectionString);
 
-    public static TheoryData<string> FilteredPaths => [ApiUrls.Orders, ApiUrls.OrderCounts, ApiUrls.OrderExport];
+    public static TheoryData<string> FilteredPaths =>
+        [ApiUrls.Orders, ApiUrls.OrderCounts, ApiUrls.OrderExport, ApiUrls.OrderPipeline];
 
     [Fact]
     public async Task OpenApiDocumentListsEveryEndpoint()
@@ -28,8 +29,10 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
                 (ApiUrls.Orders, "get"),
                 (ApiUrls.OrderCounts, "get"),
                 (ApiUrls.OrderExport, "get"),
+                (ApiUrls.OrderPipeline, "get"),
                 (ApiUrls.OrderTemplate, "get"),
                 (ApiUrls.OperationsTemplate, "post"),
+                (ApiUrls.SubmitTemplate, "post"),
                 (ApiUrls.Hubs, "get"),
                 (ApiUrls.Me, "get"),
                 (ApiUrls.Dashboard, "get"),
@@ -86,6 +89,49 @@ public sealed class OpenApiDocumentTests(PostgresFixture postgres) : IAsyncDispo
             .GetProperty("RecordOperationRequest");
         Assert.Equal(
             ["shipmentPosition", "type", "unitType", "quantity", "expectedVersion"],
+            request.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesTheBoard()
+    {
+        JsonElement document = await ReadOpenApiDocumentAsync();
+
+        JsonElement responses = document.GetProperty("paths").GetProperty(ApiUrls.OrderPipeline)
+            .GetProperty("get").GetProperty("responses");
+        Assert.Equal(["200", "400"], responses.EnumerateObject().Select(status => status.Name));
+        Assert.Equal(
+            "#/components/schemas/PipelineDto",
+            responses.GetProperty("200").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+    }
+
+    [Fact]
+    public async Task OpenApiDocumentDescribesSubmittingADraft()
+    {
+        JsonElement document = await ReadOpenApiDocumentAsync();
+
+        JsonElement post = document.GetProperty("paths").GetProperty(ApiUrls.SubmitTemplate).GetProperty("post");
+        Assert.Equal(
+            "#/components/schemas/SubmitOrderRequest",
+            post.GetProperty("requestBody").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+        JsonElement responses = post.GetProperty("responses");
+        Assert.Equal(["200", "400", "404", "409"], responses.EnumerateObject().Select(status => status.Name));
+        Assert.Equal(
+            "#/components/schemas/SubmittedOrderDto",
+            responses.GetProperty("200").GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("$ref").GetString());
+        Assert.All(
+            new[] { "404", "409" },
+            status => Assert.Equal(
+                "#/components/schemas/DomainProblemDetails",
+                responses.GetProperty(status).GetProperty("content").GetProperty(ProblemResponse.ContentType)
+                    .GetProperty("schema").GetProperty("$ref").GetString()));
+        JsonElement request = document.GetProperty("components").GetProperty("schemas")
+            .GetProperty("SubmitOrderRequest");
+        Assert.Equal(
+            ["expectedVersion"],
             request.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
     }
 

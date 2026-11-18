@@ -5,6 +5,8 @@ namespace Freitty.Domain.Orders;
 public static class OrderErrors
 {
     // The codes another layer names: the application reuses one, and the API documents them.
+    public const string NotDraftCode = "order.not_draft";
+    public const string NotReadyToSubmitCode = "order.not_ready_to_submit";
     public const string NotActiveCode = "order.not_active";
     public const string ShipmentNotFoundCode = "shipment.not_found";
     public const string ExceedsStockCode = "operation.exceeds_stock";
@@ -12,14 +14,14 @@ public static class OrderErrors
     public static DomainError NotDraft(string orderNumber, OrderStatus status)
     {
         return DomainError.Conflict(
-            "order.not_draft",
+            NotDraftCode,
             $"Order {orderNumber} is {status}; only a draft can be changed this way.");
     }
 
     public static DomainError NotReadyToSubmit(string orderNumber, IEnumerable<string> missingParts)
     {
         return DomainError.Conflict(
-            "order.not_ready_to_submit",
+            NotReadyToSubmitCode,
             $"Order {orderNumber} cannot be submitted; it still needs {string.Join(", ", missingParts)}.");
     }
 

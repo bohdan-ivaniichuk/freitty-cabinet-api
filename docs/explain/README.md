@@ -1,8 +1,9 @@
 # Query plans
 
 The three indexes of the Order List ([step 4](../steps/04-order-list.md), migration
-`OrderListIndexes`) with `EXPLAIN (ANALYZE, BUFFERS)` before and after, on a data set large enough
-for the planner to care. The seed's seventy orders are not: on them every plan is a sequential scan
+`OrderListIndexes`) and the one of its board ([step 11](../steps/11-pipeline.md), migration
+`PipelineIndex`) with `EXPLAIN (ANALYZE, BUFFERS)` before and after, on a data set large enough for
+the planner to care. The seed's seventy-one orders are not: on them every plan is a sequential scan
 and every one is fast.
 
 | Plan | Index | Before | After |
@@ -10,6 +11,7 @@ and every one is fast.
 | [`list-default.md`](list-default.md) — the default list, first page | `ix_orders_company_id_scheduled_at_id` | 4.3 ms, 2 391 buffers, Sort | 0.04 ms, 4 buffers, no Sort |
 | [`search-number.md`](search-number.md) — `search=FR0000150` | `ix_orders_number_trgm` | 5.3 ms, 2 414 buffers | 2.5 ms, 150 buffers |
 | [`search-ref-number.md`](search-ref-number.md) — `search=REF-0000224` | `ix_shipments_ref_number_trgm` | 47.9 ms, 5 423 buffers | 5.8 ms, 364 buffers |
+| [`pipeline.md`](pipeline.md) — the board's totals and first cards ([step 11](../steps/11-pipeline.md)) | `ix_orders_company_id_status_scheduled_at_id` | 6.5 + 7.4 ms, 2 385 + 4 779 buffers | 0.66 + 1.0 ms, 36 + 78 buffers |
 
 ## The data
 

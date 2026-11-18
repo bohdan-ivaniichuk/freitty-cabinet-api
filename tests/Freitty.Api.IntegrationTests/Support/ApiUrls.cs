@@ -20,10 +20,14 @@ internal static class ApiUrls
 
     public static string OrderExport { get; } = Of(ApiRoutes.Orders.Export);
 
-    // The two routes of one order as the OpenAPI document lists them, with the number still a placeholder.
+    public static string OrderPipeline { get; } = Of(ApiRoutes.Orders.Pipeline);
+
+    // The routes of one order as the OpenAPI document lists them, with the number still a placeholder.
     public static string OrderTemplate { get; } = Of(ApiRoutes.Orders.Detail);
 
     public static string OperationsTemplate { get; } = Of(ApiRoutes.Orders.Operations);
+
+    public static string SubmitTemplate { get; } = Of(ApiRoutes.Orders.Submit);
 
     public static string Dashboard { get; } = Of(ApiRoutes.Dashboard.Get);
 
@@ -39,6 +43,11 @@ internal static class ApiUrls
     public static string Operations(string orderNumber)
     {
         return OperationsTemplate.Replace(NumberPlaceholder, orderNumber, StringComparison.Ordinal);
+    }
+
+    public static string Submit(string orderNumber)
+    {
+        return SubmitTemplate.Replace(NumberPlaceholder, orderNumber, StringComparison.Ordinal);
     }
 
     public static string Of(string route)

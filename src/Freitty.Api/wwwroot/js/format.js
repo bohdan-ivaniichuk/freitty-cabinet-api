@@ -8,6 +8,7 @@ export const DASH = '—';
 
 export const NO_ACTIVE_ORDERS = 'No active orders';
 export const NO_MATCHING_ORDERS = 'No orders match these filters';
+export const NO_ORDERS_IN_COLUMN = 'No orders';
 export const NO_SHIPMENTS = 'No shipments yet';
 export const NO_OPERATIONS = 'No operations yet';
 export const NO_SUPPLIES = 'No supplies';
@@ -351,6 +352,31 @@ export function avatarClass(initials) {
 // "Showing 1–12 of 40": count items shown, the first of them numbered from, out of total.
 export function showingText(from, count, total) {
   return count === 0 ? `Showing 0 of ${total}` : `Showing ${from}–${from + count - 1} of ${total}`;
+}
+
+// --- The order list's Pipeline layout.
+
+// "Showing 13 of 71": the cards on the board, out of the orders its columns count.
+export function boardShowingText(shown, total) {
+  return `Showing ${shown} of ${total}`;
+}
+
+// "10 decl · 12 actual"
+export function declaredAndActual(card) {
+  const parts = quantityDelta(card);
+  return `${parts.declared}${parts.actual}`;
+}
+
+export function moreOrders(count) {
+  return `+${count} more`;
+}
+
+export function submitLabel(number) {
+  return `Submit ${number}`;
+}
+
+export function submittedText(number) {
+  return `${number} is ready`;
 }
 
 // --- The dashboard.

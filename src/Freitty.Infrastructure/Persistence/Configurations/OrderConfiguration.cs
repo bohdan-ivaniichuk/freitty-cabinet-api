@@ -36,6 +36,11 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.HasIndex(order => new { order.CompanyId, order.ScheduledAt, order.Id })
             .IsDescending(false, true, true);
 
+        // The pipeline: its totals per status and the first orders of each status in the list's order, both read
+        // from this index alone (docs/explain/pipeline.md). It serves the list filtered by status as well.
+        builder.HasIndex(order => new { order.CompanyId, order.Status, order.ScheduledAt, order.Id })
+            .IsDescending(false, false, true, true);
+
         ConfigureReferences(builder);
         ConfigureChildren(builder);
     }

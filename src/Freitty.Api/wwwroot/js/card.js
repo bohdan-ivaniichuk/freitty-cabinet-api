@@ -1,6 +1,7 @@
 // An order of the dashboard and the list, from a card of GET /api/v1/orders or of the dashboard: a
-// card, one <template id="order-card"> in both pages, or a row of the list's table view,
-// <template id="order-row">. Both word the same facts the same way.
+// card, one <template id="order-card"> in both pages, a row of the list's table view,
+// <template id="order-row">, or a card of its Pipeline layout, <template id="pipeline-card">. All
+// word the same facts the same way.
 
 import { ORDER_TYPE, STATUS } from './codes.js';
 import * as format from './format.js';
@@ -17,7 +18,7 @@ function orderUrl(number) {
 // listener opens the order.
 export function openOrdersOnClick(container) {
   container.addEventListener('click', event => {
-    const order = event.target.closest('.order-card, .order-row');
+    const order = event.target.closest('.order-card, .order-row, .pipeline-card');
     if (order && !event.target.closest(OWN_CLICK)) {
       location.assign(order.dataset.href);
     }
@@ -58,6 +59,42 @@ function renderRow(order) {
   ref.textContent = refSummary(order.shipments);
   ref.title = ref.textContent;
   ref.classList.toggle('is-empty', order.shipments.length === 0);
+  return fragment;
+}
+
+// The compact card of a board column: the number, type, hub, date, the declared and actual totals,
+// the open Alerts and the next step. Only a draft keeps the Submit button; the board wires it.
+export function renderPipelineCard(order) {
+  const fragment = cloneTemplate('pipeline-card');
+  const card = fragment.querySelector('.pipeline-card');
+  const field = fieldsOf(card);
+  const isDraft = order.status === STATUS.Draft;
+  const href = orderUrl(order.number);
+
+  card.dataset.href = href;
+  card.dataset.number = order.number;
+  card.classList.toggle('is-draft', isDraft);
+  card.classList.toggle('has-alert', order.openAlertTypes.length > 0);
+
+  const number = field('number');
+  number.href = href;
+  number.textContent = order.number;
+  field('alerts').textContent = format.openAlertsText(order.openAlertTypes) ?? '';
+  field('type-line').textContent = format.typeLine(order);
+  field('hub').textContent = format.hubShortLabel(order.hub, order.transferHub);
+  field('date').textContent = format.formatDayTime(order.scheduledAt, order.hub.timeZone);
+  const quantity = field('quantity');
+  quantity.textContent = format.declaredAndActual(order);
+  quantity.classList.toggle('qty-actual', order.hasQuantityDelta);
+  fillNext(field('next'), order.nextStep, href);
+
+  const submit = field('submit');
+  if (isDraft) {
+    submit.setAttribute('aria-label', format.submitLabel(order.number));
+  } else {
+    submit.remove();
+  }
+
   return fragment;
 }
 

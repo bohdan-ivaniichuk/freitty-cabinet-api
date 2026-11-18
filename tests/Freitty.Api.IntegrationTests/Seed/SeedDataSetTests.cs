@@ -26,7 +26,7 @@ public sealed class SeedDataSetTests(SeededDatabase seeded)
     }
 
     [Fact]
-    public async Task SeventyOrdersAreSeededInEveryStatus()
+    public async Task SeventyOneOrdersAreSeededInEveryStatus()
     {
         Dictionary<OrderStatus, int> countsByStatus = await seeded.InContextAsync(db => db.Orders
             .GroupBy(order => order.Status)
@@ -35,7 +35,7 @@ public sealed class SeedDataSetTests(SeededDatabase seeded)
         Assert.Equal(
             new Dictionary<OrderStatus, int>
             {
-                [OrderStatus.Draft] = 1,
+                [OrderStatus.Draft] = 2,
                 [OrderStatus.Ready] = 2,
                 [OrderStatus.InProgress] = 5,
                 [OrderStatus.Completed] = 62,

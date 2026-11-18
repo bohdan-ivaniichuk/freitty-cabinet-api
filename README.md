@@ -20,8 +20,10 @@ the OpenAPI document at http://localhost:8080/openapi/v1.json. The endpoints:
 | `GET` | `/api/v1/orders` | One page of order cards, with the tabs, filters and search of the Order List |
 | `GET` | `/api/v1/orders/counts` | The counter of each Order List tab, under the same filters |
 | `GET` | `/api/v1/orders/export` | The whole filtered Order List as a CSV file |
+| `GET` | `/api/v1/orders/pipeline` | The Order List as a board: every status with its total and first cards |
 | `GET` | `/api/v1/orders/{number}` | The detail of an order |
 | `POST` | `/api/v1/orders/{number}/operations` | Records an operation on a shipment |
+| `POST` | `/api/v1/orders/{number}/submit` | Submits a draft: Ready, under the next official number |
 | `GET` | `/api/v1/dashboard` | The tiles, the first active orders and the activity chart |
 | `GET` | `/api/v1/hubs` | The options of the Hub filter |
 | `GET` | `/api/v1/me` | The current user, the company and the number on the Orders badge |
@@ -80,8 +82,9 @@ sample data at startup, right after the migrations:
 
 - the company R-way Transport with four users, the Markham and Toronto hubs, three carriers, two
   services and sixteen supply items;
-- ten scripted orders in every status, two of them with open alerts, that the screens and the demo
-  rely on;
+- eleven scripted orders in every status, two of them with open alerts, that the screens and the
+  demo rely on — among them two drafts: DRAFT-003, which lacks what a submit needs, and DRAFT-004,
+  which can be submitted from the Pipeline layout of the Order List;
 - sixty completed orders over the last three months, for the dashboard figures and the chart;
 - an invoice for every completed order, one of them unpaid.
 

@@ -4,6 +4,7 @@ using System.Net.Mime;
 using System.Text;
 using Freitty.Application.Abstractions;
 using Freitty.Application.Orders.GetOrderDetail;
+using Freitty.Application.Orders.GetPipeline;
 using Freitty.Application.Orders.ListOrders;
 using Freitty.Infrastructure.Persistence;
 using Microsoft.Extensions.Time.Testing;
@@ -89,6 +90,16 @@ internal sealed class CabinetApi : IAsyncDisposable
     public Task<HttpResponseMessage> RecordAsync(string orderNumber, OperationRequest request)
     {
         return SendPostAsync(ApiUrls.Operations(orderNumber), request);
+    }
+
+    public Task<PipelineDto> PipelineAsync(string query = "")
+    {
+        return GetAsync<PipelineDto>($"{ApiUrls.OrderPipeline}{query}");
+    }
+
+    public Task<HttpResponseMessage> SubmitAsync(string orderNumber, int expectedVersion)
+    {
+        return SendPostAsync(ApiUrls.Submit(orderNumber), new SubmitRequest(expectedVersion));
     }
 
     public Task<T> InScopeAsync<T>(Func<IServiceProvider, Task<T>> action)

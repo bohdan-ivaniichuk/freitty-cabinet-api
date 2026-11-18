@@ -19,11 +19,11 @@ public sealed class SeededDashboardTests(SeededDatabase seeded)
     }
 
     [Fact]
-    public async Task NeedAttentionIsTheDraftTheUnpaidInvoiceAndTheTwoAlertedOrders()
+    public async Task NeedAttentionIsTheTwoDraftsTheUnpaidInvoiceAndTheTwoAlertedOrders()
     {
         NeedAttentionDto needAttention = (await DashboardAsync("Week")).NeedAttention;
 
-        Assert.Equal((4, 2, 2), (needAttention.Total, needAttention.AwaitingAction, needAttention.Alerts));
+        Assert.Equal((5, 3, 2), (needAttention.Total, needAttention.AwaitingAction, needAttention.Alerts));
         Assert.Equal(["FR001383", "FR001674"], needAttention.AlertOrders.Select(order => order.Number));
     }
 

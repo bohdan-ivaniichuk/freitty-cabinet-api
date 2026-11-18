@@ -57,7 +57,7 @@
         <div style="margin-left:auto;display:flex;gap:4px;padding:3px;background:#F0F2F5;border-radius:6px">
           <a class="view-btn" data-layout="cards">⊞ Cards</a>
           <a class="view-btn" data-layout="table">☰ Table</a>
-          <button type="button" style="padding:4px 10px;background:transparent;border:none;font-size:12px;color:#6B7280;position:relative" aria-disabled="true" data-out-of-scope title="Not part of this assignment">⎔ Pipeline </button>
+          <a class="view-btn" data-layout="pipeline">⎔ Pipeline</a>
         </div>
       </div>
 
@@ -67,7 +67,7 @@
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;font-size:12px;color:#6B7280">
         <div id="showing"></div>
-        <div style="display:flex;gap:4px"><a class="btn btn-secondary" id="page-prev" style="padding:4px 10px" aria-disabled="true">← Prev</a><a class="btn btn-secondary" id="page-next" style="padding:4px 10px" aria-disabled="true">Next →</a></div>
+        <div style="display:flex;gap:4px" id="pager"><a class="btn btn-secondary" id="page-prev" style="padding:4px 10px" aria-disabled="true">← Prev</a><a class="btn btn-secondary" id="page-next" style="padding:4px 10px" aria-disabled="true">Next →</a></div>
       </div>
     </div>
   </main>
@@ -110,6 +110,25 @@
   <div class="ref-item"><span class="sub-id"></span><span class="sub-ref"></span><span class="sub-desc"><em style="color:#DC2626"></em></span></div>
 </template>
 <!-- /card -->
+<template id="pipeline-board">
+  <div class="pipeline-board"></div>
+</template>
+<template id="pipeline-column">
+  <section class="pipeline-column">
+    <h2 class="pipeline-column-head" tabindex="-1"><span data-field="label"></span> <span class="count" data-field="total"></span></h2>
+    <div class="pipeline-cards" data-field="cards"></div>
+  </section>
+</template>
+<template id="pipeline-card">
+  <div class="pipeline-card">
+    <div class="pipeline-card-head"><a class="oc-num" data-field="number" draggable="false"></a><span class="pipeline-alerts" data-field="alerts"></span></div>
+    <div class="oc-type" data-field="type-line"></div>
+    <div class="pipeline-facts"><span data-field="hub"></span> · <span data-field="date"></span></div>
+    <div class="pipeline-facts" data-field="quantity"></div>
+    <div data-field="next"></div>
+    <button type="button" class="btn btn-primary pipeline-submit" data-field="submit">Submit</button>
+  </div>
+</template>
 <template id="order-table">
   <div class="order-table">
     <table>

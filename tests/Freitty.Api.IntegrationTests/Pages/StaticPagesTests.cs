@@ -26,6 +26,7 @@ public sealed class StaticPagesTests(PostgresFixture postgres) : IAsyncDisposabl
     [InlineData("/js/card.js", JavaScript)]
     [InlineData("/js/dashboard.js", JavaScript)]
     [InlineData("/js/orders.js", JavaScript)]
+    [InlineData("/js/pipeline.js", JavaScript)]
     [InlineData("/js/order.js", JavaScript)]
     public async Task EveryFileOfThePagesIsServedWithItsTypeForRevalidationOnEveryLoad(string url, string mediaType)
     {

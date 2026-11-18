@@ -3,7 +3,8 @@ using Freitty.Domain.Orders;
 
 namespace Freitty.Application.Orders.Cards;
 
-// ScheduledAt, Destination and Transport are null in a draft that has not set them.
+// ScheduledAt, Destination and Transport are null in a draft that has not set them. Version is what a write sends
+// back, as on the detail: the pipeline submits a draft from its card.
 public sealed record OrderCardDto(
     string Number,
     OrderType Type,
@@ -22,4 +23,5 @@ public sealed record OrderCardDto(
     bool HasQuantityDelta,
     int OutboundTrailerCount,
     IReadOnlyList<CardShipmentDto> Shipments,
-    NextStepDto NextStep);
+    NextStepDto NextStep,
+    int Version);

@@ -13,6 +13,10 @@ const SEARCH_TOO_SHORT = `Type at least ${SEARCH_MIN_LENGTH} characters`;
 // own — Prev / Next at the ends, a filter that does not apply, a request in flight — does not.
 const OUT_OF_SCOPE_CONTROL = '[data-out-of-scope]';
 const TOAST_DURATION = 3000;
+// A refusal says what to do about it, so it stays as long as it takes to read: about 60 ms a
+// character, between the time of a confirmation and a cap.
+const REFUSAL_MS_PER_CHARACTER = 60;
+const REFUSAL_MAX_DURATION = 10000;
 let toastTimer = 0;
 const PAGE_FAILURE = {
   title: 'Something went wrong',
@@ -107,12 +111,17 @@ function answerOutOfScope() {
 }
 
 // One message at a time: a new one replaces the one shown and starts its time again.
-function showToast(message) {
+export function showToast(message, duration = TOAST_DURATION) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
   toast.classList.add('is-shown');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('is-shown'), TOAST_DURATION);
+  toastTimer = setTimeout(() => toast.classList.remove('is-shown'), duration);
+}
+
+export function showRefusal(message) {
+  const readingTime = message.length * REFUSAL_MS_PER_CHARACTER;
+  showToast(message, Math.min(Math.max(readingTime, TOAST_DURATION), REFUSAL_MAX_DURATION));
 }
 
 // Fills the shell and returns the response, or null after showing the failure in the top bar.

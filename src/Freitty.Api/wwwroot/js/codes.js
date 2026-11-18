@@ -31,3 +31,7 @@ export const PERIOD = { Day: 'Day', Week: 'Week', Month: 'Month', Quarter: 'Quar
 
 // The ProblemDetails code of a write made against an older version of the order.
 export const VERSION_CONFLICT = 'order.version_conflict';
+
+// The ProblemDetails code of an order number that names no order — also a draft number after the
+// draft was submitted.
+export const ORDER_NOT_FOUND = 'order.not_found';

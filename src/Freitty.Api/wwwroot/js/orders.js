@@ -1,12 +1,14 @@
 // orders.html: the list of GET /api/v1/orders with its tabs, filters, search and pages, as cards or
-// as a table. The view lives in the URL. A change of it rewrites the URL through the History API and
+// as a table, or the same orders as the board of GET /api/v1/orders/pipeline, where a draft can be
+// submitted. The view lives in the URL. A change of it rewrites the URL through the History API and
 // loads the counts and the list again in place, so Back, Forward and a copied link all lead to the
 // same view. "Export CSV" downloads the list of the view shown, all its pages.
 
-import { apiUrl, getJson } from './api.js';
+import { apiUrl, getJson, postJson } from './api.js';
 import { openOrdersOnClick, renderCard, renderTable } from './card.js';
-import { ORDER_TYPE, STATUS } from './codes.js';
+import { ORDER_NOT_FOUND, ORDER_TYPE, STATUS, VERSION_CONFLICT } from './codes.js';
 import * as format from './format.js';
+import { cardCount, focusSubmitted, orderCount, renderBoard } from './pipeline.js';
 import {
   describeError,
   errorBox,
@@ -15,7 +17,9 @@ import {
   loadMe,
   markCurrent,
   searchText,
+  showRefusal,
   showSearchQuery,
+  showToast,
   stateBox,
 } from './shell.js';
 
@@ -28,8 +32,8 @@ const TABS = {
   drafts: { parameters: { status: STATUS.Draft }, count: 'drafts' },
 };
 const DEFAULT_TAB = 'all';
-// The URL's `view`: how the list is shown.
-const LAYOUTS = { cards: 'cards', table: 'table' };
+// The URL's `view`: how the list is shown. The pipeline has no pages.
+const LAYOUTS = { cards: 'cards', table: 'table', pipeline: 'pipeline' };
 const DEFAULT_LAYOUT = LAYOUTS.cards;
 // The filters' URL values and the API values they stand for.
 const DATE_FILTERS = { today: 'Today', week: 'ThisWeek', last30: 'Last30Days' };
@@ -40,6 +44,9 @@ const STATUS_FILTERS = {
 };
 const FILTERS = ['hub', 'date', 'status'];
 const FIRST_PAGE = 1;
+// The refusals of a submit that mean the board is older than the order: another write, or a submit
+// in another tab, which leaves the draft number naming no order.
+const STALE_BOARD_CODES = [VERSION_CONFLICT, ORDER_NOT_FOUND];
 const MAX_PAGE = 10000;
 
 let view = readView(new URLSearchParams(location.search));
@@ -48,6 +55,9 @@ let hubs = null;
 // Only the answer to the latest request is shown: an earlier one may arrive after it.
 let latestCounts = 0;
 let latestList = 0;
+// One submit at a time, held until the board shows its result: a second drop or click meanwhile is
+// ignored, so it never sends the number of a draft that is gone.
+let isSubmitting = false;
 
 initShell({
   query: view.search,
@@ -67,15 +77,34 @@ start();
 function readView(url) {
   const known = (values, name) => (Object.hasOwn(values, url.get(name)) ? url.get(name) : null);
   const page = Number(url.get('page'));
+  const layout = known(LAYOUTS, 'view') ?? DEFAULT_LAYOUT;
+  const isPage = Number.isInteger(page) && page >= FIRST_PAGE && page <= MAX_PAGE;
   return {
     tab: known(TABS, 'tab') ?? DEFAULT_TAB,
-    layout: known(LAYOUTS, 'view') ?? DEFAULT_LAYOUT,
+    layout,
     hub: url.get('hub'),
     date: known(DATE_FILTERS, 'date'),
     status: known(STATUS_FILTERS, 'status'),
     search: searchText(url.get('search')),
-    page: Number.isInteger(page) && page >= FIRST_PAGE && page <= MAX_PAGE ? page : FIRST_PAGE,
+    page: isPage && layout !== LAYOUTS.pipeline ? page : FIRST_PAGE,
   };
+}
+
+// A switch of the layout keeps everything else, the page included — except on the pipeline, which
+// has none.
+function withLayout(layout) {
+  return { ...view, layout, page: layout === LAYOUTS.pipeline ? FIRST_PAGE : view.page };
+}
+
+// "+N more" under a column: the cards of that status, on the Drafts tab for Draft.
+function moreView(status) {
+  const cards = { ...view, layout: LAYOUTS.cards, page: FIRST_PAGE };
+  if (status === STATUS.Draft) {
+    return { ...cards, tab: 'drafts', status: null };
+  }
+
+  const filter = Object.keys(STATUS_FILTERS).find(key => STATUS_FILTERS[key] === status) ?? null;
+  return { ...cards, status: filter };
 }
 
 function viewUrl(next) {
@@ -157,8 +186,17 @@ function bindControls() {
   }
 
   for (const link of document.querySelectorAll('[data-layout]')) {
-    showOnClick(link, () => ({ ...view, layout: link.dataset.layout }));
+    showOnClick(link, () => withLayout(link.dataset.layout));
   }
+
+  // The "+N more" links of the board are created with it, so one listener answers them all.
+  document.getElementById('orders').addEventListener('click', event => {
+    const more = event.target.closest('[data-more-status]');
+    if (more && isPlainClick(event)) {
+      event.preventDefault();
+      show(moreView(more.dataset.moreStatus));
+    }
+  });
 
   for (const link of [document.getElementById('page-prev'), document.getElementById('page-next')]) {
     showOnClick(link, () => ({ ...view, page: Number(link.dataset.page) }));
@@ -205,10 +243,9 @@ function renderTabs() {
   }
 }
 
-// A switch of the layout keeps everything else, the page included.
 function renderLayouts() {
   for (const link of document.querySelectorAll('[data-layout]')) {
-    link.href = viewUrl({ ...view, layout: link.dataset.layout });
+    link.href = viewUrl(withLayout(link.dataset.layout));
     markCurrent(link, link.dataset.layout === view.layout);
   }
 }
@@ -276,18 +313,25 @@ async function loadCounts() {
 
 async function loadList() {
   const list = document.getElementById('orders');
-  const parameters = { ...listParameters(), page: view.page > FIRST_PAGE ? view.page : null };
   const { layout } = view;
+  const isBoard = layout === LAYOUTS.pipeline;
   const request = ++latestList;
   list.setAttribute('aria-busy', 'true');
+  document.getElementById('pager').hidden = isBoard;
   try {
-    const result = await getJson('/api/v1/orders', parameters);
+    const result = isBoard
+      ? await getJson('/api/v1/orders/pipeline', listParameters())
+      : await getJson('/api/v1/orders', pageParameters());
     if (request !== latestList) {
       return;
     }
 
-    list.replaceChildren(...renderItems(result.items, layout));
-    renderPager(result);
+    if (isBoard) {
+      showBoard(list, result.columns);
+    } else {
+      list.replaceChildren(...renderItems(result.items, layout));
+      renderPager(result);
+    }
   } catch (error) {
     if (request !== latestList) {
       return;
@@ -297,6 +341,60 @@ async function loadList() {
   }
 
   list.removeAttribute('aria-busy');
+}
+
+function pageParameters() {
+  return { ...listParameters(), page: view.page > FIRST_PAGE ? view.page : null };
+}
+
+function showBoard(list, columns) {
+  const moreHref = status => viewUrl(moreView(status));
+  list.replaceChildren(renderBoard(columns, { moreHref, onSubmit: submitDraft }));
+  document.getElementById('showing').textContent =
+    format.boardShowingText(cardCount(columns), orderCount(columns));
+}
+
+// A submitted draft changes the board, the tab counters and the Orders badge, so all three are
+// loaded again; the focus, if it was on the board, goes back to it. A refusal changes nothing and
+// says why, unless it means the board is stale: then it is loaded again, with the counters and the
+// badge.
+async function submitDraft(order) {
+  if (isSubmitting) {
+    return;
+  }
+
+  isSubmitting = true;
+  const list = document.getElementById('orders');
+  const shownList = latestList;
+  const hadFocus = list.contains(document.activeElement);
+  list.setAttribute('aria-busy', 'true');
+  try {
+    const submitted = await postJson(
+      `/api/v1/orders/${encodeURIComponent(order.number)}/submit`,
+      { expectedVersion: order.version },
+    );
+    showToast(format.submittedText(submitted.number));
+    await reloadAfterWrite();
+    if (hadFocus) {
+      focusSubmitted(list, submitted.number);
+    }
+  } catch (error) {
+    const { title, detail } = describeError(error);
+    showRefusal(detail || title);
+    if (STALE_BOARD_CODES.includes(error.code)) {
+      await reloadAfterWrite();
+    } else if (latestList === shownList) {
+      list.removeAttribute('aria-busy');
+    }
+  } finally {
+    isSubmitting = false;
+  }
+}
+
+function reloadAfterWrite() {
+  loadCounts();
+  loadMe();
+  return loadList();
 }
 
 function renderItems(orders, layout) {

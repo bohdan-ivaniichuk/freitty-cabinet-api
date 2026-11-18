@@ -29,6 +29,7 @@ public static class DependencyInjection
             .UseSnakeCaseNamingConvention());
         services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
         services.AddScoped<IOrderSearch, OrderSearch>();
+        services.AddScoped<IOrderNumbers, OrderNumbers>();
         services.AddScoped<IDashboardReader, DashboardReader>();
         services.AddScoped<ICurrentUser, FirstAdminCurrentUser>();
         services.AddScoped<DatabaseSeeder>();

@@ -4,7 +4,7 @@ using Freitty.Domain.Orders;
 
 namespace Freitty.Infrastructure.Persistence.Seed;
 
-// The ten orders the screens and the demo rely on, one method each. At(day, hour, minute) is a local time on the
+// The eleven orders the screens and the demo rely on, one method each. At(day, hour, minute) is a local time on the
 // anchor day plus that many days: At(-2, 15, 00) is 15:00 two days before it, At(1, ...) the seeding day.
 internal sealed class ScriptedOrders(ReferenceData reference, SeedCalendar calendar)
 {
@@ -22,6 +22,7 @@ internal sealed class ScriptedOrders(ReferenceData reference, SeedCalendar calen
             PaidPickup(),
             UnpaidTransferredConsolidation(),
             UntouchedDraft(),
+            SubmittableDraft(),
         ];
     }
 
@@ -213,9 +214,37 @@ internal sealed class ScriptedOrders(ReferenceData reference, SeedCalendar calen
         return order;
     }
 
-    private OrderScript CrossDock(CrossDockKind kind, User createdBy, Hub hub, DateTimeOffset draftedAt)
+    // Everything Submit asks for, so the pipeline's move from Draft to Ready can be shown on it.
+    private OrderScript SubmittableDraft()
     {
-        return OrderScript.Draft(OrderType.CrossDock, kind, createdBy, hub, reference.FloorLeadOf(hub), draftedAt);
+        OrderScript order = CrossDock(
+            CrossDockKind.Storage,
+            reference.User2,
+            reference.Toronto,
+            At(-1, 17, 00),
+            draftNumber: "DRAFT-004");
+        order.AddShipment("REF-1016", (UnitType.Standard, 12));
+        order.Schedule(At(4, 11, 00));
+        order.SetDestination("London", "ON");
+        order.ArrangeCarrier(reference.Schneider);
+        return order;
+    }
+
+    private OrderScript CrossDock(
+        CrossDockKind kind,
+        User createdBy,
+        Hub hub,
+        DateTimeOffset draftedAt,
+        string? draftNumber = null)
+    {
+        return OrderScript.Draft(
+            OrderType.CrossDock,
+            kind,
+            createdBy,
+            hub,
+            reference.FloorLeadOf(hub),
+            draftedAt,
+            draftNumber);
     }
 
     private OrderScript Consolidation(User createdBy, Hub hub, DateTimeOffset draftedAt, string? draftNumber = null)

@@ -60,7 +60,7 @@ public sealed class SeedRefreshTests(PostgresFixture postgres)
             await db.Orders.CountAsync(CancellationToken),
         });
 
-        Assert.Equal([1, 3, 70], rows);
+        Assert.Equal([1, 3, 71], rows);
     }
 
     [Fact]

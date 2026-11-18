@@ -12,7 +12,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 
 | Role emphasis | How it shows up here |
 |---|---|
-| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, a composite index for the default list and its date filter, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency |
+| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, a composite index for the default list and its date filter and one for the pipeline board, `EXPLAIN ANALYZE` before/after in `docs/`, two writes — recording an operation and submitting a draft — each in a transaction with optimistic concurrency |
 | EF Core: change tracking, N+1, eager loading, query optimization | `AsNoTracking` + projections in read handlers, `AsSplitQuery` on the detail query, no lazy loading |
 | API: contracts, versioning, error handling | `/api/v1/...`, `ProblemDetails` everywhere, OpenAPI + Scalar |
 | Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for the whole local stack (API + Postgres), GitHub Actions: build → test → image → deploy |
@@ -96,8 +96,10 @@ GET  /api/v1/dashboard?period=            KPIs + first active orders + activity 
 GET  /api/v1/orders?type=&status=&hasOpenAlerts=&hubId=&datePreset=&search=&page=&pageSize=
 GET  /api/v1/orders/counts?hubId=&datePreset=&status=&search=   tab counters, following the filters
 GET  /api/v1/orders/export?type=&status=&hasOpenAlerts=&hubId=&datePreset=&search=   the filtered list as CSV
+GET  /api/v1/orders/pipeline?type=&status=&hasOpenAlerts=&hubId=&datePreset=&search=   the list as a board, a column per status
 GET  /api/v1/orders/{number}              detail: shipments, cargo, services, operations, supplies
-POST /api/v1/orders/{number}/operations   the one write flow (see below)
+POST /api/v1/orders/{number}/operations   the write flow (see below)
+POST /api/v1/orders/{number}/submit       a draft to Ready under the next official number (step 11)
 GET  /api/v1/hubs                         options of the Hub filter
 GET  /api/v1/me                           the shell: user, company balance, attention badge
 ```
@@ -112,7 +114,7 @@ GET  /api/v1/me                           the shell: user, company balance, atte
 Same HTML, kept 1:1:
 - Cut the mockup into three pages in `src/Freitty.Api/wwwroot`: `index.html` (Dashboard), `orders.html` (Order List), `order.html?n=FR001383` (Detail). Drop the fake browser frame; keep `.fc-shell`. Shared styles → `app.css`, class names untouched.
 - Hardcoded cards → `<template>` elements with the same markup; small vanilla JS (`fetch` + clone template + fill).
-- The view lives in the query string. The three pages are linked as ordinary pages; within a page, tabs, filters, search, Prev/Next, the Cards / Table switch and the dashboard's period rewrite the URL through the History API and reload only the affected blocks, so a copied link, Reload and Back keep the view. Card click → detail page.
+- The view lives in the query string. The three pages are linked as ordinary pages; within a page, tabs, filters, search, Prev/Next, the Cards / Table / Pipeline switch and the dashboard's period rewrite the URL through the History API and reload only the affected blocks, so a copied link, Reload and Back keep the view. Card click → detail page.
 - Served by the same ASP.NET app (static files): one origin, no CORS, one deployable.
 - No React/Blazor: the task says the markup is done; the evaluation is the backend.
 
@@ -154,5 +156,6 @@ Mention that the mockup data was inconsistent and how it was normalized ([mockup
 8. Write flow (transaction + concurrency)
 9. Deploy + CD
 10. Docs: README, ADRs, ER, EXPLAIN, presentation
+11. Pipeline view and submitting a draft — beyond the brief
 
 If time is short, cut in this order: Dapper (do dashboard in EF), write flow. Do **not** cut CI/CD, query plans or tests — the role emphasizes them.

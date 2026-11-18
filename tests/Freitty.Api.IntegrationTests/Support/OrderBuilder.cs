@@ -30,12 +30,12 @@ internal sealed class OrderBuilder(TestData data)
             BuiltAt);
     }
 
-    // A Cross-Dock gets one shipment, a Consolidation two; each declares DeclaredStandard Standard pallets.
-    public Order Ready(
+    // A draft with everything Submit asks for. A Cross-Dock gets one shipment, a Consolidation two; each declares
+    // DeclaredStandard Standard pallets.
+    public Order SubmittableDraft(
         OrderType type = OrderType.CrossDock,
         DateTimeOffset? scheduledAt = null,
-        Hub? hub = null,
-        DateTimeOffset? submittedAt = null)
+        Hub? hub = null)
     {
         Order order = Draft(type, hub);
         int shipmentCount = type == OrderType.CrossDock ? 1 : 2;
@@ -45,7 +45,19 @@ internal sealed class OrderBuilder(TestData data)
         }
 
         order.ArrangeCarrier(data.Carrier.Id, BuiltAt).MustSucceed();
-        Submit(order, scheduledAt ?? CabinetApi.Now.AddDays(1), submittedAt);
+        order.Schedule(scheduledAt ?? CabinetApi.Now.AddDays(1), BuiltAt).MustSucceed();
+        order.SetDestination(DestinationCity, DestinationRegion, BuiltAt).MustSucceed();
+        return order;
+    }
+
+    public Order Ready(
+        OrderType type = OrderType.CrossDock,
+        DateTimeOffset? scheduledAt = null,
+        Hub? hub = null,
+        DateTimeOffset? submittedAt = null)
+    {
+        Order order = SubmittableDraft(type, scheduledAt, hub);
+        order.Submit(TestData.Unique("FR"), submittedAt ?? BuiltAt).MustSucceed();
         return order;
     }
 

@@ -10,8 +10,10 @@ internal static class ApiRoutes
         public const string List = "orders";
         public const string Counts = "orders/counts";
         public const string Export = "orders/export";
+        public const string Pipeline = "orders/pipeline";
         public const string Detail = $"orders/{{{NumberParameter}}}";
         public const string Operations = $"orders/{{{NumberParameter}}}/operations";
+        public const string Submit = $"orders/{{{NumberParameter}}}/submit";
     }
 
     public static class Dashboard

@@ -238,11 +238,9 @@ public sealed class Order
         return Result.Success();
     }
 
-    public Result Submit(string orderNumber, DateTimeOffset now)
+    // Asked before an official number is taken, so a refused submit uses none; Submit asks it again.
+    public Result CanSubmit()
     {
-        string officialNumber = Guard.Text(orderNumber);
-        DateTimeOffset instant = AcceptInstant(now);
-
         if (Status != OrderStatus.Draft)
         {
             return OrderErrors.NotDraft(Number, Status);
@@ -252,6 +250,20 @@ public sealed class Order
         if (missingParts.Count > 0)
         {
             return OrderErrors.NotReadyToSubmit(Number, missingParts);
+        }
+
+        return Result.Success();
+    }
+
+    public Result Submit(string orderNumber, DateTimeOffset now)
+    {
+        string officialNumber = Guard.Text(orderNumber);
+        DateTimeOffset instant = AcceptInstant(now);
+
+        Result check = CanSubmit();
+        if (check.IsFailure)
+        {
+            return check;
         }
 
         Number = officialNumber;

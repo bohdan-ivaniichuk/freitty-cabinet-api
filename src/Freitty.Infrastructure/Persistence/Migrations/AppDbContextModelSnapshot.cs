@@ -23,6 +23,8 @@ namespace Freitty.Infrastructure.Persistence.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("order_number_seq");
+
             modelBuilder.Entity("Freitty.Domain.Billing.Invoice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -477,6 +479,7 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                         .HasColumnName("updated_at");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("integer")
                         .HasColumnName("version");
 
@@ -507,6 +510,10 @@ namespace Freitty.Infrastructure.Persistence.Migrations
                     b.HasIndex("CompanyId", "ScheduledAt", "Id")
                         .IsDescending(false, true, true)
                         .HasDatabaseName("ix_orders_company_id_scheduled_at_id");
+
+                    b.HasIndex("CompanyId", "Status", "ScheduledAt", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("ix_orders_company_id_status_scheduled_at_id");
 
                     b.HasIndex(new[] { "Number" }, "ix_orders_number_trgm")
                         .HasDatabaseName("ix_orders_number_trgm");

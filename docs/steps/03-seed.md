@@ -3,7 +3,7 @@
 ## Goal
 
 An empty database is filled with sample data when the API starts with seeding switched on: the
-reference data, ten scripted orders that the screens and the demo rely on, and sixty completed
+reference data, eleven scripted orders that the screens and the demo rely on, and sixty completed
 orders of history. With the refresh switched on as well, the data is rebuilt at every start and
 whenever the day moves on, so the deployed demo is always dated from today. Every order is built
 through the `Order` aggregate of [step 2](02-domain.md), so the data cannot contradict a domain
@@ -48,10 +48,10 @@ data below wins.
   first consumer and tests replace it with `FakeTimeProvider`.
 - **Deterministic.** No randomness; everything in the history follows from the index of the order.
   The same seed on the same day gives the same data, ids aside.
-- **Small on purpose.** Seventy orders. The large data set that makes the query plans of step 4
+- **Small on purpose.** Seventy-one orders. The large data set that makes the query plans of step 4
   meaningful is generated separately in that step and never reaches the deployed database.
-- **The seed prepares the stages of the write-flow demo** (step 8), because the API has one write
-  endpoint and cannot build them itself — see *Stages*.
+- **The seed prepares the stages of the write-flow demo** (step 8), because the API's two writes —
+  recording an operation and, from step 11, submitting a draft — cannot build them — see *Stages*.
 - **Money is realistic.** Supply prices come from the price list below. An invoice amount is the
   supply subtotal plus `14.00` for every unit of a billable Operation; Unloading and Loading are
   billable, Disposal and Restack are not. The model has no rates: the rate is a named constant of
@@ -76,7 +76,7 @@ src/Freitty.Infrastructure/Persistence/Seed/
 ├── OrderScript.cs      builds one order; holds the rules every seeded order follows
 ├── DueInvoice.cs       when an order's invoice is issued and paid, for Invoices to number
 ├── SeedResults.cs      turns a failed Result into an exception
-├── ScriptedOrders.cs   the ten orders of the table below
+├── ScriptedOrders.cs   the eleven orders of the table below
 ├── OrderHistory.cs     the sixty completed orders
 └── Invoices.cs         the 62 invoices, numbered across both groups of orders
 src/Freitty.Api/Seed/
@@ -201,6 +201,7 @@ without a day continues the day before it. Rules for every seeded order, scripte
 | **FR001672** · Cross-Dock Pickup · Markham · User 1 | Draft `D−9 10:00`: REF-1007, 10 XL; scheduled `D−3 17:30`; Brampton, ON; self pickup; submitted `D−9 10:10`. `D−3 17:35` arrival Flatbed48 TRK-4407 / TRL-8215, `17:55` Unloading 10 XL, 2 photos, `18:05` received. `D−2 09:30` Loading 10 XL onto TRL-8301, `09:45` completed. Invoice `001812` issued `D−2 10:00`, paid `D−1 12:00` | Completed; invoice `280.00`, paid |
 | **FR001668** · Consolidation · Markham → Toronto · User 4 | Draft `D−10 09:00`: 1 REF-1008 15 Std, 2 REF-1009 8 Std, 3 REF-1010 20 Std, 4 REF-1011 12 Std; scheduled `D−6 08:00`; Ottawa, ON; carrier TForce; submitted `D−10 09:30`; `D−9 11:00` transferred to Toronto. On `D−6` the shipments arrive at `08:10`, `09:40`, `11:10`, `13:10` (DryVan53, TRK-3301…3304 / TRL-6201…6204); each is unloaded in full 20 minutes after its arrival with 1 photo and received 10 minutes later. `D−5`: Loadings of shipments 1 and 2 onto TRL-7004 at `10:00` and `10:15`, of 3 and 4 onto TRL-7005 at `10:30` and `10:45`; `16:00` completed. Invoice `001809` issued `D−5 16:30`, **not paid** | Completed; declared and actual 55 Std; transfer hub Toronto; invoice `1540.00`, the only unpaid one |
 | **DRAFT-003** · Consolidation · Markham · User 1 | Draft `D−1 16:30`; scheduled `D+3 09:00`. Nothing else | Draft; no shipment, destination or transport |
+| **DRAFT-004** · Cross-Dock Storage · Toronto · User 2 | Draft `D−1 17:00`: REF-1016, 12 Std; scheduled `D+4 11:00`; London, ON; carrier Schneider. Not submitted | Draft; ready to submit |
 
 ### History
 
@@ -264,7 +265,9 @@ On the seeding day and the day after:
 
 | | |
 |---|---|
-| Orders | 70: 1 Draft, 2 Ready, 5 In progress, 62 Completed |
+| Orders | 71: 2 Draft, 2 Ready, 5 In progress, 62 Completed |
+| Order List tabs | All 71, Cross-Dock 52, Consolidation 19, Alerts 2, Drafts 2 |
+| Official order numbers | the sequence stands at the highest one, FR001681, so the next submit gets FR001682 |
 | Completed in the last 30 days / in the 30 before | 24 / 20 |
 | Orders with an open Alert | 2 — FR001674 and FR001383 |
 | Invoices | 62, one of them unpaid (FR001668) |
@@ -278,19 +281,23 @@ across the seed. Numbers ascend with submission inside the history only; nothing
 What later steps may rely on:
 
 - **Step 4** — one company; "User 1" is its only Admin.
-- **Step 6** — DRAFT-003 and the unpaid invoice of FR001668 are the candidates for "awaiting your
-  action".
+- **Step 6** — the two drafts and the unpaid invoice of FR001668 are the candidates for "awaiting
+  your action".
 - **Step 8** — FR001383 has 5 Standard On stock: a Loading of 5 empties it, a Loading of 6 is
   refused. FR001674-2 is received two short with its Quantity delta alert open: an Unloading of 2
   resolves that Alert. Its Missing photo alert stays — no endpoint resolves one — so the order
   still has an open Alert afterwards and the count of such orders stays 2. FR001681 and FR001679
   are Ready: any Operation starts them, an Unloading
   above the declared quantity or without a photo raises an Alert.
+- **Step 11** — DRAFT-004 is complete: submitting it moves it to Ready under the next official
+  number. DRAFT-003 lacks a destination, a transport arrangement and its shipments, so a submit is
+  refused with that list; a refused submit takes no number, so DRAFT-004 gets FR001682 whatever
+  was tried before it.
 
 ## Acceptance criteria
 
 - [ ] `docker compose down -v && docker compose up -d --build --wait` exits 0, and
-      `SELECT status, count(*) FROM orders GROUP BY status` returns 1, 2, 5 and 62.
+      `SELECT status, count(*) FROM orders GROUP BY status` returns 2, 2, 5 and 62.
 - [ ] After `docker compose restart api` the counts are the same and the log says the sample data
       was rebuilt; started with `Seed__Refresh` off, the log says it was skipped.
 - [ ] With `Seed:Refresh` on, an operation recorded on an order is gone once the anchor day has
@@ -319,14 +326,15 @@ Counts are plain queries.
 
 - Seeding an empty database creates the reference data: 1 company, 4 users, 2 hubs, 3 carriers,
   2 services, 16 supply items.
-- The orders are 70, with the status counts, the two orders with an open Alert and the 62 invoices
+- The orders are 71, with the status counts, the two orders with an open Alert and the 62 invoices
   of *The whole data set*; 24 have `completed_at` in `[clock − 30 d, clock)` and 20 in
   `[clock − 60 d, clock − 30 d)`. `D` and `D − 1` each have a completed order with an invoice.
 - FR001383 reads back with its four Operations, declared 10, actual 12, On stock 5, an open
   Quantity delta alert, two Services and a supply subtotal of `314.00`.
 - FR001674 has both Alerts open on its second shipment; FR001676 has 2 Standard On stock and two
   outbound trailers.
-- FR001681 is Ready with a Scheduled date after the clock; DRAFT-003 has no shipment.
+- FR001681 is Ready with a Scheduled date after the clock; DRAFT-003 has no shipment; DRAFT-004 has
+  everything a submit needs and is not submitted.
 - FR001672 has the paid invoice `001812` of `280.00`; the only unpaid invoice is the `1540.00` of
   FR001668, which has Toronto as its transfer hub.
 - Every completed order has exactly one invoice, and its amount is the supply subtotal plus the
@@ -340,7 +348,7 @@ Counts are plain queries.
 - A second start on a seeded database adds nothing.
 - With the seed off, an empty database stays empty after the API starts.
 - With refresh on, each on a database of its own: a start on a non-empty database rebuilds it — a
-  row added before is gone and the seventy orders are there; the clock moved to the next day
+  row added before is gone and the seventy-one orders are there; the clock moved to the next day
   rebuilds it with the new anchor day — an operation recorded before is gone and FR001383 is back
   at version 20; `SampleData.IsOutdated` is false a minute before midnight and true at it; a
   rebuild refused after the `TRUNCATE` leaves the previous data and the next check rebuilds it —

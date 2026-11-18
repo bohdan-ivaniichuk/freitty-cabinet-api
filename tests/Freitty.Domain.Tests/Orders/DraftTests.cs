@@ -207,6 +207,40 @@ public sealed class DraftTests
     }
 
     [Fact]
+    public void CanSubmitAcceptsACompleteDraftAndChangesNothing()
+    {
+        Order order = TestOrders.SubmittableDraft();
+        int version = order.Version;
+
+        Result result = order.CanSubmit();
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal((OrderStatus.Draft, version), (order.Status, order.Version));
+    }
+
+    [Fact]
+    public void CanSubmitRefusesADraftWithTheErrorSubmitWouldGive()
+    {
+        Order order = TestOrders.Draft();
+
+        Result check = order.CanSubmit();
+        Result submit = order.Submit(TestOrders.OrderNumber, TestOrders.At(1));
+
+        AssertRefusal.Conflict(check.Error, "order.not_ready_to_submit");
+        Assert.Equal(submit.Error, check.Error);
+    }
+
+    [Fact]
+    public void CanSubmitRefusesAnOrderThatIsNotADraft()
+    {
+        Order order = TestOrders.Ready();
+
+        Result result = order.CanSubmit();
+
+        AssertRefusal.Conflict(result.Error, "order.not_draft");
+    }
+
+    [Fact]
     public void ArrangingOwnDriverClearsTheCarrier()
     {
         Order order = TestOrders.Draft();
