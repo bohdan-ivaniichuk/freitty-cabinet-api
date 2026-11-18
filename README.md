@@ -214,26 +214,7 @@ defaults, new indexes. A rename or a drop takes two releases: stop using it, the
 The sample data is rebuilt at every start — so at every deploy and restart — and again soon after
 midnight in Toronto, as under Compose.
 
-To roll back, list the revisions with their images and deploy an earlier image:
-
-```bash
-az containerapp revision list --resource-group rg-freitty-demo --name freitty-cabinet --all \
-  --query "[].{name:name, created:properties.createdTime, image:properties.template.containers[0].image}" --output table
-az containerapp update --resource-group rg-freitty-demo --name freitty-cabinet \
-  --image "<image@sha256:… of the chosen revision>" --revision-suffix "rollback-$(date +%s)" --output none
-```
-
-This is safe when no migration was added between the two versions; across a migration, only if
-the old version can still start on the new schema. Otherwise its revision never becomes ready,
-the current one keeps serving, and the fix is a forward commit. The next push to `main` deploys
-`main` again, so a lasting rollback is a `git revert` pushed to `main`.
-
-To tear down, delete the GitHub repository variables first — CI then stops pushing and deploying
-and stays green — and then the resource group, which deletes everything billable:
-
-```bash
-az group delete --name rg-freitty-demo --yes
-```
-
-The provisioning runbook, day-to-day operations and the full teardown are in
+A rollback deploys an earlier image as a new revision; it is safe when the old version can still
+start on the current schema, and otherwise the fix is a forward commit. Provisioning, the
+day-to-day operations, the rollback and the teardown, with their commands, are in the runbook:
 [`docs/deployment.md`](docs/deployment.md).
