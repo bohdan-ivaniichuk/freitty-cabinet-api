@@ -39,7 +39,7 @@ deletes all of it.
   which breaks the budget.
 - **HTTP probes, timed for the startup work.** The process listens only after the migrations and
   the startup rebuild, so the startup probe on `/health/live` covers both: 5 seconds before the
-  first try, then every 10 seconds, 10 failures allowed — about 105 seconds, more than ten times
+  first try, then every 10 seconds, 10 failures allowed — about 95 seconds, more than ten times
   the measured startup. Liveness on `/health/live` (checks nothing, so a database outage does not
   restart the replica); readiness on `/health/ready` (the database check). Health requests pass
   the request gate and are not billed as requests.
@@ -168,7 +168,7 @@ properties:
           - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
             value: "true"
         probes:
-          # The API listens only after its migrations and the sample-data rebuild: ~105 s allowed.
+          # The API listens only after its migrations and the sample-data rebuild: ~95 s allowed.
           - type: Startup
             httpGet:
               path: /health/live
@@ -281,8 +281,8 @@ jobs:
 
   deploy:
     needs: [build-test, stack]
-    # Off until the container app exists (docs/deployment.md, stage 9).
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CONTAINER_APP != ''
+    # Off until the container app exists (docs/deployment.md, stage 9), and when no image was pushed.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CONTAINER_APP != '' && needs.stack.outputs.image != ''
     runs-on: ubuntu-latest
     # Room for the update (8), the wait (15) and the clean-up, so a timeout never skips the clean-up.
     timeout-minutes: 35
@@ -313,9 +313,10 @@ jobs:
         env:
           REVISION: ${{ steps.deploy.outputs.revision }}
         run: |
-          for attempt in $(seq 1 40); do
+          for _ in $(seq 1 40); do
+            # A poll that fails once is not a failed deploy: || true keeps the loop going.
             ready="$(az containerapp show --name "$APP" --resource-group "$RG" \
-              --query properties.latestReadyRevisionName --output tsv)"
+              --query properties.latestReadyRevisionName --output tsv || true)"
             if [ "$ready" = "$REVISION" ]; then exit 0; fi
             state="$(az containerapp revision show --name "$APP" --resource-group "$RG" \
               --revision "$REVISION" \
@@ -331,8 +332,8 @@ jobs:
         run: |
           fqdn="$(az containerapp show --name "$APP" --resource-group "$RG" \
             --query properties.configuration.ingress.fqdn --output tsv)"
-          curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "https://$fqdn/health/ready"
-          curl -fsS -o /dev/null "https://$fqdn/api/v1/dashboard"
+          curl -fsS --max-time 10 --retry 10 --retry-delay 6 --retry-all-errors "https://$fqdn/health/ready"
+          curl -fsS --max-time 10 -o /dev/null "https://$fqdn/api/v1/dashboard"
           echo "Live at https://$fqdn/" >> "$GITHUB_STEP_SUMMARY"
       - name: Show why the revision failed and stop it
         if: (failure() || cancelled()) && steps.deploy.outputs.revision != ''
@@ -340,9 +341,10 @@ jobs:
         env:
           REVISION: ${{ steps.deploy.outputs.revision }}
         run: |
-          az containerapp logs show --name "$APP" --resource-group "$RG" \
+          # Bounded, so that slow logs never keep the revision from being stopped.
+          timeout 60 az containerapp logs show --name "$APP" --resource-group "$RG" \
             --type system --tail 50 || true
-          az containerapp logs show --name "$APP" --resource-group "$RG" --revision "$REVISION" \
+          timeout 60 az containerapp logs show --name "$APP" --resource-group "$RG" --revision "$REVISION" \
             --type console --tail 100 --format text || true
           ready="$(az containerapp show --name "$APP" --resource-group "$RG" \
             --query properties.latestReadyRevisionName --output tsv)"
@@ -509,22 +511,23 @@ CAE=cae-freitty-demo                # not ENV: that name is special to POSIX she
 APP=freitty-cabinet
 GITHUB_OWNER=<owner>
 GITHUB_REPO=<repo>
-GITHUB_OWNER_ID=<owner-id>          # stage 5 shows where it comes from
-GITHUB_REPO_ID=<repo-id>
-FIRST_COMMIT=<sha>                  # the commit whose image stage 7 pushed; empty until then
+GITHUB_OWNER_ID=<owner-id>          # stage 5 shows where it comes from; leave empty until then
+GITHUB_REPO_ID=<repo-id>            # the same
+FIRST_COMMIT=<sha>                  # full 40-character SHA of the commit stage 7 pushed; empty until then
 ALERT_EMAIL=<owner-email>
-BUDGET_AMOUNT="$(awk "BEGIN { printf \"%.2f\", 15 / (1 + $VAT_RATE) }")"  # 12.50 at 20%
+BUDGET_AMOUNT="$(jq -n --argjson vat "$VAT_RATE" '15 / (1 + $vat) * 100 | floor / 100')"  # 12.5 at 20%
 
 # Re-runnable helpers.
 exists() { "$@" --output none >/dev/null 2>&1; }
 value() { "$@" --output tsv 2>/dev/null || true; }   # empty when the resource is missing
 require() { local name; for name; do [ -n "${!name}" ] || { echo "$name is empty"; return 1; }; done; }
-grant() {  # role, principal object ID, scope
+grant() {  # role, principal object ID, scope; an empty scope would mean the whole subscription
+  [ -n "$2" ] && [ -n "$3" ] || { echo "grant: empty principal or scope"; return 1; }
   [ -n "$(az role assignment list --assignee-object-id "$2" --role "$1" --scope "$3" \
     --query "[0].id" --output tsv)" ] || az role assignment create --assignee-object-id "$2" \
     --assignee-principal-type ServicePrincipal --role "$1" --scope "$3" --output none
 }
-new_password() { printf 'Pg1-%s' "$(openssl rand -hex 24)"; }
+new_password() { local hex; hex="$(openssl rand -hex 24)" || return 1; printf 'Pg1-%s' "$hex"; }
 
 # Derived from what exists.
 ACR_ID="$(value az acr show --resource-group "$RG" --name "$ACR" --query id)"
@@ -657,6 +660,10 @@ exists az postgres flexible-server show --resource-group "$RG" --name "$PG" || \
     --password-auth Enabled --microsoft-entra-auth Disabled \
     --admin-user "$PG_ADMIN" --admin-password "$(new_password)" \
     --public-access None --yes --output none
+# CLI 2.93 creates the server with public network access off, whatever its help says of None.
+# Turn it on — with no rule yet, nothing can connect — then admit only Azure services.
+az postgres flexible-server update --resource-group "$RG" --name "$PG" \
+  --public-access Enabled --output none
 az postgres flexible-server firewall-rule create --resource-group "$RG" --server-name "$PG" \
   --name allow-azure-services --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 --output none
 az postgres flexible-server parameter set --resource-group "$RG" --server-name "$PG" \
@@ -694,7 +701,8 @@ this step's commit to `main`. Re-running an earlier `main` run works only if its
 contains the new workflow. The `stack` job signs in, pushes the image and writes `Pushed <image>`
 to the run summary; `deploy` is skipped. If `az acr login` fails there, see *Day one*, item 4.
 
-Check: set `FIRST_COMMIT` in stage 2 to that run's commit SHA, run stage 2 again, and
+Check: set `FIRST_COMMIT` in stage 2 to that run's full 40-character commit SHA — the image tag;
+a short one leaves `IMAGE` empty — run stage 2 again, and
 `echo "$IMAGE"` prints the same reference as the run summary.
 
 **Stage 8 — Environment and app; the password reaches only the secret.** Run stage 2 first. The
@@ -738,8 +746,9 @@ the subshell.
 ```
 
 If the block stops after the password was changed, run it again: a new password replaces the
-old one. If the app already exists, use the password rotation (*Operations*) instead. Then run
-stage 2 again (it derives `APP_ID` and `FQDN`) and give CD its role:
+old one. If the app already exists, use the password rotation (*Operations*) instead; if only
+the last command failed, apply the template with the *Change the template* block
+(*Operations*). Then run stage 2 again (it derives `APP_ID` and `FQDN`) and give CD its role:
 
 ```bash
 grant Contributor "$GITHUB_PRINCIPAL" "$APP_ID"
@@ -799,9 +808,9 @@ says what to do if it fails.
 4. **`az acr login` with only `AcrPush`** (first run of stage 7): it falls back to
    `<name>.azurecr.io` when it cannot read the registry resource. If the push still fails, grant
    `Reader` on the registry to `id-freitty-github` (`grant Reader "$GITHUB_PRINCIPAL" "$ACR_ID"`).
-   The first CD run (stage 9) also proves that `Contributor` on the app alone lets `azure/login`
-   select the subscription; if it does not, add `allow-no-subscriptions: true` to both
-   `azure/login` steps.
+   The same run proves that a role on one resource lets `azure/login` select the subscription;
+   if it does not, grant `Reader` on the resource group:
+   `grant Reader "$GITHUB_PRINCIPAL" "$(az group show --name "$RG" --query id --output tsv)"`.
 5. **TLS `VerifyFull`** (first start, stage 8): no certificate error in the first revision's log.
    Otherwise *Open questions*, item 8.
 6. **Broken start** (after stage 9; the acceptance test below): time it. The public URL must keep

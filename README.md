@@ -132,3 +132,55 @@ dotnet test
 
 Integration tests start their own PostgreSQL container through Testcontainers, so Docker must be
 running; the compose stack does not need to be.
+
+## Deployment
+
+The demo runs on Azure, in one resource group in North Europe
+([ADR 0014](docs/adr/0014-azure-container-apps-and-managed-postgresql.md)):
+
+- one container app on Azure Container Apps — exactly one replica, always on, 0.25 vCPU and
+  0.5 GiB, behind HTTPS ingress; its container, probes and scale are in
+  [`deploy/containerapp.yaml`](deploy/containerapp.yaml);
+- an Azure Database for PostgreSQL flexible server, PostgreSQL 18, which the app reaches over
+  verified TLS;
+- an Azure Container Registry that holds the images, pulled by the app with a managed identity;
+- a Log Analytics workspace for the logs.
+
+A release is a push to `main`. CI runs the tests and the Compose stack; the image the stack job
+tested is pushed to the registry and, when both jobs pass, deployed by its digest — nothing is
+rebuilt.
+The new revision starts beside the running one, and the traffic moves to it only once it passes
+its probes; the workflow then checks the public URL. A version that cannot start never takes
+traffic: the old one keeps serving and the run is red. GitHub signs in to Azure with OIDC, so no
+cloud credential is stored in the repository.
+
+The new revision migrates the database while the old one still serves, so every migration must
+work with the running version: additive only — new tables, nullable columns or columns with
+defaults, new indexes. A rename or a drop takes two releases: stop using it, then remove it.
+
+The sample data is rebuilt at every start — so at every deploy and restart — and again soon after
+midnight in Toronto, as under Compose.
+
+To roll back, list the revisions with their images and deploy an earlier image:
+
+```bash
+az containerapp revision list --resource-group rg-freitty-demo --name freitty-cabinet --all \
+  --query "[].{name:name, created:properties.createdTime, image:properties.template.containers[0].image}" --output table
+az containerapp update --resource-group rg-freitty-demo --name freitty-cabinet \
+  --image "<image@sha256:… of the chosen revision>" --revision-suffix "rollback-$(date +%s)" --output none
+```
+
+This is safe when no migration was added between the two versions; across a migration, only if
+the old version can still start on the new schema. Otherwise its revision never becomes ready,
+the current one keeps serving, and the fix is a forward commit. The next push to `main` deploys
+`main` again, so a lasting rollback is a `git revert` pushed to `main`.
+
+To tear down, delete the GitHub repository variables first — CI then stops pushing and deploying
+and stays green — and then the resource group, which deletes everything billable:
+
+```bash
+az group delete --name rg-freitty-demo --yes
+```
+
+The provisioning runbook, day-to-day operations and the full teardown are in
+[`docs/deployment.md`](docs/deployment.md).

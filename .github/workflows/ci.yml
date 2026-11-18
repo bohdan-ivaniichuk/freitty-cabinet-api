@@ -5,9 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# A run on main is never cancelled halfway through a deploy: the next one waits for it.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -27,11 +28,112 @@ jobs:
 
   stack:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    env:
+      # Off until the Azure side exists (docs/deployment.md), and again after the teardown.
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CLIENT_ID != '' }}
     steps:
       - uses: actions/checkout@v7
       - run: docker compose up -d --build --wait --wait-timeout 180
       - run: curl -fsS http://localhost:8080/health/ready
+      - if: env.PUBLISH == 'true'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      # The image Compose just built and tested, pushed as it is; deployed by its digest.
+      - if: env.PUBLISH == 'true'
+        id: push
+        env:
+          ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          repository="$ACR_NAME.azurecr.io/freitty-cabinet-api"
+          az acr login --name "$ACR_NAME"
+          docker tag freitty-cabinet-api:local "$repository:$GITHUB_SHA"
+          docker push "$repository:$GITHUB_SHA"
+          image="$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$repository:$GITHUB_SHA" | grep "^$repository@")"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "Pushed \`$image\`" >> "$GITHUB_STEP_SUMMARY"
       - if: failure()
         run: docker compose logs
       - if: always()
         run: docker compose down -v
+
+  deploy:
+    needs: [build-test, stack]
+    # Off until the container app exists (docs/deployment.md, stage 9), and when no image was pushed.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AZURE_CONTAINER_APP != '' && needs.stack.outputs.image != ''
+    runs-on: ubuntu-latest
+    # Room for the update (8), the wait (15) and the clean-up, so a timeout never skips the clean-up.
+    timeout-minutes: 35
+    permissions:
+      id-token: write
+    env:
+      APP: ${{ vars.AZURE_CONTAINER_APP }}
+      RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+      IMAGE: ${{ needs.stack.outputs.image }}
+    steps:
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy the tested image
+        id: deploy
+        timeout-minutes: 8
+        run: |
+          suffix="c${GITHUB_SHA::7}-$GITHUB_RUN_ATTEMPT"
+          echo "revision=$APP--$suffix" >> "$GITHUB_OUTPUT"
+          az containerapp update --name "$APP" --resource-group "$RG" \
+            --image "$IMAGE" --revision-suffix "$suffix" --output none
+      # Single revision mode moves the traffic once the new revision passes its probes; a revision
+      # that never does leaves the old one serving.
+      - name: Wait for the new revision to take the traffic
+        timeout-minutes: 15
+        env:
+          REVISION: ${{ steps.deploy.outputs.revision }}
+        run: |
+          for _ in $(seq 1 40); do
+            # A poll that fails once is not a failed deploy: || true keeps the loop going.
+            ready="$(az containerapp show --name "$APP" --resource-group "$RG" \
+              --query properties.latestReadyRevisionName --output tsv || true)"
+            if [ "$ready" = "$REVISION" ]; then exit 0; fi
+            state="$(az containerapp revision show --name "$APP" --resource-group "$RG" \
+              --revision "$REVISION" \
+              --query "[properties.provisioningState, properties.runningState]" --output tsv \
+              | tr '\t' ' ')"
+            echo "$(date -u +%H:%M:%S) $REVISION: $state"
+            case "$state" in *Failed*) exit 1 ;; esac
+            sleep 15
+          done
+          echo "$REVISION did not become ready in 10 minutes"
+          exit 1
+      - name: Check the public URL
+        run: |
+          fqdn="$(az containerapp show --name "$APP" --resource-group "$RG" \
+            --query properties.configuration.ingress.fqdn --output tsv)"
+          curl -fsS --max-time 10 --retry 10 --retry-delay 6 --retry-all-errors "https://$fqdn/health/ready"
+          curl -fsS --max-time 10 -o /dev/null "https://$fqdn/api/v1/dashboard"
+          echo "Live at https://$fqdn/" >> "$GITHUB_STEP_SUMMARY"
+      - name: Show why the revision failed and stop it
+        if: (failure() || cancelled()) && steps.deploy.outputs.revision != ''
+        timeout-minutes: 5
+        env:
+          REVISION: ${{ steps.deploy.outputs.revision }}
+        run: |
+          # Bounded, so that slow logs never keep the revision from being stopped.
+          timeout 60 az containerapp logs show --name "$APP" --resource-group "$RG" \
+            --type system --tail 50 || true
+          timeout 60 az containerapp logs show --name "$APP" --resource-group "$RG" --revision "$REVISION" \
+            --type console --tail 100 --format text || true
+          ready="$(az containerapp show --name "$APP" --resource-group "$RG" \
+            --query properties.latestReadyRevisionName --output tsv)"
+          if [ "$ready" != "$REVISION" ]; then
+            az containerapp revision deactivate --name "$APP" --resource-group "$RG" \
+              --revision "$REVISION" || true
+          fi

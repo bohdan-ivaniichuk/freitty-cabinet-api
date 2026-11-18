@@ -20,6 +20,8 @@ services:
 
   api:
     build: .
+    # CI pushes this image to the registry after the stack test.
+    image: freitty-cabinet-api:local
     environment:
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=freitty;Username=freitty;Password=freitty
       Seed__Enabled: "true"

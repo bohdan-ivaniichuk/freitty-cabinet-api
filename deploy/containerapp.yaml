@@ -1,0 +1,48 @@
+# The container template of the deployed app; applied by the runbook (docs/deployment.md).
+# CD changes only the image. Secrets are not here: the connection string is the app secret
+# postgres-connection.
+properties:
+  template:
+    containers:
+      - name: api
+        image: __IMAGE__
+        resources:
+          cpu: 0.25
+          memory: 0.5Gi
+        env:
+          - name: ConnectionStrings__Postgres
+            secretRef: postgres-connection
+          - name: Seed__Enabled
+            value: "true"
+          - name: Seed__Refresh
+            value: "true"
+          # The ingress ends TLS; the OpenAPI servers URL must say https.
+          - name: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+            value: "true"
+        probes:
+          # The API listens only after its migrations and the sample-data rebuild: ~95 s allowed.
+          - type: Startup
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 10
+          - type: Liveness
+            httpGet:
+              path: /health/live
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          - type: Readiness
+            httpGet:
+              path: /health/ready
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+    scale:
+      minReplicas: 1
+      maxReplicas: 1
