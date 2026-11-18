@@ -1,81 +1,323 @@
 # 07 — Frontend wiring
 
-> **Draft, not groomed.** Written ahead of the grooming session so it does not start from zero.
-> Everything under *Decisions* is a proposal; *Open questions* is what the session has to settle.
-> Nothing here is input for implementation yet.
-
 ## Goal
 
-The three screens of the mockup become three pages served by the API and filled from it. Markup,
-styles and fields stay as they are in the mockup; only the hardcoded data goes.
+The three screens of the mockup become three pages served by the API and filled from it:
+Dashboard, Order List and Order Detail. The markup, class names and styles are the mockup's; only
+the hardcoded data goes, replaced by what the endpoints of steps 4–6 return.
+
+The source is [`assignment/Freitty_For_Candidate.html`](../../assignment/Freitty_For_Candidate.html),
+which is read and never edited: sections `#dashboard`, `#orderlist` and `#crossdock`, and the
+`<style>` rules they need.
 
 ## Decisions
 
-- **Three static pages** in `src/Freitty.Api/wwwroot`: `index.html` (Dashboard), `orders.html`
-  (Order List), `order.html?n=FR001383` (Detail). The fake browser frame is dropped; `.fc-shell`
-  and every class name stay. Shared styles move to `app.css`.
-- **Same origin.** The API serves the pages as static files: no CORS, one deployable.
-- **No framework and no build step.** Hardcoded cards become `<template>` elements with the same
-  markup; a small vanilla script fetches, clones and fills. The task says the markup is done; what
-  is judged is the backend.
-- **State lives in the URL.** Tabs, filters, search and paging change query parameters and refetch,
-  so a link reproduces the view and Back works.
-- **The server sends facts, the page words them.** Status and "Next" codes are mapped to the
-  mockup's labels in one place in the script ("Ready" → "New"). Instants are formatted in the
-  hub's zone with `Intl.DateTimeFormat`.
-- **Text is written with `textContent`**, never `innerHTML`: order data is user input.
-- `assignment/` is not touched; the pages are copies cut from it.
+- **Static pages, vanilla JavaScript, no build step** —
+  [ADR 0012](../adr/0012-static-pages-served-by-the-api.md). ES modules loaded with
+  `<script type="module">`.
+- **Same origin.** The API serves the pages from `wwwroot`: no CORS, one deployable.
+- **Only `.fc-shell` is the application.** The fake browser frame (`.mockup`, `.browser-bar`), the
+  section headers, the document header, table of contents, footer and review toolbar are dropped,
+  with the CSS that only they use. Class names inside `.fc-shell` are untouched.
+- **Hardcoded cards and rows become `<template>` elements** with the same markup; the script
+  clones and fills them.
+- **State lives in the URL, and every change of it is a plain navigation.** Tabs and paging are
+  links; a filter or a search sets `location.search`. A link reproduces the view, Reload keeps it
+  and Back works, with no history code to get wrong.
+- **The server sends facts, the page words them.** Codes become labels in one module
+  (`format.js`). One label per status on every page: `Draft` → "Draft", `Ready` → "New",
+  `InProgress` → "In progress", `Completed` → "Completed". An order with an open Alert shows the
+  "Alert" badge in place of its status, as the mockup does.
+- **Text is written with `textContent`, never `innerHTML`**: order data is user input.
+- **English only.** `lang="en"`. The Ukrainian design notes — the Pipeline view note, the Supply
+  picker note, the Ukrainian `title` attributes — are removed: they describe features outside the
+  assignment. The transfer banner is reworded in English.
+- **What happens to each element of the mockup** — the default rule, with the exceptions listed
+  under *Contract*:
+  - text or a number that is data is filled from an endpoint;
+  - a control without a function stays where it is, disabled: `disabled` on a button,
+    `aria-disabled="true"` on anything else, no pointer cursor, and
+    `title="Not part of this assignment"`;
+  - static text, glyphs and decoration stay;
+  - text that would be data and has no source is removed, never invented.
+- **One order card.** The mockup draws two variants; the dashboard's — six fields, date with time
+  — is used on both pages. The list keeps its three-column grid.
+- **One shell.** The mockup's three shells differ slightly; the dashboard's is used on all three
+  pages.
+- **Hub-local time and CAD.** Dates: `Intl.DateTimeFormat('en-GB', { timeZone, day: 'numeric',
+  month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })` → `12 Apr, 09:00`, in
+  the zone the response names. Money: `Intl.NumberFormat('en-CA', { style: 'currency',
+  currency: 'CAD' })` → `$1,540.00`. No single locale gives both.
+- **Styles added for the wiring go in one marked block at the end of `app.css`**: disabled
+  controls, the search input, links that must look like the elements they replace, the active
+  period button, loading / empty / error states, the Draft badge. Everything above the block is
+  the mockup's CSS, with the seeded names in its comments removed.
 
 ## Contract
 
-| Page | Calls |
-|---|---|
-| `index.html` | `GET /api/v1/dashboard`, the shell data |
-| `orders.html` | `GET /api/v1/orders`, `GET /api/v1/orders/counts`, the shell data |
-| `order.html` | `GET /api/v1/orders/{number}`, the shell data |
+### Files
 
-- A card links to `order.html?n=<number>`.
-- Loading, empty and error states exist for every block that fetches: an empty list says so, a
-  `ProblemDetails` shows its title.
-- Elements of the mockup that have no data behind them are listed in step 2 (*Out of scope*) and
-  are removed or left static — never filled with invented values.
+```
+src/Freitty.Api/wwwroot/
+├── index.html      Dashboard
+├── orders.html     Order List
+├── order.html      Order Detail — order.html?n=FR001383
+├── app.css
+└── js/
+    ├── api.js        fetch wrapper: JSON, ProblemDetails → an error with title, detail, errors
+    ├── format.js     labels for codes, dates in a zone, money, quantities
+    ├── shell.js      sidebar and top bar: GET /api/v1/me, the search box
+    ├── card.js       fills one order card — shared by the dashboard and the list
+    ├── dashboard.js
+    ├── orders.js
+    └── order.js
+```
+
+`Program.cs`: `UseDefaultFiles()` then `UseStaticFiles()`, before the request logging so assets
+are not logged one line each, and before FastEndpoints. Static files are sent with
+`Cache-Control: no-cache`, so a new deploy is picked up on the next load. `/` serves `index.html`.
+Each page has `<link rel="icon" href="data:,">` — without it the browser asks for a favicon that
+does not exist.
+
+### The shell (every page)
+
+- The logo is a link to `index.html`. "Orders" is a link to `orders.html` and the active item on
+  every page, as in the mockup; its badge shows `needAttention` of `GET /api/v1/me` and is hidden
+  at zero. "Settings" and "+ New Order" are disabled.
+- Top bar: the balance, the user's initials and name. "Top up →", the bell and the help button
+  are disabled; the bell's red dot is removed.
+- The search box stays the mockup's `.fc-search` element with a borderless `<input>` inside it,
+  placeholder "Search orders…". On `orders.html` it holds `q` and applies on Enter; clearing it and
+  pressing Enter removes the search. On the other pages Enter goes to `orders.html?q=…`. The API
+  searches from three characters: a shorter entry is not sent, and the input reports "Type at
+  least 3 characters" as its validation message.
+- Breadcrumbs: "Home › Dashboard", "Home › Orders", "Orders › {number}" — "Home" and "Orders" are
+  links.
+
+### `index.html`
+
+Calls `GET /api/v1/dashboard?period=…` and `GET /api/v1/me`. URL: `period` = `day`, `week`
+(default), `month`, `quarter`.
+
+- "Welcome, {name} 👋".
+- **Active Orders**: the count; "▲ n this week" in the mockup's green, "▼ n this week" in
+  `#DC2626`, "no change this week" in `#6B7280`.
+- **Completed (30 d)**: the count; "▲ n vs previous 30 d", "▼ n vs previous 30 d" or
+  "⟶ same as previous 30 d", with the same colours.
+- **Need Attention**: the total; "{n} · awaiting your action"; "{n} · alert" or "alerts" followed
+  by the first of `alertOrders` in brackets — "(photo missing · FR001674)", "(quantity delta ·
+  FR001383)", from its first Alert type. A chip whose number is zero is hidden. The tile and
+  "Open list →" are links to `orders.html?tab=alerts`.
+- **Active Orders**: the cards of the response in the mockup's grid; "View all →" is a link to
+  `orders.html`. Empty: "No active orders".
+- **Your activity**:
+  - The period buttons are links that set `period`; "CW" is `week`. The active one carries the
+    mockup's red style.
+  - Header figures: `summary.completedLast30Days` and `summary.spendLast30Days`, each followed by
+    "last 30d".
+  - Completed orders: one bar per bucket across the mockup's `0 0 400 120` view box. The tallest
+    bar is 110 high, the others in proportion; a zero has no bar. Opacity runs from 0.3 to 1 with
+    the value, as the mockup's ramp does.
+  - Spend: the line, its area fill and a dot per bucket; the highest point gets the mockup's
+    larger dot with the white stroke.
+  - Axis labels on the first bucket, the last and every third between: `Day` and `Week` — the
+    start date as `12 Apr`; `Month` — `Apr`; `Quarter` — `Q2 2026`.
+  - A series that is all zeros draws the grid lines and the text "No data".
+  - Summary: "📈 +20% completed orders vs previous 30 days" (green from zero up, red below; with a
+    `null` percentage: "📈 {n} completed orders in the last 30 days"); "💰 {spend} spent · avg
+    {average}/order" (without the average when it is `null`); "⭐ Best day / week / month /
+    quarter: {its axis label} (peak spend {amount})", hidden when `best` is `null`.
+
+### `orders.html`
+
+Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GET /api/v1/me`.
+
+| URL parameter | Control | Sent to the API as |
+|---|---|---|
+| `tab` = `all` (default), `crossdock`, `consolidation`, `alerts`, `drafts` | the tabs, which become links | nothing, `type=CrossDock`, `type=Consolidation`, `alerts=true`, `status=Draft` |
+| `hub` = a hub id | the first `<select>`: "Hub: All", then one option per hub of `/hubs` | `hub` |
+| `date` = `today`, `week`, `last30` | the second `<select>`: "Date: Any" (added, the default), "Today", "This week", "Last 30 days" | `date=Today`, `ThisWeek`, `Last30Days` |
+| `status` = `ready`, `inprogress`, `completed` | the third `<select>`: "Status: Any", "New", "In progress", "Completed" (added) | `status=Ready`, `InProgress`, `Completed` |
+| `q` | the search box | `q` |
+| `page` | Prev / Next | `page` |
+
+- The filters are the mockup's three selects. A change navigates with the new value and without
+  `page`; so does a tab and a search. A tab link keeps `hub`, `date`, `status` and `q`.
+- A value the page does not know is treated as absent.
+- On the Drafts tab the Status select is disabled and `status` from the URL is not sent.
+- The tab counters come from `/orders/counts` with the same `hub`, `date`, `status` and `q`.
+- "Showing {from}–{to} of {total}"; Prev and Next are disabled at the ends. An empty result says
+  "No orders match these filters".
+- The page title stays "All Orders".
+- Disabled: "Export CSV", "+ New Order", the Table and Pipeline buttons; Cards stays the active
+  one. The Pipeline note is removed.
+
+### The card (`card.js`)
+
+- `.oc-num` becomes a link to `order.html?n={number}`. A click anywhere else on the card goes
+  there too, through one delegated listener that ignores clicks inside `details`, `a`, `button`
+  and `[aria-disabled]` — wrapping the card in a link would be invalid around the `<details>`.
+- A card with an open Alert has the mockup's red top border. A draft has its dashed, faded style
+  and the grey "DRAFT" badge.
+- Badges: `badge-simple` "Cross-Dock" or `badge-consol` "Consolidation"; then `badge-new` "New",
+  `badge-prog` "In progress", `badge-done` "Completed", or `badge-alert` "Alert" when any Alert is
+  open.
+- Ref N: one shipment → inline. Several → the `<details>` list, its count "{n} refs", open when a
+  shipment has an open Alert. Each row: the sub-order label, the Ref N, "{n} pallets" — the actual
+  quantity once anything was unloaded, the declared one before — and, for an open Alert,
+  " · ⚠ missing photo" or " · ⚠ quantity delta" (both, comma-separated, when both are open).
+- Type line: "Cross-Dock · Storage", "Cross-Dock · Pickup", "Consolidation · {n} sub-orders"
+  ("1 sub-order"), and "… · incomplete" for a draft without shipments.
+- "by" chip: initials in `.ava`, the name, the role tag — `.role` "Admin" or `.role.disp`
+  "Dispatcher". A draft's card has no chip in the mockup; ours shows it like any other. The avatar
+  colour class is `u1`–`u4`, chosen from the initials (the sum of their character codes modulo
+  four) so one person always has one colour.
+- Fields: **Hub** — the name, or "Mark→Tor" from the short names with a transfer hub. **Date** —
+  `12 Apr, 09:00` in the hub's zone, "—" when not scheduled. **Q-ty** — one Unit Type:
+  "23 × Standard" or "10 × XL"; several: "15 × Std + 3 × XL"; with `hasQuantityDelta`:
+  "20 decl · 18 actual", the second part in the mockup's orange; "—" without cargo.
+  **Carrier** — the carrier's name, "Driver: {name}", "Self pickup" or "—". **Destination** —
+  "Calgary, AB" or "—". **Trailers** — "{n} consolidated", only on a Consolidation with outbound
+  trailers; without it Destination spans two columns as on the mockup's Cross-Dock cards.
+- Footer, from `next.code`: `ContinueEditing` → "Continue editing →" (a link to the detail);
+  `AwaitingTruck` → "Next: Waiting for truck"; `Unloading` → "Next: Unloading"; `Loading` →
+  "Next: Loading"; `AwaitingCompletion` → "Next: Completion"; `UploadPhoto` → "⚠ Next: Upload
+  photo" and `ReviewQuantityDelta` → "⚠ Next: Review quantity", both in the mockup's red;
+  `AwaitingPayment` → "Next: Payment · {amount} · #{invoice}"; `Paid` → "Paid · {amount} ·
+  #{invoice}"; `Closed` → "Closed".
+- The five footer icons, and a draft's delete icon, stay as inert glyphs.
+
+### `order.html`
+
+Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `orders.html`.
+
+**Header**
+
+- The strip: "F", "Cross-Dock management" or "Consolidation management", the menu glyph.
+- "←" is a link to `orders.html`. The number. The green "$" is shown when the order has an
+  invoice, the truck glyph when transport is arranged. The type badge. "● On Stock" while any
+  `totals.onStock` is above zero. The stage badge:
+
+  | `stage` | Label | Class |
+  |---|---|---|
+  | `Draft` | Draft | the Draft badge |
+  | `AwaitingTruck` | Waiting for truck | `badge-new` |
+  | `Unloading` | Unloading in progress | `badge-prog` |
+  | `Loading` | Loading in progress | `badge-prog` |
+  | `AwaitingCompletion` | Loaded | `badge-prog` |
+  | `Completed` | Completed | `badge-done` |
+
+- Ref N inline for one shipment; "{n} sub-orders" for several.
+- The "by" chip with the derived initials and the tag "ADMIN" or "DISP".
+- "⚠ Actual ≠ Expected" when `totals.quantityDeltas` is above zero.
+- Icon bar: "💬 {comments}" and "📷 {photos}" as plain sums, without denominators; all its
+  buttons, "Share QR", "BOL PDF" and "Edit" are disabled.
+- The transfer banner only when the order has a transfer hub: "**Read-only:** transfers between
+  hubs are arranged by the call center."
+
+**Meta grid**
+
+| Left column | |
+|---|---|
+| Customer | the company's name |
+| Hub | "Markham (ON)"; with a transfer hub "Markham (ON) → Toronto" |
+| Services | one badge each, alternating the mockup's two badge styles; "—" without any |
+| Date | `17 Apr 2026`; " · today" and the red style only when that is today in the hub's zone; "—" when not scheduled |
+| Declared q-ty | per Unit Type of `totals.declared`: "10 Std · 48×40", "2 XL"; "—" when empty |
+| Actual q-ty | per Unit Type of `totals.actual`, with the badge "Δ +2" / "Δ −2" — the sum of that Unit Type's non-null shipment deltas — when it is not zero |
+| Trailer type | Cross-Dock only: "Van · 53ft", "Reefer · 53ft", "Flatbed · 48ft"; "—" before arrival |
+
+| Right column | |
+|---|---|
+| Carrier | the carrier's name, "Driver: {name}", "Self pickup" or "—" |
+| Phone | the carrier's phone or "—" |
+| Destination | added: "Kingston, ON" or "—" |
+| Truck / trailer | Cross-Dock only: "TRK-4521 / TRL-8830" or "—" |
+| Dock | Cross-Dock only: "Dock 12 · Bay B" or "—" |
+| Assigned to | Cross-Dock only: "User 6 (floor lead)" or "—" |
+| Status flow | "Draft → New → In progress → Completed", the current status highlighted |
+| Deltas detected | "{n} (q-ty)"; "View all →" stays, disabled |
+
+**Shipment block** — once for a Cross-Dock, once per shipment in order of position for a
+Consolidation. A Consolidation's block starts with a header line, "{label} · Ref N: {Ref N} ·
+received" or "· receiving", and a small grid with that shipment's Trailer type, Truck / trailer,
+Dock and Assigned to, which its meta grid leaves out. Then:
+
+- **Dock card.** The wall reads "{HUB NAME} HUB"; the highlighted dock "DOCK {dock}"; the two
+  flanking docks stay without numbers; the trailer box shows the arrival's trailer number from
+  arrival until the order is completed. Below: "Dock 12 · Bay B", "Assigned 17 Apr, 08:42", and one
+  status line — "● Trailer docked · unloading" / "· loading" (from the stage; no suffix
+  otherwise) while a trailer is shown, "Waiting for the truck" before arrival, "Released" on a
+  completed order. Without a dock the schematic is replaced by "No dock assigned".
+- **Expected (BOL)** and **Actual (warehouse)**: one line per row of the shipment's `quantities` —
+  the number and "Standard · 48×40" or "XL". The Actual card has the mockup's amber style, the
+  badge "+2" / "−2" and "Delta from BOL · read-only" only for a delta that is neither `null` nor
+  zero; otherwise it is plain like Expected and says "Receiving in progress" before the shipment is
+  received and "Matches BOL" after.
+- **Warehouse note**: the note in quotation marks, or "—". The photo thumbnails are removed.
+- **Operations**: per row, the green "$" for a billable one; a Disposal with the mockup's badge
+  and red row; the trailer or "—"; the quantity; "Standard (48×40)" or "XL"; "17 Apr · 08:55" in
+  the hub's zone; "💬 {n} · 📷 {n}" followed by the two inert glyphs. Empty: "No operations yet".
+  "+ Operation" is disabled here and becomes the form of [step 8](08-write-flow.md).
+
+**Once per order, after the blocks**
+
+- **Supplies**: SKU, a category badge (the mockup's three badge styles, chosen by category so one
+  category keeps one style), quantity, unit price, line total, the two inert glyphs; the subtotal.
+  Empty: "No supplies". "+ Supply" is disabled. "→ Invoice line items" and the picker note are
+  removed.
+- **Invoices**, when there are any: one line each — "#{number} · {amount} · paid {date}" or
+  "· unpaid" — in a block styled like the Supplies one.
+
+A draft renders the same page with dashes and "No shipments yet" in place of the blocks. An
+unknown number shows a not-found state with the `detail` of the `ProblemDetails` and a link to the
+list.
+
+### Removed for lack of data
+
+The countdown in "Next: Loading · 2h 14m"; "via External PDF" and "Order with photos" beside a
+destination; the denominators of the photo and comment counters; the photo thumbnails; the numbers
+of the neighbouring docks; "→ Invoice line items"; the bell's dot.
+
+### States
+
+Every block that fetches has a loading state ("Loading…"), an empty state and an error state that
+shows the `title` and `detail` of the `ProblemDetails`. A failed request never leaves sample
+values on screen — there are none in the HTML.
 
 ## Acceptance criteria
 
-- [ ] `docker compose up` and `http://localhost:8080/` shows the dashboard with seeded data; the
-      three pages look like the mockup's three screens.
-- [ ] No order number, name or amount is written in the HTML or the script.
-- [ ] Every tab, filter, the search and Prev / Next change the URL and the list; reloading the page
-      keeps the view.
-- [ ] A card opens its detail page; an unknown number shows a not-found state.
-- [ ] The browser console is clean on all three pages.
+What the implementation session checks itself, on `docker compose up -d --build --wait`:
+
+- [ ] `/`, the three pages, `app.css` and every script answer `200`; `/health/ready`, `/scalar`
+      and `/api/v1/me` answer as before.
+- [ ] `node --check` passes for every module, when Node is available.
+- [ ] No order number, person, company, hub, carrier name or amount appears in `wwwroot`, comments
+      included, and no Cyrillic character.
+- [ ] No `innerHTML`, `insertAdjacentHTML` or `document.write` in the scripts.
+- [ ] `assignment/` is unchanged.
+- [ ] Build with 0 warnings, `dotnet format --verify-no-changes` clean, `dotnet test` green.
+
+*Browser session* — checked in a real browser against the running stack after the implementation,
+and recorded in the step's review:
+
+- [ ] The three pages look like the mockup's three screens.
+- [ ] Every tab, filter, the search and Prev / Next change the URL and the list; Reload keeps the
+      view; Back returns to the previous one.
+- [ ] The tab counters equal the totals of the list for the same filters.
+- [ ] A card opens its detail page; FR001383, a Consolidation (FR001676), a completed order
+      (FR001672) and DRAFT-003 all render; an unknown number shows the not-found state.
+- [ ] Each period button redraws both charts.
+- [ ] The console has no error or warning on any page, and no request fails.
 
 ## Tests
 
-- The three pages and the stylesheet are served with `200` — integration
-- The rest is checked by hand against the mockup, page by page, and recorded in the step's review.
+- `/`, `/index.html`, `/orders.html`, `/order.html`, `/app.css` and each script are served with
+  `200` and the right content type — integration.
+- `/health/ready` and `/api/v1/me` still answer after static files are added — integration.
 
 ## Out of scope
 
-- Table and Pipeline views, "+ New Order", "Export CSV", "Top up", settings, chat, the global
-  search box in the header.
-- Browser tests in CI.
-
-## Open questions
-
-1. **Labels.** The mockup calls one status "Completed" on the dashboard and "Done" in the list, and
-   another "New". One label per status everywhere, or keep each screen's wording?
-2. **Language.** UI text is English; tooltips and notes are Ukrainian; the page says `lang="uk"`.
-   Unify to English or leave?
-3. **Mockup elements without data**: remove them, or leave them as static decoration? Per element:
-   the countdown, the counters' denominators, "via External PDF", the Pipeline note, the Transfer
-   banner.
-4. **Buttons that do nothing** ("+ New Order", "Edit", "Share QR"): disabled, hidden, or left
-   clickable with no effect?
-5. **The Consolidation detail** has no design. How far does this step go — see step 5, question 7.
-6. **"+ Operation"** on the detail page belongs to step 8. Build its form there, or here as a
-   disabled button?
-7. **The chart.** The mockup draws it with inline SVG. Redraw the same SVG from the series, or is a
-   tiny chart library acceptable?
-8. **Any automated check of the pages** beyond "served with 200" — a headless smoke test — or is
-   the manual pass enough for an assignment judged by a demo?
+- The Table and Pipeline views, "+ New Order", "Export CSV", "Top up", settings, chat.
+- The form behind "+ Operation" — step 8.
+- Browser tests in CI; a framework; a bundler.

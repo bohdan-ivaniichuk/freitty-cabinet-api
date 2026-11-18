@@ -92,17 +92,19 @@ Key decisions (presentation material):
 ## 6. API
 
 ```
-GET  /api/v1/dashboard                    KPIs + recent active orders + weekly activity (period param)
-GET  /api/v1/orders?type=&hub=&status=&from=&to=&q=&page=&pageSize=
-GET  /api/v1/orders/counts                tab counters
+GET  /api/v1/dashboard?period=            KPIs + first active orders + activity series
+GET  /api/v1/orders?type=&status=&alerts=&hub=&date=&q=&page=&pageSize=
+GET  /api/v1/orders/counts?hub=&date=&status=&q=   tab counters, following the filters
 GET  /api/v1/orders/{number}              detail: shipments, cargo, services, operations, supplies
 POST /api/v1/orders/{number}/operations   the one write flow (see below)
+GET  /api/v1/hubs                         options of the Hub filter
+GET  /api/v1/me                           the shell: user, company balance, attention badge
 ```
 
 - Filtering, search and pagination in SQL. Search: `ILIKE` on number and Ref N (further fields are decided in step 4), backed by `pg_trgm` GIN indexes. Pagination: offset/limit (mention keyset as the scale-up path).
 - Dashboard KPIs and charts: Dapper + SQL (`date_trunc`, `FILTER (WHERE ...)`, CTEs).
-- **Write flow** (not required by the task, added to show transactions/isolation): add an operation → in one transaction append it to the ledger and open/resolve the quantity delta alert; optimistic concurrency on the order row (`Version` or `xmin`, decided in step 8), 409 ProblemDetails on conflict.
-- Validation (FluentValidation): pageSize bounds, date range, enum values, operation payload.
+- **Write flow** (not required by the task, added to show transactions/isolation): add an operation → in one transaction append it to the ledger and open/resolve the quantity delta alert; optimistic concurrency on the order row (`Order.Version` as the token, [ADR 0013](adr/0013-optimistic-concurrency-on-order-version.md)), 409 ProblemDetails on conflict.
+- Validation (FluentValidation): page and pageSize bounds, search length, enum values, operation payload.
 
 ## 7. Frontend
 
