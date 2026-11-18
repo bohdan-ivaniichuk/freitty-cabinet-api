@@ -189,27 +189,6 @@ on the live application: a revision that could not start never took traffic, and
 took over without a failed request. The commands — provisioning, operations, rollback, teardown —
 are in the runbook, [`docs/deployment.md`](docs/deployment.md).
 
-## How the work was done
-
-The plan came first: scope, model, stack and the order of work, agreed before any code
-([`docs/plan.md`](docs/plan.md)). Then twelve steps, each through the same four stages.
-
-```mermaid
-flowchart LR
-    Spec["Spec:<br/>decisions and contract,<br/>before the code"] --> Build["Implementation:<br/>code and tests<br/>from the spec"]
-    Build --> Review["Independent review:<br/>a fresh context,<br/>only the diff"]
-    Review --> Check["The author's check,<br/>then the commit"]
-    Review -- findings --> Build
-```
-
-The implementation and the reviews were done with AI coding agents (Claude Code), and the
-repository shows how they were kept on a short lead rather than trusted: the rules they work
-under ([`CLAUDE.md`](CLAUDE.md), the [code rules](docs/engineering/code-rules.md)), the spec each
-step was built from ([`docs/steps/`](docs/steps)), the reviewer and test-author agents
-([`.claude/agents`](.claude/agents)), and the hooks that scan for secrets, format every edit and
-ask before each commit and push ([`.claude/hooks`](.claude/hooks)). The scope, the model, every
-trade-off in the ADRs and the final word on each step are the author's.
-
 ## Known limits
 
 - **One instance.** The nightly rebuild of the sample data and the request gate around it assume
