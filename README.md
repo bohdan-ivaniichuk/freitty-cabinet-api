@@ -2,6 +2,10 @@
 
 Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail) — .NET 10, FastEndpoints, EF Core, PostgreSQL.
 
+**Live demo:** https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/ —
+the API reference is at
+https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/.
+
 > 🚧 Work in progress. Test assignment — see [`assignment/`](assignment) for the task and [`docs/plan.md`](docs/plan.md) for the implementation plan.
 
 ## What is in the box
