@@ -99,12 +99,12 @@ for it.
 
 ```mermaid
 flowchart LR
-    Pages["Three static pages<br/><sub>served by the API</sub>"] --> Api
+    Pages["Three static pages"] --> Api
     subgraph App["One deployable"]
-        Api["Freitty.Api<br/><sub>FastEndpoints · validation · ProblemDetails</sub>"]
-        Application["Freitty.Application<br/><sub>commands and queries, one folder each</sub>"]
-        Domain["Freitty.Domain<br/><sub>the Order aggregate and its rules</sub>"]
-        Infrastructure["Freitty.Infrastructure<br/><sub>EF Core · Dapper · blob storage · seed</sub>"]
+        Api["Freitty.Api<br/>endpoints, validation,<br/>error format"]
+        Application["Freitty.Application<br/>commands and queries"]
+        Domain["Freitty.Domain<br/>the Order aggregate"]
+        Infrastructure["Freitty.Infrastructure<br/>EF Core, Dapper,<br/>blob storage, seed"]
         Api --> Application --> Domain
         Api --> Infrastructure --> Application
     end
@@ -167,14 +167,14 @@ All under `/api/v1`. A `GET` below opens on the demo; the writes are best tried 
 
 ```mermaid
 flowchart LR
-    Push["Push to main"] --> Tests["build-test<br/><sub>format · build · 643 tests</sub>"]
-    Push --> Stack["stack<br/><sub>Compose up · health check</sub>"]
-    Stack --> Image["The tested image<br/><sub>pushed to the registry</sub>"]
+    Push["Push to main"] --> Tests["build-test:<br/>format, build,<br/>643 tests"]
+    Push --> Stack["stack:<br/>Compose up,<br/>health check"]
+    Stack --> Image["The tested image<br/>goes to the registry"]
     Tests --> Deploy
-    Image --> Deploy["deploy<br/><sub>by digest, nothing rebuilt</sub>"]
-    Deploy --> Probes{"New revision<br/>passes its probes?"}
-    Probes -- yes --> Live["Traffic moves<br/><sub>public URL checked</sub>"]
-    Probes -- no --> Old["Old revision keeps serving<br/><sub>the run is red</sub>"]
+    Image --> Deploy["deploy:<br/>that image, by digest"]
+    Deploy --> Probes{"Probes pass?"}
+    Probes -- yes --> Live["Traffic moves,<br/>public URL checked"]
+    Probes -- no --> Old["Old revision<br/>keeps serving"]
 ```
 
 The demo runs on Azure, in one resource group
@@ -196,9 +196,9 @@ The plan came first: scope, model, stack and the order of work, agreed before an
 
 ```mermaid
 flowchart LR
-    Spec["Spec<br/><sub>decisions and contract,<br/>written before the code</sub>"] --> Build["Implementation<br/><sub>code and tests,<br/>from the spec alone</sub>"]
-    Build --> Review["Independent review<br/><sub>a fresh context<br/>that sees only the diff</sub>"]
-    Review --> Check["The author's check<br/><sub>in the browser and the code,<br/>then the commit</sub>"]
+    Spec["Spec:<br/>decisions and contract,<br/>before the code"] --> Build["Implementation:<br/>code and tests<br/>from the spec"]
+    Build --> Review["Independent review:<br/>a fresh context,<br/>only the diff"]
+    Review --> Check["The author's check,<br/>then the commit"]
     Review -- findings --> Build
 ```
 
