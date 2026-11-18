@@ -1,23 +1,132 @@
 # Freitty Cabinet API
 
-Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail) — .NET 10, FastEndpoints, EF Core, PostgreSQL.
+The backend behind a logistics client cabinet — a dashboard, an order list and an order page —
+on .NET 10, FastEndpoints, EF Core and PostgreSQL. A test assignment for a backend role.
 
-A test assignment: three screens of a finished mockup, fed by a backend — deployed, with the
-decisions written down.
+[**Live demo**](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/) · [API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/) · [Where to start reading](#where-to-start-reading) ·
+[How it is built](#how-it-is-built) · [Decisions](docs/adr) · [Known limits](#known-limits) ·
+[Run locally](#run-locally)
+
+[![CI](https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/actions/workflows/ci.yml/badge.svg)](https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/actions/workflows/ci.yml)
+
+<a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/"><img src="presentation/img/dashboard.png" alt="The dashboard of the deployed cabinet: three tiles, the first active orders and the activity chart" width="100%"></a>
+
+## What this is
+
+The brief hands over one HTML file with three finished screens and asks for the backend that
+feeds them: a domain model and a schema designed from the mockup, PostgreSQL, filtering, search
+and pagination on the database side, and a deployed application.
+
+This repository is that backend, the three pages wired to it, and the reasoning behind both: the
+plan, a spec for every step, and a record of every decision a reviewer could question. This page
+is a guide to it — what runs, how it is built, and where to look first.
+
+## Where to start reading
+
+| If you want to see | Open |
+|---|---|
+| The domain model and its rules | [`Order.cs`](src/Freitty.Domain/Orders/Order.cs), [`Shipment.cs`](src/Freitty.Domain/Orders/Shipment.cs) — statuses, quantities, alerts; the vocabulary is in [`CONTEXT.md`](CONTEXT.md) |
+| The schema | [`docs/er-diagram.md`](docs/er-diagram.md), the [EF Core configurations](src/Freitty.Infrastructure/Persistence/Configurations) and the [migrations](src/Freitty.Infrastructure/Persistence/Migrations) |
+| Filtering, search and pagination in SQL | [`OrderFilter.cs`](src/Freitty.Application/Orders/OrderFilter.cs), [`OrderListSort.cs`](src/Freitty.Application/Orders/OrderListSort.cs), [`OrderSearch.cs`](src/Freitty.Infrastructure/Orders/OrderSearch.cs), [`ListOrdersQueryHandler.cs`](src/Freitty.Application/Orders/ListOrders/ListOrdersQueryHandler.cs) |
+| Aggregates written by hand | [`DashboardSql.cs`](src/Freitty.Infrastructure/Dashboard/DashboardSql.cs) — the dashboard through Dapper |
+| Indexes and their query plans | [`docs/explain/`](docs/explain) — before and after, on a volume data set |
+| A write: transaction and concurrency | [`RecordOperationCommandHandler.cs`](src/Freitty.Application/Orders/RecordOperation/RecordOperationCommandHandler.cs), then [`SubmitOrderCommandHandler.cs`](src/Freitty.Application/Orders/SubmitOrder/SubmitOrderCommandHandler.cs) and [`AttachPhotosCommandHandler.cs`](src/Freitty.Application/Orders/AttachPhotos/AttachPhotosCommandHandler.cs) |
+| How a request travels | An endpoint folder such as [`Orders/RecordOperation`](src/Freitty.Api/Endpoints/Orders/RecordOperation), the routes in [`ApiRoutes.cs`](src/Freitty.Api/Endpoints/ApiRoutes.cs), the pipeline in [`Pipeline/`](src/Freitty.Api/Pipeline), the errors in [`Errors/`](src/Freitty.Api/Errors) |
+| Tests | Domain rules in [`Freitty.Domain.Tests`](tests/Freitty.Domain.Tests/Orders); the API against a real PostgreSQL in [`Freitty.Api.IntegrationTests`](tests/Freitty.Api.IntegrationTests/Orders), including the race tests |
+| Why something is the way it is | [`docs/adr/`](docs/adr) — seventeen decisions with their alternatives; [`docs/plan.md`](docs/plan.md) — the plan made first |
+| The release pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and the runbook, [`docs/deployment.md`](docs/deployment.md) |
 
 ## See it running
 
 Everything below opens on the deployed demo. Its sample data is rebuilt every night and at every
 release, so anything you record there is yours to break.
 
-| Open | What it shows |
+| Open | What to look at |
 |---|---|
 | [Dashboard](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/) | The tiles, the first active orders, the activity chart with its four periods |
-| [Order List](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html) | Tabs with counters, filters, search, pages — as [cards](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html), a [table](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=table) or a [pipeline board](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=pipeline), where a draft is submitted by dragging it to New |
+| [Order List](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html) | Tabs with counters, filters, search and pages — as [cards](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html), a [table](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=table) or a [pipeline board](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=pipeline), where a draft is submitted by dragging it to New |
 | [Order FR001383](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001383) | An order in progress with a quantity delta: record an operation with **+ Operation**, open the photos with 📷 |
 | [Order FR001674](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001674) | An order with a missing photo: uploading one to its Unloading closes the alert |
 | [API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/) | Every endpoint with its request, responses and errors; requests can be sent from the page |
 | [OpenAPI document](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/openapi/v1.json) | The same contract as JSON |
+
+<table>
+<tr>
+<td width="33%"><a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=pipeline"><img src="presentation/img/orders-pipeline.png" alt="The Order List as a pipeline board with a column per status"></a></td>
+<td width="33%"><a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001383"><img src="presentation/img/order-detail.png" alt="The page of order FR001383 with its dock, quantities and operations"></a></td>
+<td width="33%"><a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001383"><img src="presentation/img/photo-gallery.png" alt="The photo gallery of an order, grouped by operation"></a></td>
+</tr>
+<tr>
+<td align="center"><sub>The pipeline board</sub></td>
+<td align="center"><sub>An order</sub></td>
+<td align="center"><sub>The photos of its operations</sub></td>
+</tr>
+</table>
+
+The demo is temporary. Once it is taken down these links stop working, and
+[`docker compose up`](#run-locally) gives the same application on `localhost:8080`.
+
+## What it does
+
+**What the brief asks for**
+
+- **Dashboard** — active orders with this week's change, orders completed in thirty days against
+  the thirty before, what needs the client's attention, the first active orders, and an activity
+  chart by day, week, month or quarter in one reporting time zone.
+- **Order List** — five tabs with counters, filters by hub, date and status, search by order
+  number and reference number, pagination — all of it done by the database.
+- **Order Detail** — the order with its shipments, declared and actual quantities, dock
+  assignment, operations, alerts and supplies.
+- **Sample data** — 71 orders built through the domain model, so they obey the rules the API
+  enforces; dates are kept relative to today.
+
+**What was added beyond it**
+
+- **Recording an operation** — the first write: a transaction, optimistic concurrency on the
+  order's version, and a quantity delta that raises or resolves an alert.
+- **A pipeline board** — the mockup's third layout: one column per status, and a draft that is
+  submitted by dragging it to New, under an official number from a database sequence.
+- **Photos** — uploaded from the order page into blob storage, checked by content, served by the
+  API; the photo an Unloading lacks closes its Missing photo alert.
+- **CSV export, a table layout**, and views that change in place, with the state in the URL.
+- **CI/CD to Azure**, and sample data that rebuilds itself so the demo never ages.
+
+**What was left out on purpose** — sign-in, real payments, and creating an order: the aggregate
+supports every step of it and the sample data is built that way, but the mockup has no screen
+for it.
+
+## How it is built
+
+```mermaid
+flowchart LR
+    Pages["Three static pages<br/><sub>served by the API</sub>"] --> Api
+    subgraph App["One deployable"]
+        Api["Freitty.Api<br/><sub>FastEndpoints · validation · ProblemDetails</sub>"]
+        Application["Freitty.Application<br/><sub>commands and queries, one folder each</sub>"]
+        Domain["Freitty.Domain<br/><sub>the Order aggregate and its rules</sub>"]
+        Infrastructure["Freitty.Infrastructure<br/><sub>EF Core · Dapper · blob storage · seed</sub>"]
+        Api --> Application --> Domain
+        Api --> Infrastructure --> Application
+    end
+    Infrastructure --> Db[("PostgreSQL 18")]
+    Infrastructure --> Blob[("Blob storage")]
+```
+
+- **The dependencies point inward.** The domain knows nothing of the web or the database; the
+  application knows ports (`IAppDbContext`, `IPhotoStorage`, `IOrderNumbers`), not their
+  implementations.
+- **One operation, one folder** — a query or a command, its handler, its validator. An endpoint
+  only maps a request to it and a result to a response
+  ([ADR 0009](docs/adr/0009-fastendpoints-and-its-command-bus.md)).
+- **Reads and writes take different roads.** A read projects straight to a DTO in SQL, with
+  Dapper for the dashboard's aggregates
+  ([ADR 0011](docs/adr/0011-dapper-for-dashboard-aggregates.md)); a write loads the aggregate,
+  calls one business method and saves under a version check
+  ([ADR 0013](docs/adr/0013-optimistic-concurrency-on-order-version.md)).
+- **One shape for every error** — `application/problem+json` with a stable `code`, so a client
+  branches on a code, not on a sentence.
+- **What is not here, deliberately** — MediatR, AutoMapper, generic repositories, a value object
+  for every field, a front-end framework. [`docs/plan.md`](docs/plan.md) says why.
 
 Where the decisions are:
 
@@ -35,7 +144,7 @@ Where the decisions are:
 
 ## The API
 
-All under `/api/v1`; a `GET` below opens on the demo, the writes are best tried from the
+All under `/api/v1`. A `GET` below opens on the demo; the writes are best tried from the
 [API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/).
 
 | Method | Route | What |
@@ -54,25 +163,99 @@ All under `/api/v1`; a `GET` below opens on the demo, the writes are best tried 
 | `GET` | [`/api/v1/hubs`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/hubs) | The options of the Hub filter |
 | `GET` | [`/api/v1/me`](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/api/v1/me) | The current user, the company and the number on the Orders badge |
 
-The demo is temporary. Once it is taken down these links stop working, and
-`docker compose up` below gives the same application on `localhost:8080`.
+## How a release happens
+
+```mermaid
+flowchart LR
+    Push["Push to main"] --> Tests["build-test<br/><sub>format · build · 643 tests</sub>"]
+    Push --> Stack["stack<br/><sub>Compose up · health check</sub>"]
+    Stack --> Image["The tested image<br/><sub>pushed to the registry</sub>"]
+    Tests --> Deploy
+    Image --> Deploy["deploy<br/><sub>by digest, nothing rebuilt</sub>"]
+    Deploy --> Probes{"New revision<br/>passes its probes?"}
+    Probes -- yes --> Live["Traffic moves<br/><sub>public URL checked</sub>"]
+    Probes -- no --> Old["Old revision keeps serving<br/><sub>the run is red</sub>"]
+```
+
+The demo runs on Azure, in one resource group
+([ADR 0014](docs/adr/0014-azure-container-apps-and-managed-postgresql.md)): a container app with
+one always-on replica, a managed PostgreSQL 18, a private container registry, a storage account
+for the photos and a log workspace. GitHub signs in to Azure with OIDC, so the repository holds
+no cloud credential.
+
+The new revision migrates the database while the old one still serves, so every migration is
+additive ([ADR 0007](docs/adr/0007-migrations-applied-at-startup.md)). The behaviour was measured
+on the live application: a revision that could not start never took traffic, and a healthy one
+took over without a failed request. The commands — provisioning, operations, rollback, teardown —
+are in the runbook, [`docs/deployment.md`](docs/deployment.md).
+
+## How the work was done
+
+The plan came first: scope, model, stack and the order of work, agreed before any code
+([`docs/plan.md`](docs/plan.md)). Then twelve steps, each through the same four stages.
+
+```mermaid
+flowchart LR
+    Spec["Spec<br/><sub>decisions and contract,<br/>written before the code</sub>"] --> Build["Implementation<br/><sub>code and tests,<br/>from the spec alone</sub>"]
+    Build --> Review["Independent review<br/><sub>a fresh context<br/>that sees only the diff</sub>"]
+    Review --> Check["The author's check<br/><sub>in the browser and the code,<br/>then the commit</sub>"]
+    Review -- findings --> Build
+```
+
+The implementation and the reviews were done with AI coding agents (Claude Code), and the
+repository shows how they were kept on a short lead rather than trusted: the rules they work
+under ([`CLAUDE.md`](CLAUDE.md), the [code rules](docs/engineering/code-rules.md)), the spec each
+step was built from ([`docs/steps/`](docs/steps)), the reviewer and test-author agents
+([`.claude/agents`](.claude/agents)), and the hooks that scan for secrets, format every edit and
+ask before each commit and push ([`.claude/hooks`](.claude/hooks)). The scope, the model, every
+trade-off in the ADRs and the final word on each step are the author's.
+
+## Known limits
+
+- **One instance.** The nightly rebuild of the sample data and the request gate around it assume
+  a single replica ([ADR 0015](docs/adr/0015-the-demo-rebuilds-its-sample-data.md)).
+- **No sign-in.** The current user is one seeded user, and the demo is open to anyone with the
+  link. Uploads are therefore capped, limited and can be switched off
+  ([ADR 0017](docs/adr/0017-photos-in-blob-storage-behind-the-api.md)); the caps are shared by
+  all visitors.
+- **A photo is an image by its signature only.** A few bytes that begin like a JPEG are stored
+  and shown as a broken picture; decoding every upload was left out with the imaging library.
+- **The application connects as the database administrator.** Accepted for synthetic data; a
+  role of its own is the first step for anything real.
+- **Four pipeline columns, not the mockup's seven.** Three of the seven are stages the model
+  does not have; the board shows the statuses the domain owns.
+- **Official numbers are unique and increasing, not dense.** A submit that loses a race leaves a
+  gap ([ADR 0016](docs/adr/0016-official-order-numbers-from-a-sequence.md)).
 
 ## Run locally
 
-### Prerequisites
+You need:
 
 - [Docker](https://docs.docker.com/get-docker/) with Docker Compose — enough to run the app.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — only for `dotnet run` and
   `dotnet test`.
 
-### The whole stack in Docker
-
 ```bash
 docker compose up -d --build --wait
 ```
 
-This starts PostgreSQL, Azurite — the Azure Blob Storage emulator, which keeps the photos — and the
-API; host ports 5432, 10000 and 8080 must be free. When the command returns, all three are healthy:
+This starts PostgreSQL, Azurite — the Azure Blob Storage emulator, which keeps the photos — and
+the API; host ports 5432, 10000 and 8080 must be free. When the command returns, all three are
+healthy and the cabinet is at http://localhost:8080/, with the API reference at
+http://localhost:8080/scalar/. Stop with `docker compose down`; add `-v` to delete the database
+and the stored photos as well.
+
+```bash
+dotnet test
+```
+
+Integration tests start their own PostgreSQL and Azurite containers through Testcontainers, so
+Docker must be running; the Compose stack does not need to be.
+
+<details>
+<summary><b>Addresses, settings and what happens at startup</b></summary>
+
+<br>
 
 | URL | What |
 |---|---|
@@ -96,9 +279,12 @@ are still served.
 The API reads its reporting time zone — where "today" and "this week" begin — from `Cabinet__TimeZone`
 (`America/Toronto` by default, in `appsettings.json`). It must be an IANA id; any other value stops the startup.
 
-Stop with `docker compose down`; add `-v` to delete the database and the stored photos as well.
+</details>
 
-### The API from source
+<details>
+<summary><b>Running the API from source</b></summary>
+
+<br>
 
 Start only the database and the photo storage, then run the API:
 
@@ -114,7 +300,12 @@ The API listens on http://localhost:5080 (for example, http://localhost:5080/hea
 at http://localhost:5080/ and the API reference at http://localhost:5080/scalar. In Development the SQL
 that EF Core sends is logged.
 
-### Sample data
+</details>
+
+<details>
+<summary><b>The sample data and how it stays fresh</b></summary>
+
+<br>
 
 When `Seed:Enabled` is `true` and the database is empty — it has no company — the API fills it with
 sample data at startup, right after the migrations:
@@ -161,7 +352,12 @@ docker compose up -d --wait postgres azurite
 dotnet run --project src/Freitty.Api
 ```
 
-### Database migrations
+</details>
+
+<details>
+<summary><b>Database migrations</b></summary>
+
+<br>
 
 Migrations live in `src/Freitty.Infrastructure/Persistence/Migrations` and are applied by the API at startup.
 To add one, restore the local tools once, then run:
@@ -176,45 +372,17 @@ A migration that has reached `main` is never edited; a change is a new migration
 The first start against an empty database logs one `Failed executing DbCommand` at `ERR`: EF Core
 reads its migrations history table before it has created it. The migrations follow on the next lines.
 
-### Tests
+</details>
 
-```bash
-dotnet test
-```
+## Repository map
 
-Integration tests start their own PostgreSQL and Azurite containers through Testcontainers, so
-Docker must be running; the compose stack does not need to be.
-
-## Deployment
-
-The demo runs on Azure, in one resource group in North Europe
-([ADR 0014](docs/adr/0014-azure-container-apps-and-managed-postgresql.md)):
-
-- one container app on Azure Container Apps — exactly one replica, always on, 0.25 vCPU and
-  0.5 GiB, behind HTTPS ingress; its container, probes and scale are in
-  [`deploy/containerapp.yaml`](deploy/containerapp.yaml);
-- an Azure Database for PostgreSQL flexible server, PostgreSQL 18, which the app reaches over
-  verified TLS;
-- an Azure Container Registry that holds the images, pulled by the app with a managed identity;
-- a storage account with one private container for the photos, which only the API reads;
-- a Log Analytics workspace for the logs.
-
-A release is a push to `main`. CI runs the tests and the Compose stack; the image the stack job
-tested is pushed to the registry and, when both jobs pass, deployed by its digest — nothing is
-rebuilt.
-The new revision starts beside the running one, and the traffic moves to it only once it passes
-its probes; the workflow then checks the public URL. A version that cannot start never takes
-traffic: the old one keeps serving and the run is red. GitHub signs in to Azure with OIDC, so no
-cloud credential is stored in the repository.
-
-The new revision migrates the database while the old one still serves, so every migration must
-work with the running version: additive only — new tables, nullable columns or columns with
-defaults, new indexes. A rename or a drop takes two releases: stop using it, then remove it.
-
-The sample data is rebuilt at every start — so at every deploy and restart — and again soon after
-midnight in Toronto, as under Compose.
-
-A rollback deploys an earlier image as a new revision; it is safe when the old version can still
-start on the current schema, and otherwise the fix is a forward commit. Provisioning, the
-day-to-day operations, the rollback and the teardown, with their commands, are in the runbook:
-[`docs/deployment.md`](docs/deployment.md).
+| Path | What is there |
+|---|---|
+| [`src/Freitty.Domain`](src/Freitty.Domain) | The `Order` aggregate with its shipments, operations, alerts and photos; no dependencies |
+| [`src/Freitty.Application`](src/Freitty.Application) | Queries, commands, validators and the ports they need |
+| [`src/Freitty.Infrastructure`](src/Freitty.Infrastructure) | EF Core mappings and migrations, the Dapper dashboard, blob storage, the seed |
+| [`src/Freitty.Api`](src/Freitty.Api) | Endpoints, the error format, OpenAPI, and the three pages under `wwwroot` |
+| [`tests/Freitty.Domain.Tests`](tests/Freitty.Domain.Tests) | Unit tests of the domain rules |
+| [`tests/Freitty.Api.IntegrationTests`](tests/Freitty.Api.IntegrationTests) | Tests through HTTP against a real PostgreSQL and Azurite |
+| [`docs`](docs) | The plan, the decisions, the step specs, the query plans, the runbook |
+| [`deploy`](deploy) · [`.github/workflows`](.github/workflows) | The container template and the pipeline that releases it |
