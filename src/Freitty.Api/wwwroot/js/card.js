@@ -1,8 +1,9 @@
 // The order card of the dashboard and the list: one <template id="order-card"> in both pages,
 // filled from a card of GET /api/v1/orders or of the dashboard.
 
+import { ORDER_TYPE, STATUS } from './codes.js';
 import * as format from './format.js';
-import { fieldsOf } from './shell.js';
+import { cloneTemplate, fieldsOf, fillCreatedBy } from './shell.js';
 
 // Clicks on these keep their own meaning instead of opening the order.
 const OWN_CLICK = 'details, a, button, [aria-disabled]';
@@ -21,13 +22,13 @@ export function openCardsOnClick(container) {
   });
 }
 
-// openAlertRefs: a Ref N list with an open Alert starts open, as on the mockup's dashboard. The list
-// leaves it closed: an open list is wider than a third of the page.
+// openAlertRefs: the dashboard opens a Ref N list that has an open Alert, so the alert is seen at
+// once. The list leaves it closed: an open list is wider than a third of the page.
 export function renderCard(order, { openAlertRefs = false } = {}) {
-  const fragment = document.getElementById('order-card').content.cloneNode(true);
+  const fragment = cloneTemplate('order-card');
   const card = fragment.querySelector('.order-card');
   const field = fieldsOf(card);
-  const isDraft = order.status === 'Draft';
+  const isDraft = order.status === STATUS.Draft;
   const hasAlert = order.openAlertTypes.length > 0;
   const href = orderUrl(order.number);
 
@@ -40,7 +41,7 @@ export function renderCard(order, { openAlertRefs = false } = {}) {
   number.textContent = order.number;
   fillRefs(field, order.shipments, openAlertRefs);
   field('type-line').textContent = format.typeLine(order);
-  fillCreatedBy(field, order.createdBy);
+  fillCreatedBy(field, order.createdBy, 'card');
   fillBadges(field, order, isDraft, hasAlert);
 
   field('hub').textContent = format.hubShortLabel(order.hub, order.transferHub);
@@ -50,7 +51,7 @@ export function renderCard(order, { openAlertRefs = false } = {}) {
   field('destination').textContent = format.destinationLabel(order.destination);
   fillTrailers(field, order);
 
-  fillNext(field('next'), order.next, href);
+  fillNext(field('next'), order.nextStep, href);
   field(isDraft ? 'order-icons' : 'draft-icons').remove();
   return fragment;
 }
@@ -71,11 +72,12 @@ function fillRefs(field, shipments, openAlertRefs) {
   field('ref-single').remove();
   field('ref-count').textContent = format.refCount(shipments.length);
   field('ref-list').append(...shipments.map(renderRefItem));
-  field('ref-multi').open = openAlertRefs && shipments.some(shipment => shipment.openAlertTypes.length > 0);
+  field('ref-multi').open = openAlertRefs
+    && shipments.some(shipment => shipment.openAlertTypes.length > 0);
 }
 
 function renderRefItem(shipment) {
-  const item = document.getElementById('ref-item').content.cloneNode(true);
+  const item = cloneTemplate('ref-item');
   item.querySelector('.sub-id').textContent = shipment.label;
   item.querySelector('.sub-ref').textContent = shipment.refNumber ?? format.DASH;
   item.querySelector('.sub-desc').prepend(format.palletCount(shipment));
@@ -91,17 +93,7 @@ function renderRefItem(shipment) {
   return item;
 }
 
-function fillCreatedBy(field, createdBy) {
-  const avatar = field('initials');
-  avatar.textContent = createdBy.initials;
-  avatar.classList.add(format.avatarClass(createdBy.initials));
-  avatar.after(createdBy.name);
-  const role = field('role');
-  role.textContent = createdBy.role;
-  role.classList.toggle('disp', createdBy.role === 'Dispatcher');
-}
-
-// A draft shows only its status, as in the mockup; an open Alert takes the place of the status.
+// A draft shows its status badge alone, without the type badge.
 function fillBadges(field, order, isDraft, hasAlert) {
   const typeBadge = field('type-badge');
   if (isDraft) {
@@ -111,9 +103,10 @@ function fillBadges(field, order, isDraft, hasAlert) {
     typeBadge.classList.add(format.typeBadge(order.type));
   }
 
+  const status = format.cardStatus(order.status, hasAlert);
   const statusBadge = field('status-badge');
-  statusBadge.textContent = hasAlert ? 'Alert' : format.statusLabel(order.status);
-  statusBadge.classList.add(hasAlert ? 'badge-alert' : format.statusBadge(order.status));
+  statusBadge.textContent = status.label;
+  statusBadge.classList.add(status.badge);
 }
 
 function fillQuantity(cell, order) {
@@ -122,16 +115,17 @@ function fillQuantity(cell, order) {
     return;
   }
 
+  const parts = format.quantityDelta(order);
   const actual = document.createElement('span');
   actual.className = 'qty-actual';
-  actual.textContent = `${order.actualTotal} actual`;
-  cell.replaceChildren(`${order.declaredTotal} decl · `, actual);
+  actual.textContent = parts.actual;
+  cell.replaceChildren(parts.declared, actual);
 }
 
 // Trailers only on a Consolidation that has loaded some; otherwise Destination takes the whole row.
 function fillTrailers(field, order) {
-  if (order.type === 'Consolidation' && order.outboundTrailers > 0) {
-    field('trailers').textContent = format.consolidatedTrailers(order.outboundTrailers);
+  if (order.type === ORDER_TYPE.Consolidation && order.outboundTrailerCount > 0) {
+    field('trailers').textContent = format.consolidatedTrailers(order.outboundTrailerCount);
     return;
   }
 

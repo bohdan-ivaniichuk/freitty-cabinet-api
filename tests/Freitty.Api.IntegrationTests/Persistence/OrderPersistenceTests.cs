@@ -26,14 +26,14 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
     public async Task ServiceAddedToLoadedDraftIsInsertedAlone()
     {
         TestData data = TestData.Create();
-        Order draft = data.Draft();
-        TestData.Succeed(draft.AddService(data.Service.Id, TestData.Now));
+        Order draft = new OrderBuilder(data).Draft();
+        draft.AddService(data.Service.Id, OrderBuilder.BuiltAt).MustSucceed();
         await database.SaveAsync([.. data.Entities(), draft]);
 
         Type[] addedTypes = await database.InContextAsync(async db =>
         {
             Order loaded = await db.LoadOrderAsync(draft.Id);
-            TestData.Succeed(loaded.AddService(data.OtherService.Id, TestData.Now));
+            loaded.AddService(data.OtherService.Id, OrderBuilder.BuiltAt).MustSucceed();
             return await SaveReportingAddedTypesAsync(db);
         });
 
@@ -48,15 +48,14 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
     public async Task OperationAndSupplyLineAddedToLoadedSubmittedOrderAreInsertedAlone()
     {
         TestData data = TestData.Create();
-        Order order = data.Ready();
+        Order order = new OrderBuilder(data).Ready();
         await database.SaveAsync([.. data.Entities(), order]);
 
         Type[] addedTypes = await database.InContextAsync(async db =>
         {
             Order loaded = await db.LoadOrderAsync(order.Id);
-            TestData.Succeed(loaded.AddSupply(data.SupplyItem, 2, TestData.Now));
-            NewOperation unloading = TestData.DeclaredUnloading(photoCount: 1);
-            _ = loaded.RecordOperation(loaded.Shipments.Single().Id, unloading, TestData.Now).Value;
+            loaded.AddSupply(data.SupplyItem, 2, OrderBuilder.BuiltAt).MustSucceed();
+            OrderBuilder.Unload(loaded, loaded.Shipments.Single(), OrderBuilder.DeclaredStandard, photos: 1);
             return await SaveReportingAddedTypesAsync(db);
         });
 
@@ -82,23 +81,23 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
             data.User,
             data.Hub.Id,
             start);
-        Shipment first = order.AddShipment("REF-1001", start).Value;
-        Shipment second = order.AddShipment("REF-1002", start).Value;
-        TestData.Succeed(order.DeclareCargo(first.Id, UnitType.Standard, 10, start));
-        TestData.Succeed(order.DeclareCargo(first.Id, UnitType.ExtraLarge, 2, start));
-        TestData.Succeed(order.DeclareCargo(second.Id, UnitType.Standard, 5, start));
-        TestData.Succeed(order.Schedule(start.AddDays(1), start));
-        TestData.Succeed(order.SetDestination("Montreal", "QC", start));
-        TestData.Succeed(order.ArrangeOwnDriver("Jean Tremblay", start));
-        TestData.Succeed(order.AddService(data.Service.Id, start));
-        TestData.Succeed(order.AddSupply(data.SupplyItem, 3, start));
-        TestData.Succeed(order.Submit(TestData.Unique("FR"), start.AddMinutes(5)));
+        Shipment first = order.AddShipment("REF-1001", start).MustSucceed();
+        Shipment second = order.AddShipment("REF-1002", start).MustSucceed();
+        order.DeclareCargo(first.Id, UnitType.Standard, 10, start).MustSucceed();
+        order.DeclareCargo(first.Id, UnitType.ExtraLarge, 2, start).MustSucceed();
+        order.DeclareCargo(second.Id, UnitType.Standard, 5, start).MustSucceed();
+        order.Schedule(start.AddDays(1), start).MustSucceed();
+        order.SetDestination("Montreal", "QC", start).MustSucceed();
+        order.ArrangeOwnDriver("Jean Tremblay", start).MustSucceed();
+        order.AddService(data.Service.Id, start).MustSucceed();
+        order.AddSupply(data.SupplyItem, 3, start).MustSucceed();
+        order.Submit(TestData.Unique("FR"), start.AddMinutes(5)).MustSucceed();
 
         DateTimeOffset hubWork = start.AddHours(2);
-        TestData.Succeed(order.TransferTo(data.OtherHub.Id, hubWork));
-        TestData.Succeed(order.RecordArrival(first.Id, TrailerType.Reefer53, "tr-77", "tl-88", hubWork));
-        TestData.Succeed(order.AssignDock(first.Id, "D4", "B2", "Floor Lead", hubWork));
-        TestData.Succeed(order.SetWarehouseNote(first.Id, "Fragile freight", hubWork));
+        order.TransferTo(data.OtherHub.Id, hubWork).MustSucceed();
+        order.RecordArrival(first.Id, TrailerType.Reefer53, "tr-77", "tl-88", hubWork).MustSucceed();
+        order.AssignDock(first.Id, "D4", "B2", "Floor Lead", hubWork).MustSucceed();
+        order.SetWarehouseNote(first.Id, "Fragile freight", hubWork).MustSucceed();
         var excessWithoutPhoto = new NewOperation(
             OperationType.Unloading,
             UnitType.Standard,
@@ -115,11 +114,11 @@ public sealed class OrderPersistenceTests(PostgresFixture postgres) : IAsyncDisp
             IsBillable: false,
             PhotoCount: 1,
             CommentCount: 0);
-        _ = order.RecordOperation(first.Id, excessWithoutPhoto, hubWork.AddMinutes(10)).Value;
-        _ = order.RecordOperation(first.Id, restack, hubWork.AddMinutes(20)).Value;
+        order.RecordOperation(first.Id, excessWithoutPhoto, hubWork.AddMinutes(10)).MustSucceed();
+        order.RecordOperation(first.Id, restack, hubWork.AddMinutes(20)).MustSucceed();
         Alert missingPhoto = first.Alerts.Single(alert => alert.Type == AlertType.MissingPhoto);
-        TestData.Succeed(order.ResolveAlert(missingPhoto.Id, hubWork.AddMinutes(30)));
-        TestData.Succeed(order.FinishReceiving(second.Id, hubWork.AddMinutes(40)));
+        order.ResolveAlert(missingPhoto.Id, hubWork.AddMinutes(30)).MustSucceed();
+        order.FinishReceiving(second.Id, hubWork.AddMinutes(40)).MustSucceed();
         return order;
     }
 

@@ -9,12 +9,17 @@ supplies with totals, services, alerts and invoices. It is a read: nothing loads
 ## Decisions
 
 - **One endpoint, one read handler, projections only** — `AsNoTracking`, `Select` to DTOs, no
-  entity materialised. It is built on what [step 4](04-order-list.md) wired: FastEndpoints, the
+  entity materialised. The reading is `OrderDetailReader`, a service of Application registered in
+  `AddApplication` next to `OrderCardReader`; it returns `null` when the company has no order with
+  that number. The handler only resolves the current user, calls the reader and turns `null` into
+  the not-found error. It is built on what [step 4](04-order-list.md) wired: FastEndpoints, the
   pipeline, `ProblemDetails`, `IAppDbContext`, `ICurrentUser`, the reporting calendar.
 - **Split queries.** The order has four collections two levels deep; one joined statement would
-  multiply them. The handler issues a small, fixed number of statements — the order row with its
+  multiply them. The reader issues a small, fixed number of statements — the order row with its
   references, then the collections — with `AsSplitQuery` where one projection carries collections.
-  No statement returns the product of two collections.
+  No statement returns the product of two collections. The statements share no snapshot, so a write
+  committed between them can show in part; that is accepted because `version` is read in the first
+  statement, and a write decided on a stale page gets `409`.
 - **Found by number within the current company.** An unknown number and another company's number
   are the same `404`; the message names the number. The handler returns
   `Result<OrderDetailDto>`; "not found" is a `DomainError` of kind `NotFound` with the code
@@ -30,8 +35,8 @@ supplies with totals, services, alerts and invoices. It is a read: nothing loads
   grouped in SQL, the subtraction in one class. The computed members of the aggregate are never
   used in a projection — they return zero there ([step 2](02-domain.md)).
 - **Progress is a code, not a sentence.** `stage` describes the freight and ignores alerts; the
-  page words it. It comes from the same `OrderProgress` class that gives a card its `next` line in
-  step 4, and uses the same names for the same conditions.
+  page words it. It comes from the same `OrderProgress` class that gives a card its `nextStep` line
+  in step 4, and uses the same names for the same conditions.
 - **Instants are UTC; the hub's IANA zone travels with them.** The page formats hub-local time.
 - **`version` is part of the response** — the write flow of [step 8](08-write-flow.md) sends it
   back.
@@ -41,7 +46,9 @@ supplies with totals, services, alerts and invoices. It is a read: nothing loads
 ### `GET /api/v1/orders/{number}`
 
 `{number}` is matched as a whole, case-insensitively (`fr001383` finds `FR001383`):
-`lower(number) = lower(@number)`, never a pattern match — a `_` in the route is not a wildcard.
+`lower(number) = @number`, the parameter lower-cased by the application, never a pattern match — a
+`_` in the route is not a wildcard. The detail and the write of step 8 find the order through the
+same query extension, `OrderQueries.WithNumber`.
 
 The example is FR001383 as the seed leaves it, instants shortened:
 
@@ -66,9 +73,9 @@ The example is FR001383 as the seed leaves it, instants shortened:
     "declared": [{ "unitType": "Standard", "quantity": 10 }],
     "actual":   [{ "unitType": "Standard", "quantity": 12 }],
     "onStock":  [{ "unitType": "Standard", "quantity": 5 }],
-    "quantityDeltas": 1,                // (shipment, Unit Type) pairs with a known delta
-    "photos": 7, "comments": 1,         // sums over all operations
-    "outboundTrailers": 1               // distinct trailer numbers of Loadings
+    "quantityDeltaCount": 1,            // (shipment, Unit Type) pairs with a known delta
+    "photoCount": 7, "commentCount": 1, // sums over all operations
+    "outboundTrailerCount": 1           // distinct trailer numbers of Loadings
   },
   "shipments": [{
     "position": 1,
@@ -97,8 +104,8 @@ The example is FR001383 as the seed leaves it, instants shortened:
 
 Rules:
 
-- Order: `shipments` by `position`; `operations` by `appliedAt`, then `id`; `alerts` by
-  `raisedAt`, then `type`; `services` by name; `supplies.lines` by category, then SKU, then `id`;
+- Order: `shipments` by `position`; `operations` by `appliedAt`, then `id`; `alerts` by `raisedAt`,
+  then `type`, then `id`; `services` by name; `supplies.lines` by category, then SKU, then `id`;
   `invoices` by `issuedAt`, then `number`. Ids are UUID v7 and do not follow creation within a
   millisecond ([ADR 0006](../adr/0006-uuid-v7-keys-from-the-domain.md)), so `id` is only ever a
   tie-break that keeps the order stable; tests do not assert the order of rows that tie.
@@ -107,8 +114,8 @@ Rules:
   received (then it may be zero or negative); otherwise `null` — the definition of
   [`CONTEXT.md`](../../CONTEXT.md) and of `Shipment.HasQuantityDelta`.
 - `totals.declared`, `actual` and `onStock` have one entry per Unit Type that appears in any
-  shipment's `quantities`, zeros included, `Standard` first. `totals.quantityDeltas` counts the
-  rows of `quantities`, over all shipments, whose `delta` is neither `null` nor zero.
+  shipment's `quantities`, zeros included, `Standard` first. `totals.quantityDeltaCount` counts
+  the rows of `quantities`, over all shipments, whose `delta` is neither `null` nor zero.
 - A draft without shipments has `shipments: []`, the three `totals` arrays empty, the counters 0,
   `supplies.lines` empty and `supplies.subtotal` 0.
 - `lineTotal` and `subtotal` are multiplied and summed in SQL.
@@ -126,7 +133,7 @@ Rules:
 | `Loading` | every shipment is received and something is On stock |
 | `AwaitingCompletion` | every shipment is received and nothing is On stock |
 
-The last four are the conditions of the same names in the `next` table of step 4.
+The last four are the conditions of the same names in the `nextStep` table of step 4.
 
 ### Errors
 
@@ -139,13 +146,21 @@ The number comes from the route alone: a `number` in the query string does not r
 ### Code
 
 ```
-src/Freitty.Application/Orders/GetOrderDetail/   GetOrderDetailQuery, its handler, OrderDetailDto and its parts
-src/Freitty.Application/Common/                  the application's own errors (order not found)
-src/Freitty.Api/Endpoints/Orders/Detail/         the endpoint
-src/Freitty.Api/…                                the DomainError → ProblemDetails mapper
+src/Freitty.Application/Orders/GetOrderDetail/   GetOrderDetailQuery, its handler, OrderDetailReader,
+                                                 OrderDetailDto and its parts
+src/Freitty.Application/Orders/                  OrderRequestErrors — the application's own errors
+                                                 (order not found); OrderQueries.WithNumber
+src/Freitty.Api/Endpoints/Orders/GetOrderDetail/ the endpoint
+src/Freitty.Api/Errors/                          DomainErrorProblem (DomainError → ProblemDetails),
+                                                 DomainProblemDetails (ProblemDetails plus `code`),
+                                                 its OpenAPI description DomainProblemDescription
 ```
 
 The query has nothing to validate beyond the route value being present, so it has no validator.
+`Freitty.Application` gains `Microsoft.EntityFrameworkCore.Relational` for `AsSplitQuery` —
+relational, not a provider, so Application still cannot see Npgsql. The error codes are public
+constants (`OrderRequestErrors.OrderNotFoundCode`), and the endpoint's description interpolates
+them.
 
 ## Acceptance criteria
 

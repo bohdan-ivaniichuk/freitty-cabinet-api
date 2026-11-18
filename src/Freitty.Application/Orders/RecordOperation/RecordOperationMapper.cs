@@ -8,7 +8,7 @@ internal static partial class RecordOperationMapper
 {
     // The order, the shipment and the version select where the Operation goes; there is no chat, so it is recorded
     // without comments.
-    [MapperIgnoreSource(nameof(RecordOperationCommand.Number))]
+    [MapperIgnoreSource(nameof(RecordOperationCommand.OrderNumber))]
     [MapperIgnoreSource(nameof(RecordOperationCommand.ShipmentPosition))]
     [MapperIgnoreSource(nameof(RecordOperationCommand.ExpectedVersion))]
     [MapValue(nameof(NewOperation.CommentCount), 0)]

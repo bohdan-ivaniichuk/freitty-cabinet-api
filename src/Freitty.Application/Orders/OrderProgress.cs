@@ -4,7 +4,7 @@ using Freitty.Domain.Orders;
 namespace Freitty.Application.Orders;
 
 // The stage of the freight and, from it, the card's "Next" line. Each takes the first rule that applies.
-public static class OrderProgress
+internal static class OrderProgress
 {
     public static OrderStage StageOf(OrderStatus status, IReadOnlyCollection<ShipmentProgress> shipments)
     {

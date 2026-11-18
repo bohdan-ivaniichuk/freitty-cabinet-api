@@ -36,7 +36,9 @@ If that fails, the process exits.
 - Instances starting together do not race, but not for free: the provider's lock covers one
   migration at a time while the pending list is read once, so from the second migration on the
   API holds a PostgreSQL advisory lock around the whole run
-  ([step 4](../steps/04-order-list.md)). A missing database is then an error, not something the
+  ([step 4](../steps/04-order-list.md)). The lock is a session lock taken under a five-minute
+  command timeout, which also bounds every migration command, so a queued instance waits up to
+  five minutes and then fails to start. A missing database is then an error, not something the
   API creates.
 - A migration must stay compatible with the version that is still running during a deploy. With one
   instance and a restart this is not yet a constraint; it becomes one with rolling deploys.

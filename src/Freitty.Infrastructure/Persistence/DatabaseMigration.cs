@@ -45,7 +45,8 @@ public static class DatabaseMigration
 
     // A pooled connection would keep its session lock until it is reused, so the lock is released explicitly. If
     // that fails, the connection is broken and the server has dropped the lock with the session; the failure is not
-    // allowed to replace an exception from the migration itself.
+    // allowed to replace an exception from the migration itself. The release takes no token: it must run even when
+    // the startup is being cancelled.
     private static async Task ReleaseLockAsync(AppDbContext db)
     {
         try

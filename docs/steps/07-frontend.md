@@ -21,13 +21,19 @@ which is read and never edited: sections `#dashboard`, `#orderlist` and `#crossd
   with the CSS that only they use. Class names inside `.fc-shell` are untouched.
 - **Hardcoded cards and rows become `<template>` elements** with the same markup; the script
   clones and fills them.
-- **State lives in the URL, and every change of it is a plain navigation.** Tabs and paging are
-  links; a filter or a search sets `location.search`. A link reproduces the view, Reload keeps it
-  and Back works, with no history code to get wrong.
-- **The server sends facts, the page words them.** Codes become labels in one module
-  (`format.js`). One label per status on every page: `Draft` → "Draft", `Ready` → "New",
-  `InProgress` → "In progress", `Completed` → "Completed". An order with an open Alert shows the
-  "Alert" badge in place of its status, as the mockup does.
+- **State lives in the URL; within a page a change of view is made in place.** The three pages
+  are separate static pages, and moving between them is an ordinary link. On `orders.html` a tab,
+  a filter, a search and a page rewrite the URL through the History API (`pushState`) and load the
+  counters and the list again; on `index.html` a period button does the same and redraws only the
+  activity block. Tabs, Prev / Next and the period buttons stay links with their `href`: a plain
+  click is answered in place, a modified click still opens a new tab. `popstate` handles Back and
+  Forward. A copied link opens the same view and Reload keeps it. A page restored from the
+  back/forward cache loads its data again.
+- **The server sends facts, the page words them.** The API codes the scripts compare against or send
+  are named once, in `codes.js`; they become labels in one module (`format.js`). One label per
+  status on every page: `Draft` → "Draft", `Ready` → "New", `InProgress` → "In progress",
+  `Completed` → "Completed". An order with an open Alert shows the "Alert" badge in place of its
+  status, as the mockup does.
 - **Text is written with `textContent`, never `innerHTML`**: order data is user input.
 - **English only.** `lang="en"`. The Ukrainian design notes — the Pipeline view note, the Supply
   picker note, the Ukrainian `title` attributes — are removed: they describe features outside the
@@ -88,22 +94,27 @@ src/Freitty.Api/wwwroot/
 ├── app.css
 └── js/
     ├── api.js        fetch wrapper: JSON, ProblemDetails → an error with status, code, title, detail, errors
-    ├── format.js     labels for codes, dates in a zone, money, quantities, chart geometry — no DOM
-    ├── shell.js      sidebar and top bar: GET /api/v1/me, the search box
+    ├── codes.js      the API codes the scripts compare against or send
+    ├── format.js     labels for codes, most of the pages' wording, dates in a zone, money,
+    │                 quantities, chart geometry — no DOM
+    ├── shell.js      sidebar and top bar: GET /api/v1/me, the search box; the loading, empty and
+    │                 error states; cloneTemplate, fieldsOf, the "by" chip, isPlainClick,
+    │                 markCurrent
     ├── card.js       fills one order card — shared by the dashboard and the list
     ├── dashboard.js
     ├── orders.js
     └── order.js
 ```
 
-`Program.cs`: `UseDefaultFiles()` then `UseStaticFiles(…)`, after the exception handler and before
-the request logging — so assets are not logged one line each — and before FastEndpoints. Static
-files are sent with `Cache-Control: no-cache` (`StaticFileOptions.OnPrepareResponse`), so a new
-deploy is picked up on the next load. `/` serves `index.html`; a file that does not exist falls
-through to the `404` `ProblemDetails`. Each page has its own `<title>` ("Freitty — Dashboard",
-"… — Orders", "… — Order") and `<link rel="icon" href="data:,">` — without it the browser asks
-for a favicon that does not exist. The selects and the search input have `autocomplete="off"`, so
-the browser's form restore does not fight the URL.
+`Pages/StaticPages.cs`: `UseStaticPages()`, called from `Program.cs`, is `UseDefaultFiles()` then
+`UseStaticFiles(…)`, after the exception handler and before the request logging — so assets are not
+logged one line each — and before FastEndpoints. Static files are sent with
+`Cache-Control: no-cache` (`StaticFileOptions.OnPrepareResponse`), so a new deploy is picked up on
+the next load. `/` serves `index.html`; a file that does not exist falls through to the `404`
+`ProblemDetails`. Each page has its own `<title>` ("Freitty — Dashboard", "… — Orders", "… — Order",
+which the detail page turns into "Freitty — Order {number}") and `<link rel="icon" href="data:,">` —
+without it the browser asks for a favicon that does not exist. The selects and the search input have
+`autocomplete="off"`, so the browser's form restore does not fight the URL.
 
 ### Codes and their labels
 
@@ -121,15 +132,16 @@ the browser's form restore does not fight the URL.
 ### The shell (every page)
 
 - The logo is a link to `index.html`. "Orders" is a link to `orders.html` and the active item on
-  every page, as in the mockup; its badge shows `needAttention` of `GET /api/v1/me` and is hidden
-  at zero. "Settings" and "+ New Order" are disabled.
+  every page, as in the mockup; its badge shows `needAttentionCount` of `GET /api/v1/me` and is
+  hidden at zero. "Settings" and "+ New Order" are disabled.
 - Top bar: the balance, the user's initials and name. "Top up →", the bell and the help button
   are disabled; the bell's red dot is removed.
 - The search box stays the mockup's `.fc-search` element with a borderless `<input>` inside it,
-  placeholder "Search orders…". On `orders.html` it holds `q` and applies on Enter; clearing it and
-  pressing Enter removes the search. On the other pages Enter goes to `orders.html?q=…`. The API
-  searches from three characters: a shorter entry is not sent, and the input reports "Type at
-  least 3 characters" as its validation message.
+  placeholder "Search orders…". On `orders.html` it holds `search` and applies on Enter, in place;
+  clearing it and pressing Enter removes the search. On the other pages Enter goes to
+  `orders.html?search=…`. The API searches from three characters: a shorter entry is not sent, and
+  the input reports "Type at least 3 characters" as its validation message. A search containing a
+  control character is treated as absent.
 - Breadcrumbs: "Home › Dashboard", "Home › Orders", "Orders › {number}" — "Home" and "Orders" are
   links.
 
@@ -152,8 +164,8 @@ an unknown one, the page sends `Week`.
 - **Active Orders**: the cards of the response in the mockup's grid; "View all →" is a link to
   `orders.html`. Empty: "No active orders".
 - **Your activity**:
-  - The period buttons are links that set `period`; "CW" is `week`. The active one carries the
-    mockup's red style.
+  - The period buttons are links that set `period`; "CW" is `week`. A plain click rewrites the URL
+    and redraws only the activity block. The active one carries the mockup's red style.
   - Header figures: `summary.completedLast30Days` and `summary.spendLast30Days`, each followed by
     "last 30d".
   - Both charts use the mockup's `0 0 400 120` view box. The baseline is y = 104 and the labels
@@ -174,30 +186,39 @@ an unknown one, the page sends `Week`.
   - Summary: "📈 +20% completed orders vs previous 30 days" (green from zero up, red below; with a
     `null` percentage: "📈 {n} completed orders in the last 30 days"); "💰 {spend} spent · avg
     {average}/order" (without the average when it is `null`); "⭐ Best day / week / month /
-    quarter: {its axis label} (peak spend {amount})", hidden when `best` is `null`.
+    quarter: {its axis label} (peak spend {amount})", hidden when `bestBucket` is `null`.
 
 ### `orders.html`
 
 Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GET /api/v1/me`.
 
+The page's URL keeps its own names; the page maps them to the API's.
+
 | URL parameter | Control | Sent to the API as |
 |---|---|---|
-| `tab` = `all` (default), `crossdock`, `consolidation`, `alerts`, `drafts` | the tabs, which become links | nothing, `type=CrossDock`, `type=Consolidation`, `alerts=true`, `status=Draft` |
-| `hub` = a hub id | the first `<select>`: "Hub: All", then one option per hub of `/hubs` | `hub` |
-| `date` = `today`, `week`, `last30` | the second `<select>`: "Date: Any" (added, the default), "Today", "This week", "Last 30 days" | `date=Today`, `ThisWeek`, `Last30Days` |
+| `tab` = `all` (default), `crossdock`, `consolidation`, `alerts`, `drafts` | the tabs, which become links | nothing, `type=CrossDock`, `type=Consolidation`, `hasOpenAlerts=true`, `status=Draft` |
+| `hub` = a hub id | the first `<select>`: "Hub: All", then one option per hub of `/hubs` | `hubId` |
+| `date` = `today`, `week`, `last30` | the second `<select>`: "Date: Any" (added, the default), "Today", "This week", "Last 30 days" | `datePreset=Today`, `ThisWeek`, `Last30Days` |
 | `status` = `ready`, `inprogress`, `completed` | the third `<select>`: "Status: Any", "New", "In progress", "Completed" (added) | `status=Ready`, `InProgress`, `Completed` |
-| `q` | the search box | `q` |
+| `search` | the search box | `search` |
 | `page` | Prev / Next | `page` |
 
-- The filters are the mockup's three selects. A change navigates with the new value and without
-  `page`; so does a tab and a search. A tab link keeps `hub`, `date`, `status` and `q`.
-- A value the page does not know is treated as absent; so is a `q` shorter than 3 or longer than
-  50 characters after trimming — the API would answer `400`. The input has `maxlength="50"`.
+- The filters are the mockup's three selects. A change shows the view with the new value and
+  without `page`; so does a tab and a search. A tab link keeps `hub`, `date`, `status` and
+  `search`. While the new list loads, the old cards stay, dimmed (`aria-busy`).
+- A value the page does not know is treated as absent, a `hub` that is not one of the loaded hubs
+  included; so is a `search` shorter than 3 or longer than 50 characters after trimming, or with a
+  control character — the API would answer `400`. A `page` outside 1–10 000 is the first page. The
+  input has `maxlength="50"`.
+- When `/hubs` fails, the Hub select reads "Hub: unavailable" and is disabled, and the list loads
+  without a hub.
 - On the Drafts tab the Status select is disabled and `status` from the URL is not sent to the
   list. `/orders/counts` always receives the URL's `status`.
-- The tab counters come from `/orders/counts` with the same `hub`, `date`, `status` and `q`.
-- "Showing {from}–{to} of {total}"; Prev and Next are disabled at the ends. An empty result says
-  "No orders match these filters"; a page past the end shows that too, with Prev enabled.
+- The tab counters come from `/orders/counts` with the same `hubId`, `datePreset`, `status` and
+  `search`.
+- "Showing {from}–{to} of {total}", and "Showing 0 of {total}" for an empty page; Prev and Next
+  are disabled at the ends. An empty result says "No orders match these filters"; a page past the
+  end shows that too, with Prev enabled.
 - The page title stays "All Orders".
 - Disabled: "Export CSV", "+ New Order", the Table and Pipeline buttons; Cards stays the active
   one. The Pipeline note is removed.
@@ -234,7 +255,7 @@ Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GE
   **Carrier** — the carrier's name, "Driver: {name}", "Self pickup" or "—". **Destination** —
   "Calgary, AB" or "—". **Trailers** — "{n} consolidated", only on a Consolidation with outbound
   trailers; without it Destination spans two columns as on the mockup's Cross-Dock cards.
-- Footer, from `next.code`: `ContinueEditing` → "Continue editing →" (a link to the detail);
+- Footer, from `nextStep.code`: `ContinueEditing` → "Continue editing →" (a link to the detail);
   `AwaitingTruck` → "Next: Waiting for truck"; `Unloading` → "Next: Unloading"; `Loading` →
   "Next: Loading"; `AwaitingCompletion` → "Next: Completion"; `UploadPhoto` → "⚠ Next: Upload
   photo" and `ReviewQuantityDelta` → "⚠ Next: Review quantity", both in the mockup's red;
@@ -244,7 +265,10 @@ Calls `GET /api/v1/orders`, `GET /api/v1/orders/counts`, `GET /api/v1/hubs`, `GE
 
 ### `order.html`
 
-Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `orders.html`.
+Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `orders.html`. An
+`n` of `.` or `..`, which the URL parser folds into another path, and a number that reaches
+another endpoint, such as `counts`, show the not-found state. The order number is the page's
+`h1`; the sections and the dialog title are `h2`.
 
 **Header**
 
@@ -265,7 +289,7 @@ Calls `GET /api/v1/orders/{n}` and `GET /api/v1/me`. Without `n` it goes to `ord
 
 - Ref N inline for one shipment; "{n} sub-orders" for several.
 - The "by" chip with the derived initials and the tag "ADMIN" or "DISP".
-- "⚠ Actual ≠ Expected" when `totals.quantityDeltas` is above zero, and after it a
+- "⚠ Actual ≠ Expected" when `totals.quantityDeltaCount` is above zero, and after it a
   `badge badge-alert` "⚠ Missing photo" while any shipment has an open Missing photo alert.
 - Icon bar: "💬 {comments}" and "📷 {photos}" as plain sums, without denominators; all its
   buttons, "Share QR", "BOL PDF" and "Edit" are disabled.

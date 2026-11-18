@@ -1,4 +1,5 @@
 using FastEndpoints.OpenApi;
+using Freitty.Api.Endpoints;
 using Scalar.AspNetCore;
 
 namespace Freitty.Api.OpenApi;
@@ -7,9 +8,10 @@ namespace Freitty.Api.OpenApi;
 // demo shows them.
 internal static class ApiDocumentation
 {
-    private const string DocumentName = "v1";
-    private const int DocumentedVersion = 1;
     private const string Title = "Freitty Cabinet API";
+
+    // The document is named for the one version the endpoints are served under.
+    private static readonly string DocumentName = $"{ApiEndpoints.VersionPrefix}{ApiEndpoints.CurrentVersion}";
 
     public static IServiceCollection AddApiDocumentation(this IServiceCollection services)
     {
@@ -20,7 +22,7 @@ internal static class ApiDocumentation
             options.Version = DocumentName;
 
             // The default of 0 lists no versioned endpoint.
-            options.MaxEndpointVersion = DocumentedVersion;
+            options.MaxEndpointVersion = ApiEndpoints.CurrentVersion;
             options.ShortSchemaNames = true;
             options.ExcludeNonFastEndpoints = true;
             options.EnableJWTBearerAuth = false;

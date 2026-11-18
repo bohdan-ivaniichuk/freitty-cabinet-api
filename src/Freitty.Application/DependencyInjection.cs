@@ -1,6 +1,7 @@
 using Freitty.Application.Common;
 using Freitty.Application.Orders;
 using Freitty.Application.Orders.Cards;
+using Freitty.Application.Orders.GetOrderDetail;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Freitty.Application;
@@ -14,6 +15,7 @@ public static class DependencyInjection
         services.AddScoped<ReportingCalendar>();
         services.AddScoped<OrderFilter>();
         services.AddScoped<OrderCardReader>();
+        services.AddScoped<OrderDetailReader>();
         return services;
     }
 }

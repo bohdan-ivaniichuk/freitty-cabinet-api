@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="Freitty.Api.IntegrationTests.Support" />
     <Using Include="Xunit" />
   </ItemGroup>
 

@@ -2,8 +2,10 @@ namespace Freitty.Domain.Orders;
 
 public sealed class Operation
 {
+    public const int MaxTrailerNumberLength = 20;
+
     // Unloading and Loading move freight between a trailer and the dock, so they record the trailer number.
-    internal static readonly IReadOnlySet<OperationType> TypesWithTrailer =
+    private static readonly IReadOnlySet<OperationType> TypesWithTrailer =
         new HashSet<OperationType> { OperationType.Unloading, OperationType.Loading };
 
     // These document the condition of freight; recorded without a photo, they raise a MissingPhoto alert.
@@ -47,6 +49,11 @@ public sealed class Operation
     public int PhotoCount { get; private set; }
 
     public int CommentCount { get; private set; }
+
+    public static bool RequiresTrailer(OperationType type)
+    {
+        return TypesWithTrailer.Contains(type);
+    }
 
     // A Restack rearranges pallets and does not change their count.
     internal int StockChange => Type switch

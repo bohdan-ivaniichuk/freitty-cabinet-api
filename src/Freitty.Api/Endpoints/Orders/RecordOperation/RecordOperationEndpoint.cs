@@ -1,6 +1,7 @@
 using FastEndpoints;
-using Freitty.Api.Endpoints.Orders.Detail;
+using Freitty.Api.Endpoints.Orders.GetOrderDetail;
 using Freitty.Api.Errors;
+using Freitty.Application.Orders;
 using Freitty.Application.Orders.RecordOperation;
 using Freitty.Domain.Common;
 using Freitty.Domain.Orders;
@@ -11,11 +12,9 @@ namespace Freitty.Api.Endpoints.Orders.RecordOperation;
 // a value of the body. The number is read from the route, as the detail endpoint reads it.
 internal sealed class RecordOperationEndpoint : Endpoint<RecordOperationRequest, RecordedOperationDto>
 {
-    private const string NumberParameter = "number";
-
     public override void Configure()
     {
-        Post($"orders/{{{NumberParameter}}}/operations");
+        Post(ApiRoutes.Orders.Operations);
         RequestBinder(new RequestBinder<RecordOperationRequest>(BindingSource.JsonBody));
         Description(endpoint => endpoint
             .ClearDefaultProduces()
@@ -38,7 +37,7 @@ internal sealed class RecordOperationEndpoint : Endpoint<RecordOperationRequest,
             summary.RequestParam(
                 request => request.TrailerNumber,
                 "Required for Unloading and Loading, at most " +
-                $"{RecordOperationCommandValidator.MaxTrailerNumberLength} characters; null or left out for " +
+                $"{Operation.MaxTrailerNumberLength} characters; null or left out for " +
                 "Disposal and Restack.");
             summary.RequestParam(
                 request => request.PhotoCount,
@@ -47,7 +46,8 @@ internal sealed class RecordOperationEndpoint : Endpoint<RecordOperationRequest,
             summary.RequestParam(
                 request => request.ExpectedVersion,
                 "The version of the order the caller loaded, from its detail.");
-            summary.Params[NumberParameter] = "The order number, e.g. FR001383; matched case-insensitively.";
+            summary.Params[ApiRoutes.Orders.NumberParameter] =
+                "The order number, e.g. FR001383; matched case-insensitively.";
             summary.ExampleRequest = new RecordOperationRequest(
                 ShipmentPosition: 1,
                 Type: OperationType.Loading,
@@ -61,28 +61,29 @@ internal sealed class RecordOperationEndpoint : Endpoint<RecordOperationRequest,
                 "the order.";
             summary.Responses[StatusCodes.Status400BadRequest] = "A field is missing, out of range or not understood.";
             summary.Responses[StatusCodes.Status404NotFound] =
-                "No such order in the current company (order.not_found), or no shipment at that position " +
-                "(shipment.not_found).";
+                $"No such order in the current company ({OrderRequestErrors.OrderNotFoundCode}), or no shipment at " +
+                $"that position ({OrderErrors.ShipmentNotFoundCode}).";
             summary.Responses[StatusCodes.Status409Conflict] =
-                "The order changed since the caller loaded it, or while the request ran (order.version_conflict); " +
-                "the order is not Ready or InProgress (order.not_active); more than is on stock " +
-                "(operation.exceeds_stock).";
+                "The order changed since the caller loaded it, or while the request ran " +
+                $"({OrderRequestErrors.VersionConflictCode}); the order is not Ready or InProgress " +
+                $"({OrderErrors.NotActiveCode}); more than is on stock ({OrderErrors.ExceedsStockCode}).";
         });
     }
 
     public override async Task HandleAsync(RecordOperationRequest request, CancellationToken ct)
     {
-        RecordOperationCommand command = request.ToCommand(Route<string>(NumberParameter)!);
-        Result<RecordedOperationDto> recorded = await command.ExecuteAsync(ct);
-        if (recorded.IsFailure)
+        RecordOperationCommand command = request.ToCommand(Route<string>(ApiRoutes.Orders.NumberParameter)!);
+        Result<RecordedOperationDto> recordResult = await command.ExecuteAsync(ct);
+        if (recordResult.IsFailure)
         {
-            await Send.ResultAsync(recorded.Error.ToProblem());
+            await Send.ResultAsync(recordResult.Error.ToProblem());
             return;
         }
 
+        RecordedOperationDto recorded = recordResult.Value;
         await Send.CreatedAtAsync<GetOrderDetailEndpoint>(
-            new { number = recorded.Value.Order.Number },
-            recorded.Value,
+            new RouteValueDictionary { [ApiRoutes.Orders.NumberParameter] = recorded.Order.Number },
+            recorded,
             cancellation: ct);
     }
 }

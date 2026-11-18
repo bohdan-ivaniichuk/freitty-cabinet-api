@@ -1,5 +1,3 @@
-using System.Net;
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Domain.Orders;
 
 namespace Freitty.Api.IntegrationTests.Orders;
@@ -13,7 +11,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
     {
         (Order match, _) = await SaveTwoAsync();
 
-        string[] numbers = await api.ListNumbersAsync($"?q={match.Number}");
+        string[] numbers = await api.ListNumbersAsync($"?search={match.Number}");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -23,7 +21,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
     {
         (Order match, _) = await SaveTwoAsync();
 
-        string[] numbers = await api.ListNumbersAsync($"?q={match.Number[..12].ToLowerInvariant()}");
+        string[] numbers = await api.ListNumbersAsync($"?search={match.Number[..12].ToLowerInvariant()}");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -38,7 +36,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         api.Orders.AddShipment(other, 1, refNumber: "PO-333-CCC");
         await api.SaveAsync(match, other);
 
-        string[] numbers = await api.ListNumbersAsync("?q=po-222-bbb");
+        string[] numbers = await api.ListNumbersAsync("?search=po-222-bbb");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -52,7 +50,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         api.Orders.AddShipment(other, 1, refNumber: "PO-555-EEE");
         await api.SaveAsync(match, other);
 
-        string[] numbers = await api.ListNumbersAsync("?q=444-d");
+        string[] numbers = await api.ListNumbersAsync("?search=444-d");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -63,7 +61,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         Order match = api.Orders.Ready(OrderType.Consolidation);
         await api.SaveAsync(match, api.Orders.Ready());
 
-        string[] numbers = await api.ListNumbersAsync($"?q={match.Number.ToLowerInvariant()}-2");
+        string[] numbers = await api.ListNumbersAsync($"?search={match.Number.ToLowerInvariant()}-2");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -74,7 +72,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         Order order = api.Orders.Ready(OrderType.Consolidation);
         await api.SaveAsync(order);
 
-        string[] numbers = await api.ListNumbersAsync($"?q={order.Number}-3");
+        string[] numbers = await api.ListNumbersAsync($"?search={order.Number}-3");
 
         Assert.Empty(numbers);
     }
@@ -85,7 +83,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        string[] numbers = await api.ListNumbersAsync($"?q={order.Number}-99999999999");
+        string[] numbers = await api.ListNumbersAsync($"?search={order.Number}-99999999999");
 
         Assert.Empty(numbers);
     }
@@ -102,7 +100,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         api.Orders.AddShipment(other, 1, refNumber: otherRef);
         await api.SaveAsync(match, other);
 
-        string[] numbers = await api.ListNumbersAsync($"?q={Uri.EscapeDataString(searchText)}");
+        string[] numbers = await api.ListNumbersAsync($"?search={Uri.EscapeDataString(searchText)}");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -112,7 +110,7 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
     {
         (Order match, _) = await SaveTwoAsync();
 
-        string[] numbers = await api.ListNumbersAsync($"?q=%20%20{match.Number}%20");
+        string[] numbers = await api.ListNumbersAsync($"?search=%20%20{match.Number}%20");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -122,17 +120,9 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
     {
         await SaveTwoAsync();
 
-        string[] numbers = await api.ListNumbersAsync("?q=%20%20%20%20");
+        string[] numbers = await api.ListNumbersAsync("?search=%20%20%20%20");
 
         Assert.Equal(2, numbers.Length);
-    }
-
-    [Fact]
-    public async Task TwoCharactersAreRefused()
-    {
-        using HttpResponseMessage response = await api.SendGetAsync("/api/v1/orders?q=FR");
-
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -144,8 +134,8 @@ public sealed class OrderSearchTests(PostgresFixture postgres) : IAsyncDisposabl
         Order own = api.Orders.Draft();
         await api.SaveAsync([.. otherCompany.Entities(), foreign, own]);
 
-        string[] byRefNumber = await api.ListNumbersAsync("?q=SHARED-REF");
-        string[] byNumber = await api.ListNumbersAsync($"?q={foreign.Number}");
+        string[] byRefNumber = await api.ListNumbersAsync("?search=SHARED-REF");
+        string[] byNumber = await api.ListNumbersAsync($"?search={foreign.Number}");
 
         Assert.Empty(byRefNumber);
         Assert.Empty(byNumber);

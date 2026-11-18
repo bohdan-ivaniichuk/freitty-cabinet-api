@@ -1,4 +1,3 @@
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Orders.CountOrders;
 using Freitty.Domain.Orders;
 
@@ -32,10 +31,10 @@ public sealed class OrderCountsTests(PostgresFixture postgres) : IAsyncDisposabl
     public async Task EachCounterEqualsTheTotalOfTheListUnderTheSameFilters()
     {
         await SaveMixedOrdersAsync();
-        string[] hubs = [string.Empty, $"hub={api.Data.OtherHub.Id}"];
+        string[] hubs = [string.Empty, $"hubId={api.Data.OtherHub.Id}"];
         string[] statuses = [string.Empty, "status=Draft", "status=InProgress"];
-        string[] dates = [string.Empty, "date=ThisWeek"];
-        string[] searches = [string.Empty, "q=REF"];
+        string[] dates = [string.Empty, "datePreset=ThisWeek"];
+        string[] searches = [string.Empty, "search=REF"];
 
         foreach (string filters in Combine(hubs, statuses, dates, searches))
         {
@@ -46,7 +45,7 @@ public sealed class OrderCountsTests(PostgresFixture postgres) : IAsyncDisposabl
                 await TotalAsync(filters),
                 await TotalAsync($"{filters}&type=CrossDock"),
                 await TotalAsync($"{filters}&type=Consolidation"),
-                await TotalAsync($"{filters}&alerts=true"),
+                await TotalAsync($"{filters}&hasOpenAlerts=true"),
                 await TotalAsync($"{withoutStatus}&status=Draft"));
             Assert.True(counts == totals, $"With '{filters}' the counters are {counts}, the list totals {totals}.");
         }
@@ -109,7 +108,7 @@ public sealed class OrderCountsTests(PostgresFixture postgres) : IAsyncDisposabl
 
     private Task<OrderCountsDto> CountAsync(string filters)
     {
-        return api.GetAsync<OrderCountsDto>($"/api/v1/orders/counts?{filters}");
+        return api.GetAsync<OrderCountsDto>($"{ApiUrls.OrderCounts}?{filters}");
     }
 
     private async Task<int> TotalAsync(string filters)

@@ -46,8 +46,9 @@ The OpenAPI document comes from `FastEndpoints.OpenApi`, which builds on
 
 ## Consequences
 
-- An operation is one folder in Application — query, handler, validator — and one endpoint class
-  in Api. Handlers are testable without a web host, though the tests here go through HTTP.
+- An operation is one folder in Application — query, handler, validator — and one endpoint class in
+  a folder of the same name in Api. Handlers are testable without a web host, though the tests here
+  go through HTTP.
 - Application depends on a FastEndpoints package. It is an interface-only package with no
   dependencies; replacing the bus means replacing two interfaces.
 - The middleware lives in Api, because the bus's middleware contract and `ExecuteAsync` sit in a

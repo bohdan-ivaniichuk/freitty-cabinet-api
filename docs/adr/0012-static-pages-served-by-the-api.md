@@ -34,10 +34,15 @@ The API serves the pages from `wwwroot`, on the same origin as `/api/v1`.
 - The pages keep the mockup's markup and classes; what differs is listed in the step's spec —
   sample data removed, controls without a function disabled, design notes dropped.
 - The API contract is exercised by a real client: every value on screen comes from an endpoint.
-- Every change of view is a full page load. For three pages on one origin that is instant, and it
-  is what makes Reload and Back correct without history code.
+- Moving between the three pages is an ordinary link and a full page load. Within a page, a change
+  of view — a tab, a filter, a search or a page of the list, a period of the chart — is made in
+  place: the URL is rewritten through the History API and only the affected blocks are loaded
+  again. The cost is a little history code per page — `pushState`, a `popstate` handler, plain
+  clicks told from modified ones — and a page restored from the back/forward cache must load its
+  data again.
 - No components: the order card is shared by two pages as a module and a `<template>` copied into
   both. Accepted at three pages; a fourth page with cards is the point to reconsider.
 - No client-side tests. The pages are checked in a browser against the running stack; the
   behaviour worth automating lives behind the API and is tested there.
-- State is in the URL, so a link reproduces a view without a client-side router.
+- State is in the URL, so a link reproduces a view, and Reload and Back keep working, without a
+  client-side router.

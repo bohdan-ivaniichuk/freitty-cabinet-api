@@ -72,7 +72,7 @@ public sealed class OrderListPagingTests(PostgresFixture postgres) : IAsyncDispo
         OrderPageDto page = await api.ListAsync();
 
         Assert.Equal(1, page.Page);
-        Assert.Equal(ListOrdersQuery.DefaultPageSize, page.PageSize);
+        Assert.Equal(12, page.PageSize);
     }
 
     public async ValueTask DisposeAsync()

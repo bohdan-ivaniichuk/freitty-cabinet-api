@@ -1,12 +1,10 @@
-using Freitty.Api.IntegrationTests.Orders;
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Dashboard.GetDashboard;
 using Freitty.Domain.Orders;
 
 namespace Freitty.Api.IntegrationTests.Dashboard;
 
-// The API's clock stands at 12:00 on Wednesday 15 April 2026 in Toronto: the last 30 days begin at 16:00 UTC on
-// 16 March, the 30 before them at 16:00 UTC on 14 February, and the week on Monday 13 April.
+// At CabinetApi.Now the last 30 days begin at 16:00 UTC on 16 March, the 30 before them at 16:00 UTC on
+// 14 February, and the week on Monday 13 April.
 public sealed class DashboardTilesTests(PostgresFixture postgres) : IAsyncDisposable
 {
     private static readonly DateTimeOffset Last30DaysFrom = CabinetApi.Now.AddDays(-30);
@@ -41,7 +39,7 @@ public sealed class DashboardTilesTests(PostgresFixture postgres) : IAsyncDispos
             laterApi.Orders.Completed(completedAt: previous30DaysFrom),
             laterApi.Orders.Completed(completedAt: previous30DaysFrom.AddSeconds(-1)));
 
-        DashboardDto dashboard = await laterApi.GetAsync<DashboardDto>("/api/v1/dashboard");
+        DashboardDto dashboard = await laterApi.GetAsync<DashboardDto>(ApiUrls.Dashboard);
 
         Assert.Equal(new CompletedOrdersDto(Last30Days: 0, Previous30Days: 1), dashboard.Completed);
     }
@@ -57,7 +55,7 @@ public sealed class DashboardTilesTests(PostgresFixture postgres) : IAsyncDispos
             OrderBuilder.IssueInvoice(order, 100.00m, last30DaysFrom, paid: false),
             OrderBuilder.IssueInvoice(order, 7.00m, last30DaysFrom.AddSeconds(-1), paid: false));
 
-        DashboardDto dashboard = await laterApi.GetAsync<DashboardDto>("/api/v1/dashboard");
+        DashboardDto dashboard = await laterApi.GetAsync<DashboardDto>(ApiUrls.Dashboard);
 
         Assert.Equal(100.00m, dashboard.Activity.Summary.SpendLast30Days);
     }
@@ -164,6 +162,6 @@ public sealed class DashboardTilesTests(PostgresFixture postgres) : IAsyncDispos
 
     private Task<DashboardDto> DashboardAsync()
     {
-        return api.GetAsync<DashboardDto>("/api/v1/dashboard");
+        return api.GetAsync<DashboardDto>(ApiUrls.Dashboard);
     }
 }

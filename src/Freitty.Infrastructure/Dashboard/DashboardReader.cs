@@ -1,7 +1,6 @@
 using Dapper;
 using Freitty.Application.Common;
 using Freitty.Application.Dashboard;
-using Freitty.Application.Dashboard.GetDashboard;
 using Freitty.Domain.Orders;
 using Npgsql;
 
@@ -25,10 +24,10 @@ internal sealed class DashboardReader(NpgsqlDataSource dataSource, ReportingTime
         {
             CompanyId = companyId,
             Now = utcNow,
-            Last30DaysFrom = utcNow - rollingWindow,
-            Previous30DaysFrom = utcNow - (2 * rollingWindow),
+            WindowFrom = utcNow - rollingWindow,
+            PreviousWindowFrom = utcNow - (2 * rollingWindow),
             Zone = reportingTimeZone.Id,
-            ActiveStatuses = ActiveOrderStatuses.All.Select(status => (int)status).ToArray(),
+            ActiveStatuses = Order.ActiveStatuses.Select(status => (int)status).ToArray(),
         };
         await using NpgsqlConnection connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return await connection.QuerySingleAsync<DashboardFigures>(
@@ -38,17 +37,19 @@ internal sealed class DashboardReader(NpgsqlDataSource dataSource, ReportingTime
     public async Task<IReadOnlyList<ActivityBucketDto>> ReadActivityAsync(
         Guid companyId,
         DateTimeOffset now,
-        ActivityAxis axis,
+        ActivityPeriod period,
+        int bucketCount,
         CancellationToken cancellationToken)
     {
+        (string unit, string step) = AxisOf(period);
         var parameters = new
         {
             CompanyId = companyId,
             Now = now.ToUniversalTime(),
             Zone = reportingTimeZone.Id,
-            axis.Unit,
-            axis.Step,
-            axis.Buckets,
+            Unit = unit,
+            Step = step,
+            BucketCount = bucketCount,
         };
         await using NpgsqlConnection connection = await dataSource.OpenConnectionAsync(cancellationToken);
         IEnumerable<ActivityBucketDto> buckets = await connection.QueryAsync<ActivityBucketDto>(
@@ -76,6 +77,20 @@ internal sealed class DashboardReader(NpgsqlDataSource dataSource, ReportingTime
         return rows
             .Select(row => new AlertOrderDto(row.Number, row.AlertTypes.Select(type => (AlertType)type).ToList()))
             .ToList();
+    }
+
+    // The calendar unit a bucket starts on, as date_trunc names it, and the length of one bucket as an interval; a
+    // quarter is stepped as three months.
+    private static (string Unit, string Step) AxisOf(ActivityPeriod period)
+    {
+        return period switch
+        {
+            ActivityPeriod.Day => ("day", "1 day"),
+            ActivityPeriod.Week => ("week", "1 week"),
+            ActivityPeriod.Month => ("month", "1 month"),
+            ActivityPeriod.Quarter => ("quarter", "3 months"),
+            _ => throw new ArgumentOutOfRangeException(nameof(period), period, "The activity period is not known."),
+        };
     }
 
     private static CommandDefinition Command(string sql, object parameters, CancellationToken cancellationToken)

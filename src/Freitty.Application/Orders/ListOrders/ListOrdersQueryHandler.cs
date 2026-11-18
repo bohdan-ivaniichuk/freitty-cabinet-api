@@ -20,17 +20,17 @@ public sealed class ListOrdersQueryHandler(
         IQueryable<Order> orders = filter.Apply(
             db.Orders.AsNoTracking(),
             user.CompanyId,
-            query.Hub,
-            query.Date,
+            query.HubId,
+            query.DatePreset,
             query.Status,
-            query.Q);
+            query.Search);
 
         if (query.Type is { } type)
         {
             orders = orders.Where(order => order.Type == type);
         }
 
-        if (query.Alerts)
+        if (query.HasOpenAlerts)
         {
             orders = OrderFilter.WithOpenAlert(orders);
         }

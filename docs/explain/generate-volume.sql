@@ -1,5 +1,5 @@
 -- Fills a migrated, unseeded database with a volume large enough for the planner to care: 200 000 orders in
--- 50 companies, one to three shipments each, with cargo lines, Operations and invoices — about half a minute on
+-- 50 companies, one or three shipments each, with cargo lines, Operations and invoices — about half a minute on
 -- a laptop. Deterministic: every value follows from the row number. Ids have no column default, so they come from
 -- PostgreSQL 18's uuidv7().
 --
@@ -11,7 +11,7 @@
 -- numbers; shipment positions from 1 with unique Ref Ns per order, arrival and dock columns all or none; one cargo
 -- line per Unit Type; a trailer number exactly on Unloading and Loading.
 --
--- Shape of order n (1 … 200 000): company n % 50; every 4th a Consolidation (2 or 3 shipments), the rest
+-- Shape of order n (1 … 200 000): company n % 50; every 4th a Consolidation (3 shipments), the rest
 -- Cross-Docks; status by n % 20 — 0 Draft, 1–2 Ready, 3–4 In progress, the rest Completed; Scheduled dates spread
 -- over 2025–2026, none on every other draft.
 

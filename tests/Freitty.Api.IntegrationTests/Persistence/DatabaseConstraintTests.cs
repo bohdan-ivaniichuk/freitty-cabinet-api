@@ -18,7 +18,7 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     [Fact]
     public async Task SecondOpenAlertOfOneTypeOnShipmentIsRefused()
     {
-        (TestData data, Order order) = InProgressWithOpenMissingPhotoAlert();
+        (TestData data, Order order) = WithOpenMissingPhotoAlert();
         await database.SaveAsync([.. data.Entities(), order]);
 
         await AssertRefusedAsync(
@@ -30,9 +30,9 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     [Fact]
     public async Task SecondAlertOfOneTypeIsAcceptedOnceFirstIsResolved()
     {
-        (TestData data, Order order) = InProgressWithOpenMissingPhotoAlert();
+        (TestData data, Order order) = WithOpenMissingPhotoAlert();
         Shipment shipment = order.Shipments.Single();
-        TestData.Succeed(order.ResolveAlert(shipment.Alerts.Single().Id, TestData.Now));
+        order.ResolveAlert(shipment.Alerts.Single().Id, OrderBuilder.BuiltAt).MustSucceed();
         await database.SaveAsync([.. data.Entities(), order]);
 
         await database.InContextAsync(db => InsertMissingPhotoAlertAsync(db, shipment.Id));
@@ -46,8 +46,9 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task DuplicateOrderNumberWithinCompanyIsRefused()
     {
         TestData data = TestData.Create();
-        Order first = data.Draft();
-        Order second = data.Draft();
+        var orders = new OrderBuilder(data);
+        Order first = orders.Draft();
+        Order second = orders.Draft();
         await database.SaveAsync([.. data.Entities(), first, second]);
 
         await AssertRefusedAsync(
@@ -63,8 +64,8 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     {
         TestData firstCompany = TestData.Create();
         TestData secondCompany = TestData.Create();
-        Order first = firstCompany.Ready();
-        Order second = secondCompany.Ready();
+        Order first = new OrderBuilder(firstCompany).Ready();
+        Order second = new OrderBuilder(secondCompany).Ready();
         await database.SaveAsync([.. firstCompany.Entities(), .. secondCompany.Entities(), first, second]);
 
         await AssertRefusedAsync(
@@ -84,7 +85,8 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
 
         await database.SaveAsync(
             [.. firstCompany.Entities(), .. secondCompany.Entities(),
-                firstCompany.Draft(draftNumber), secondCompany.Draft(draftNumber)]);
+                new OrderBuilder(firstCompany).Draft(draftNumber: draftNumber),
+                new OrderBuilder(secondCompany).Draft(draftNumber: draftNumber)]);
 
         int orderCount = await database.InContextAsync(
             db => db.Orders.CountAsync(order => order.Number == draftNumber, CancellationToken));
@@ -95,8 +97,8 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task CargoLineWithQuantityZeroIsRefused()
     {
         TestData data = TestData.Create();
-        Order draft = data.Draft();
-        Shipment shipment = draft.AddShipment(TestData.Unique("REF-"), TestData.Now).Value;
+        Order draft = new OrderBuilder(data).Draft();
+        Shipment shipment = draft.AddShipment(TestData.Unique("REF-"), OrderBuilder.BuiltAt).MustSucceed();
         await database.SaveAsync([.. data.Entities(), draft]);
 
         await AssertRefusedAsync(
@@ -114,7 +116,7 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task CarrierOnOrderWithoutTransportKindIsRefused()
     {
         TestData data = TestData.Create();
-        Order draft = data.Draft();
+        Order draft = new OrderBuilder(data).Draft();
         await database.SaveAsync([.. data.Entities(), draft]);
 
         await AssertRefusedAsync(
@@ -129,7 +131,7 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task CompletedOrderWithoutCompletedAtIsRefused()
     {
         TestData data = TestData.Create();
-        Order order = data.InProgress();
+        Order order = InProgress(data);
         await database.SaveAsync([.. data.Entities(), order]);
 
         await AssertRefusedAsync(
@@ -146,7 +148,7 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task StatusOutsideEnumIsRefused()
     {
         TestData data = TestData.Create();
-        Order order = data.Ready();
+        Order order = new OrderBuilder(data).Ready();
         await database.SaveAsync([.. data.Entities(), order]);
 
         await AssertRefusedAsync(
@@ -161,7 +163,9 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task DeletingDraftRemovesItsShipmentsAndCargoLines()
     {
         TestData data = TestData.Create();
-        Order draft = data.DraftWithCargo();
+        var orders = new OrderBuilder(data);
+        Order draft = orders.Draft();
+        orders.AddShipment(draft, OrderBuilder.DeclaredStandard);
         Guid shipmentId = draft.Shipments.Single().Id;
         await database.SaveAsync([.. data.Entities(), draft]);
 
@@ -178,9 +182,8 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
     public async Task DeletingOrderWithOperationIsRefused()
     {
         TestData data = TestData.Create();
-        Order order = data.Ready();
-        _ = order.RecordOperation(order.Shipments.Single().Id, TestData.DeclaredUnloading(photoCount: 1), TestData.Now)
-            .Value;
+        Order order = new OrderBuilder(data).Ready();
+        OrderBuilder.Unload(order, order.Shipments.Single(), OrderBuilder.DeclaredStandard, photos: 1);
         await database.SaveAsync([.. data.Entities(), order]);
 
         await AssertRefusedAsync(
@@ -194,13 +197,20 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
         await database.DisposeAsync();
     }
 
-    private static (TestData Data, Order Order) InProgressWithOpenMissingPhotoAlert()
+    // Unloaded as declared, so the photo is the only thing missing.
+    private static (TestData Data, Order Order) WithOpenMissingPhotoAlert()
     {
         TestData data = TestData.Create();
-        Order order = data.InProgress();
-        _ = order.RecordOperation(order.Shipments.Single().Id, TestData.DeclaredUnloading(photoCount: 0), TestData.Now)
-            .Value;
+        Order order = InProgress(data);
+        OrderBuilder.Unload(order, order.Shipments.Single(), OrderBuilder.DeclaredStandard, photos: 0);
         return (data, order);
+    }
+
+    private static Order InProgress(TestData data)
+    {
+        Order order = new OrderBuilder(data).Ready();
+        OrderBuilder.Arrive(order, order.Shipments.Single());
+        return order;
     }
 
     private static Task<int> InsertMissingPhotoAlertAsync(AppDbContext db, Guid shipmentId)
@@ -208,7 +218,7 @@ public sealed class DatabaseConstraintTests(PostgresFixture postgres) : IAsyncDi
         return db.Database.ExecuteSqlAsync(
             $"""
             INSERT INTO alerts (id, shipment_id, type, raised_at)
-            VALUES ({Guid.CreateVersion7()}, {shipmentId}, {(int)AlertType.MissingPhoto}, {TestData.Now})
+            VALUES ({Guid.CreateVersion7()}, {shipmentId}, {(int)AlertType.MissingPhoto}, {OrderBuilder.BuiltAt})
             """,
             CancellationToken);
     }

@@ -1,6 +1,6 @@
 # Search by Ref N
 
-The page query of `GET /api/v1/orders?q=REF-0000224`: the `UNION` of all three branches — the text
+The page query of `GET /api/v1/orders?search=REF-0000224`: the `UNION` of all three branches — the text
 ends in a hyphen and digits, so the label branch looks for an order numbered `REF` with a shipment at
 position 224. Dropped for "before": `ix_shipments_ref_number_trgm`.
 

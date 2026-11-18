@@ -18,10 +18,10 @@ internal static class DashboardSql
                       AND (completed_at IS NULL OR completed_at >= week_start)
                 ) AS active_at_week_start,
                 count(*) FILTER (
-                    WHERE completed_at >= @Last30DaysFrom AND completed_at < @Now
+                    WHERE completed_at >= @WindowFrom AND completed_at < @Now
                 ) AS completed_last,
                 count(*) FILTER (
-                    WHERE completed_at >= @Previous30DaysFrom AND completed_at < @Last30DaysFrom
+                    WHERE completed_at >= @PreviousWindowFrom AND completed_at < @WindowFrom
                 ) AS completed_previous
             FROM orders
             CROSS JOIN this_week
@@ -34,7 +34,7 @@ internal static class DashboardSql
             FROM invoices
             JOIN orders ON orders.id = invoices.order_id
             WHERE orders.company_id = @CompanyId
-              AND invoices.issued_at >= @Last30DaysFrom AND invoices.issued_at < @Now
+              AND invoices.issued_at >= @WindowFrom AND invoices.issued_at < @Now
         )
         SELECT
             active::int AS "ActiveOrders",
@@ -58,7 +58,7 @@ internal static class DashboardSql
         WITH axis AS (
             SELECT local_start, local_start AT TIME ZONE @Zone AS bucket_start
             FROM generate_series(
-                date_trunc(@Unit, @Now AT TIME ZONE @Zone) - @Step::interval * (@Buckets - 1),
+                date_trunc(@Unit, @Now AT TIME ZONE @Zone) - @Step::interval * (@BucketCount - 1),
                 date_trunc(@Unit, @Now AT TIME ZONE @Zone),
                 @Step::interval
             ) AS local_start

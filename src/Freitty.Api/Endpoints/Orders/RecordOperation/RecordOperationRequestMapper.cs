@@ -6,5 +6,5 @@ namespace Freitty.Api.Endpoints.Orders.RecordOperation;
 [Mapper]
 internal static partial class RecordOperationRequestMapper
 {
-    public static partial RecordOperationCommand ToCommand(this RecordOperationRequest request, string number);
+    public static partial RecordOperationCommand ToCommand(this RecordOperationRequest request, string orderNumber);
 }

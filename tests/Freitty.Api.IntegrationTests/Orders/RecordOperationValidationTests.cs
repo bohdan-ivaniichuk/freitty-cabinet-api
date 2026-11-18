@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Mime;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Freitty.Application.Orders;
@@ -44,13 +45,10 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
         await api.SaveAsync(order);
 
         using HttpResponseMessage response = await api.SendPostAsync(
-            OperationRequest.UrlOf(order.Number),
+            ApiUrls.Operations(order.Number),
             Changed(OperationRequest.Unloading(order, 1), change));
-        JsonElement problem = await ProblemResponse.ReadAsync(response);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(field, Assert.Single(problem.GetProperty("errors").EnumerateArray()).GetProperty("name").GetString());
-        AssertNamesNoDotNetType(problem);
+        await ProblemResponse.AssertValidationProblemAsync(response, field);
         Assert.Equal(order.Version, (await api.DetailAsync(order.Number)).Version);
     }
 
@@ -58,23 +56,49 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
     [InlineData("[]")]
     [InlineData("\"Unloading\"")]
     [InlineData("42")]
-    public async Task BodyThatIsNotAnObjectIsABadRequestOfTheWholeBody(string json)
+    [InlineData("{\"quantity\":")]
+    [InlineData("{\"quantity\": 5,, }")]
+    public async Task BodyThatIsNotAJsonObjectIsABadRequestOfTheWholeBody(string json)
     {
         Order order = api.Orders.Received();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await api.SendPostAsync(OperationRequest.UrlOf(order.Number), json);
-        JsonElement problem = await ProblemResponse.ReadAsync(response);
+        using HttpResponseMessage response = await api.SendRawPostAsync(ApiUrls.Operations(order.Number), json);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(
-            "serializerErrors",
-            Assert.Single(problem.GetProperty("errors").EnumerateArray()).GetProperty("name").GetString());
-        AssertNamesNoDotNetType(problem);
+        await AssertBodyRefusedAsync(response);
     }
 
-    // Each defined type, with and without a trailer, is either recorded or refused with a 4xx: the validator keeps
-    // every request the aggregate would reject as a broken contract from reaching it.
+    [Fact]
+    public async Task EmptyBodyIsABadRequestOfTheWholeBody()
+    {
+        Order order = api.Orders.Received();
+        await api.SaveAsync(order);
+
+        using HttpResponseMessage response = await api.SendRawPostAsync(
+            ApiUrls.Operations(order.Number),
+            string.Empty);
+
+        await AssertBodyRefusedAsync(response);
+    }
+
+    [Fact]
+    public async Task BodyThatIsNotJsonByItsContentTypeIsAnUnsupportedMediaType()
+    {
+        Order order = api.Orders.Received();
+        await api.SaveAsync(order);
+        string json = JsonSerializer.Serialize(OperationRequest.Unloading(order, 1), ApiJson.Options);
+
+        using HttpResponseMessage response = await api.SendRawPostAsync(
+            ApiUrls.Operations(order.Number),
+            json,
+            MediaTypeNames.Text.Plain);
+
+        await ProblemResponse.AssertProblemAsync(response, HttpStatusCode.UnsupportedMediaType);
+        Assert.Equal(order.Version, (await api.DetailAsync(order.Number)).Version);
+    }
+
+    // Each defined type, with and without a trailer, is either recorded or refused by validation with a 400: the
+    // validator keeps every request the aggregate would reject as a broken contract from reaching it.
     [Theory]
     [MemberData(nameof(EveryTypeWithAndWithoutTrailer))]
     public async Task NoOperationTypeReachesTheAggregateWithABrokenContract(OperationType type, bool withTrailer)
@@ -87,7 +111,7 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
             TrailerNumber = withTrailer ? OrderBuilder.TrailerNumber : null,
         };
 
-        using HttpResponseMessage response = await api.SendPostAsync(OperationRequest.UrlOf(order.Number), request);
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, request);
 
         Assert.True(
             response.StatusCode is HttpStatusCode.Created or HttpStatusCode.BadRequest,
@@ -104,7 +128,7 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
             TrailerNumber = "TRL-1234567890123456",
         };
 
-        using HttpResponseMessage response = await api.SendPostAsync(OperationRequest.UrlOf(order.Number), atLimits);
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, atLimits);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -118,7 +142,7 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
             OperationRequest.Unloading(order, 1) with { Type = OperationType.Restack, TrailerNumber = null },
             """{ "isBillable": null, "photoCount": null, "trailerNumber": null }""");
 
-        using HttpResponseMessage response = await api.SendPostAsync(OperationRequest.UrlOf(order.Number), restack);
+        using HttpResponseMessage response = await api.SendPostAsync(ApiUrls.Operations(order.Number), restack);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         OperationDto operation = Assert.Single(
@@ -144,11 +168,13 @@ public sealed class RecordOperationValidationTests(PostgresFixture postgres) : I
         return cases;
     }
 
-    private static void AssertNamesNoDotNetType(JsonElement problem)
+    private static async Task AssertBodyRefusedAsync(HttpResponseMessage response)
     {
-        string body = problem.GetRawText();
-        Assert.DoesNotContain("Freitty.", body);
-        Assert.DoesNotContain("Int32", body);
+        JsonElement problem = await ProblemResponse.AssertValidationProblemAsync(response, "serializerErrors");
+
+        Assert.Equal(
+            "The request body is not valid JSON for this endpoint.",
+            problem.GetProperty("detail").GetString());
     }
 
     private static JsonObject Changed(OperationRequest request, string change)

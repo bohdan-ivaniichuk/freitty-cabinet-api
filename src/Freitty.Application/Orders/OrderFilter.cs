@@ -1,4 +1,3 @@
-using Freitty.Application.Abstractions;
 using Freitty.Application.Common;
 using Freitty.Domain.Orders;
 
@@ -12,7 +11,7 @@ public sealed class OrderFilter(ReportingCalendar calendar, IOrderSearch search)
         IQueryable<Order> orders,
         Guid companyId,
         Guid? hubId,
-        DatePreset? date,
+        DatePreset? datePreset,
         OrderStatus? status,
         string? searchText)
     {
@@ -23,7 +22,7 @@ public sealed class OrderFilter(ReportingCalendar calendar, IOrderSearch search)
             filtered = filtered.Where(order => order.HubId == hub);
         }
 
-        if (date is { } preset)
+        if (datePreset is { } preset)
         {
             InstantRange range = calendar.RangeOf(preset);
             filtered = filtered.Where(order => order.ScheduledAt >= range.From && order.ScheduledAt < range.To);

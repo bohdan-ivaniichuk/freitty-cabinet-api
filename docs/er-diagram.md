@@ -42,7 +42,7 @@ erDiagram
         timestamptz started_at "set exactly when InProgress or Completed"
         timestamptz completed_at "set exactly when Completed; milestones are in order"
         timestamptz updated_at "set by every change to the aggregate"
-        int version "incremented by every change to the aggregate"
+        int version "incremented by every change to the aggregate; the optimistic concurrency token"
     }
 
     shipments {
@@ -203,8 +203,13 @@ erDiagram
 
 ## Indexes
 
-Besides the primary keys, the unique keys named in the diagrams and an index per foreign key, the
-Order List has three of its own (migration `OrderListIndexes`, which also enables `pg_trgm`):
+Besides the primary keys, the unique keys named in the diagrams and an index per foreign key,
+`alerts` has a partial unique index: `ix_alerts_shipment_id_type` on `(shipment_id, type) WHERE
+resolved_at IS NULL`, one open Alert per shipment and type. Its name is matched to turn a lost race
+to raise the same Alert into `409`
+([ADR 0013](adr/0013-optimistic-concurrency-on-order-version.md)).
+
+The Order List has three of its own (migration `OrderListIndexes`, which also enables `pg_trgm`):
 
 | Index | On | Serves |
 |---|---|---|

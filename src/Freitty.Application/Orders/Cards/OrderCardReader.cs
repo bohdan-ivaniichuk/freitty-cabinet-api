@@ -76,7 +76,7 @@ public sealed class OrderCardReader(IAppDbContext db)
             quantities.Sum(quantity => quantity.Declared),
             quantities.Sum(quantity => quantity.Actual),
             quantities.Exists(quantity => quantity.HasQuantityDelta),
-            order.OutboundTrailers,
+            order.OutboundTrailerCount,
             shipments.Select(shipment => ToCardShipment(order.Number, shipment, lookups)).ToList(),
             OrderProgress.NextStepOf(stage, openAlertTypes, order.FirstUnpaidInvoice, order.LastInvoice));
     }
@@ -84,11 +84,8 @@ public sealed class OrderCardReader(IAppDbContext db)
     // A Unit Type that was unloaded but never declared has quantities with nothing declared; it is no declared line.
     private static List<UnitQuantityDto> DeclaredPerUnitType(List<ShipmentQuantities> quantities)
     {
-        return quantities
-            .GroupBy(quantity => quantity.UnitType)
-            .Select(group => new UnitQuantityDto(group.Key, group.Sum(quantity => quantity.Declared)))
+        return ShipmentQuantities.SumPerUnitType(quantities, quantity => quantity.Declared)
             .Where(declared => declared.Quantity > 0)
-            .OrderBy(declared => declared.UnitType)
             .ToList();
     }
 
@@ -96,7 +93,7 @@ public sealed class OrderCardReader(IAppDbContext db)
     {
         IEnumerable<ShipmentQuantities> quantities = lookups.Quantities[shipment.Id];
         return new CardShipmentDto(
-            ShipmentLabel.Of(orderNumber, shipment.Position),
+            Shipment.LabelOf(orderNumber, shipment.Position),
             shipment.RefNumber,
             quantities.Sum(quantity => quantity.Declared),
             quantities.Sum(quantity => quantity.Actual),
@@ -208,7 +205,7 @@ public sealed class OrderCardReader(IAppDbContext db)
         DateTimeOffset? ScheduledAt,
         DestinationDto? Destination,
         CardTransportDto? Transport,
-        int OutboundTrailers,
+        int OutboundTrailerCount,
         InvoiceSummary? FirstUnpaidInvoice,
         InvoiceSummary? LastInvoice);
 

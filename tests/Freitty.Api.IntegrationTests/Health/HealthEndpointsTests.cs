@@ -38,12 +38,11 @@ public sealed class HealthEndpointsTests(PostgresFixture postgres)
     // startup on a database created for this test.
     private async Task<HttpStatusCode> GetStatusCodeAfterDatabaseGoesAwayAsync(string url)
     {
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        string connectionString = await postgres.CreateDatabaseAsync(cancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         await using var factory = new ApiFactory(connectionString);
         using HttpClient client = factory.CreateClient();
 
-        await postgres.DropDatabaseAsync(connectionString, cancellationToken);
+        await postgres.DropDatabaseAsync(connectionString);
 
         return await GetStatusCodeAsync(client, url);
     }

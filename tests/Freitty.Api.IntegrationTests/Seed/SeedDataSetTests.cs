@@ -1,4 +1,3 @@
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Domain.Orders;
 using Microsoft.EntityFrameworkCore;
 

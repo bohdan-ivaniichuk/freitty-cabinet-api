@@ -1,13 +1,8 @@
 using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Orders;
 using Freitty.Application.Orders.GetOrderDetail;
 using Freitty.Application.Orders.RecordOperation;
 using Freitty.Domain.Orders;
-using Freitty.Infrastructure.Persistence;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Freitty.Api.IntegrationTests.Orders;
 
@@ -21,8 +16,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(order.Number, OperationRequest.Unloading(order, 4));
-        RecordedOperationDto recorded = await ReadCreatedAsync(response);
+        RecordedOperationDto recorded = await RecordCreatedAsync(order.Number, OperationRequest.Unloading(order, 4));
 
         Assert.Equal(new RecordedOrderDto(order.Number, OrderStatus.InProgress, order.Version + 1), recorded.Order);
         Assert.Equal(
@@ -48,12 +42,12 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number.ToLowerInvariant(),
             OperationRequest.Unloading(order, 4));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal($"/api/v1/orders/{order.Number}", response.Headers.Location?.OriginalString);
+        Assert.Equal(ApiUrls.Order(order.Number), response.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -62,7 +56,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
             OperationRequest.Unloading(order, OrderBuilder.DeclaredStandard + 1));
 
@@ -80,7 +74,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         await api.SaveAsync(order);
         Assert.Equal([AlertType.QuantityDelta], await OpenAlertsAsync(order));
 
-        using HttpResponseMessage response = await PostAsync(order.Number, OperationRequest.Unloading(order, 2));
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, OperationRequest.Unloading(order, 2));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Empty(await OpenAlertsAsync(order));
@@ -92,7 +86,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
             OperationRequest.Unloading(order, 4, photos: 0));
 
@@ -106,7 +100,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready(OrderType.Consolidation);
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
             OperationRequest.Unloading(order, 3, position: 2));
 
@@ -128,8 +122,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
             IsBillable = false,
         };
 
-        using HttpResponseMessage response = await PostAsync(order.Number, disposal);
-        RecordedOperationDto recorded = await ReadCreatedAsync(response);
+        RecordedOperationDto recorded = await RecordCreatedAsync(order.Number, disposal);
 
         Assert.Equal(
             (OperationType.Disposal, (string?)null, false, 2, 0),
@@ -143,7 +136,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Received();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
             OperationRequest.Loading(order, OrderBuilder.DeclaredStandard));
 
@@ -157,9 +150,15 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
     {
         Order neverSaved = api.Orders.Ready();
 
-        using HttpResponseMessage response = await PostAsync("FR009999", OperationRequest.Unloading(neverSaved, 4));
+        using HttpResponseMessage response = await api.RecordAsync(
+            "FR009999",
+            OperationRequest.Unloading(neverSaved, 4));
 
-        await AssertProblemAsync(response, HttpStatusCode.NotFound, "order.not_found", "Order FR009999 not found.");
+        await ProblemResponse.AssertDomainProblemAsync(
+            response,
+            HttpStatusCode.NotFound,
+            "order.not_found",
+            "Order FR009999 not found.");
     }
 
     [Fact]
@@ -169,9 +168,11 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order foreign = new OrderBuilder(otherCompany).Ready();
         await api.SaveAsync([.. otherCompany.Entities(), foreign]);
 
-        using HttpResponseMessage response = await PostAsync(foreign.Number, OperationRequest.Unloading(foreign, 4));
+        using HttpResponseMessage response = await api.RecordAsync(
+            foreign.Number,
+            OperationRequest.Unloading(foreign, 4));
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.NotFound,
             "order.not_found",
@@ -186,9 +187,9 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         await api.SaveAsync(order);
         OperationRequest stale = OperationRequest.Loading(order, 1) with { ExpectedVersion = order.Version - 1 };
 
-        using HttpResponseMessage response = await PostAsync(order.Number, stale);
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, stale);
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.Conflict,
             "order.version_conflict",
@@ -203,12 +204,12 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
         OperationRequest unloading = OperationRequest.Unloading(order, 4);
-        using HttpResponseMessage first = await PostAsync(order.Number, unloading);
+        using HttpResponseMessage first = await api.RecordAsync(order.Number, unloading);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
-        using HttpResponseMessage repeated = await PostAsync(order.Number, unloading);
+        using HttpResponseMessage repeated = await api.RecordAsync(order.Number, unloading);
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             repeated,
             HttpStatusCode.Conflict,
             "order.version_conflict",
@@ -229,9 +230,9 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
             ExpectedVersion = order.Version - 1,
         };
 
-        using HttpResponseMessage response = await PostAsync(order.Number, staleAndMisplaced);
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, staleAndMisplaced);
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.Conflict,
             "order.version_conflict",
@@ -246,11 +247,11 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
             OperationRequest.Unloading(order, 4, position: 2));
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.NotFound,
             "shipment.not_found",
@@ -264,9 +265,9 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order draft = api.Orders.Draft();
         await api.SaveAsync(draft);
 
-        using HttpResponseMessage response = await PostAsync(draft.Number, OperationRequest.Unloading(draft, 4));
+        using HttpResponseMessage response = await api.RecordAsync(draft.Number, OperationRequest.Unloading(draft, 4));
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.NotFound,
             "shipment.not_found",
@@ -281,9 +282,9 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         api.Orders.AddShipment(draft, OrderBuilder.DeclaredStandard);
         await api.SaveAsync(draft);
 
-        using HttpResponseMessage response = await PostAsync(draft.Number, OperationRequest.Unloading(draft, 4));
+        using HttpResponseMessage response = await api.RecordAsync(draft.Number, OperationRequest.Unloading(draft, 4));
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.Conflict,
             "order.not_active",
@@ -297,9 +298,9 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Completed();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(order.Number, OperationRequest.Unloading(order, 4));
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, OperationRequest.Unloading(order, 4));
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.Conflict,
             "order.not_active",
@@ -313,11 +314,11 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Received();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await PostAsync(
+        using HttpResponseMessage response = await api.RecordAsync(
             order.Number,
             OperationRequest.Loading(order, OrderBuilder.DeclaredStandard + 1));
 
-        await AssertProblemAsync(
+        await ProblemResponse.AssertDomainProblemAsync(
             response,
             HttpStatusCode.Conflict,
             "operation.exceeds_stock",
@@ -333,7 +334,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         await api.SaveAsync(requested, other);
 
         using HttpResponseMessage response = await api.SendPostAsync(
-            $"{OperationRequest.UrlOf(requested.Number)}?number={other.Number}",
+            $"{ApiUrls.Operations(requested.Number)}?number={other.Number}",
             OperationRequest.Unloading(requested, 4));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -347,11 +348,11 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         Order order = api.Orders.Ready();
         await api.SaveAsync(order);
 
-        using HttpResponseMessage response = await api.SendPostAsync(
-            $"{OperationRequest.UrlOf(order.Number)}?quantity=9&expectedVersion=0",
-            OperationRequest.Unloading(order, 4));
+        RecordedOperationDto recorded = await api.PostAsync<RecordedOperationDto>(
+            $"{ApiUrls.Operations(order.Number)}?quantity=9&expectedVersion=0",
+            OperationRequest.Unloading(order, 4),
+            HttpStatusCode.Created);
 
-        RecordedOperationDto recorded = await ReadCreatedAsync(response);
         Assert.Equal(4, recorded.Operation.Quantity);
     }
 
@@ -360,32 +361,12 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
         await api.DisposeAsync();
     }
 
-    private static async Task<RecordedOperationDto> ReadCreatedAsync(HttpResponseMessage response)
+    private Task<RecordedOperationDto> RecordCreatedAsync(string orderNumber, OperationRequest request)
     {
-        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        Assert.True(response.StatusCode == HttpStatusCode.Created, $"Answered {response.StatusCode}: {body}");
-        return (await response.Content.ReadFromJsonAsync<RecordedOperationDto>(
-            ApiJson.Options,
-            TestContext.Current.CancellationToken))!;
-    }
-
-    private static async Task AssertProblemAsync(
-        HttpResponseMessage response,
-        HttpStatusCode status,
-        string code,
-        string detail)
-    {
-        JsonElement problem = await ProblemResponse.ReadAsync(response);
-
-        Assert.Equal(status, response.StatusCode);
-        Assert.Equal((int)status, problem.GetProperty("status").GetInt32());
-        Assert.Equal(code, problem.GetProperty("code").GetString());
-        Assert.Equal(detail, problem.GetProperty("detail").GetString());
-    }
-
-    private Task<HttpResponseMessage> PostAsync(string number, OperationRequest request)
-    {
-        return api.SendPostAsync(OperationRequest.UrlOf(number), request);
+        return api.PostAsync<RecordedOperationDto>(
+            ApiUrls.Operations(orderNumber),
+            request,
+            HttpStatusCode.Created);
     }
 
     private async Task<AlertType[]> OpenAlertsAsync(Order order)
@@ -401,8 +382,7 @@ public sealed class RecordOperationTests(PostgresFixture postgres) : IAsyncDispo
     // The order as it was built: the same version, Operations and Alerts.
     private async Task AssertUnchangedAsync(Order order)
     {
-        Order stored = await api.InScopeAsync(services =>
-            services.GetRequiredService<AppDbContext>().LoadOrderAsync(order.Id));
+        Order stored = await api.InContextAsync(db => db.LoadOrderAsync(order.Id));
 
         Assert.Equal(order.Version, stored.Version);
         Assert.Equal(CountOperations(order), CountOperations(stored));

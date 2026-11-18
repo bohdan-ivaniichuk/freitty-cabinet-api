@@ -13,9 +13,9 @@ public sealed class ListOrdersQueryValidator : AbstractValidator<ListOrdersQuery
     {
         RuleFor(query => query.Type).IsInEnum();
         RuleFor(query => query.Status).IsInEnum();
-        RuleFor(query => query.Date).IsInEnum();
-        RuleFor(query => query.Hub).MustBeAHubId();
-        RuleFor(query => query.Q).MustBeSearchable();
+        RuleFor(query => query.DatePreset).IsInEnum();
+        RuleFor(query => query.HubId).MustBeAHubId();
+        RuleFor(query => query.Search).MustBeSearchable();
         RuleFor(query => query.Page).InclusiveBetween(ListOrdersQuery.FirstPage, MaxPage);
         RuleFor(query => query.PageSize).InclusiveBetween(1, MaxPageSize);
     }

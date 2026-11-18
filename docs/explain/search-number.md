@@ -1,6 +1,6 @@
 # Search by order number
 
-The page query of `GET /api/v1/orders?q=FR0000150`: the `UNION` of the number branch and the Ref N
+The page query of `GET /api/v1/orders?search=FR0000150`: the `UNION` of the number branch and the Ref N
 branch (no label branch: the text has no hyphen). Dropped for "before": `ix_orders_number_trgm`.
 
 The statement is the one EF Core sends, copied from the SQL log of `dotnet run` with the parameters

@@ -9,7 +9,9 @@ internal static class ErrorResponses
 {
     public static IServiceCollection AddErrorResponses(this IServiceCollection services)
     {
-        services.AddProblemDetails();
+        // The path of the request, as FastEndpoints puts it into its 400s.
+        services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+            context.ProblemDetails.Instance ??= context.HttpContext.Request.Path);
 
         // The request log records the exception with its request, so the handler's own log line would repeat it.
         // Health requests are the exception: the request log keeps them below its level.

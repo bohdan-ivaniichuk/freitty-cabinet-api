@@ -1,10 +1,8 @@
-using Freitty.Application.Dashboard.GetDashboard;
-
 namespace Freitty.Application.Dashboard;
 
 // The aggregates of the dashboard are hand-written SQL (ADR 0011), so they are read next to the provider. Each
 // method is one statement; every figure is scoped to the company, and the instants are cut in the reporting zone.
-// What the figures mean — the window, the axis, the limit — is decided by the caller.
+// The window, the period with its number of buckets and the limit are decided by the caller.
 public interface IDashboardReader
 {
     Task<DashboardFigures> ReadFiguresAsync(
@@ -16,7 +14,8 @@ public interface IDashboardReader
     Task<IReadOnlyList<ActivityBucketDto>> ReadActivityAsync(
         Guid companyId,
         DateTimeOffset now,
-        ActivityAxis axis,
+        ActivityPeriod period,
+        int bucketCount,
         CancellationToken cancellationToken);
 
     Task<AttentionCounts> ReadAttentionCountsAsync(Guid companyId, CancellationToken cancellationToken);

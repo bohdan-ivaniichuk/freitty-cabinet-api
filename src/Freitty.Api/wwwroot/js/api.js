@@ -46,7 +46,8 @@ async function request(url, init) {
 
   const body = await readJson(response);
   if (!response.ok) {
-    throw new ApiError(response.status, body ?? { title: `${response.status} ${response.statusText}`.trim() });
+    const fallback = { title: `${response.status} ${response.statusText}`.trim() };
+    throw new ApiError(response.status, body ?? fallback);
   }
 
   return body;

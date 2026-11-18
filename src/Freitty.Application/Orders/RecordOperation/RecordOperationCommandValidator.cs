@@ -1,17 +1,17 @@
 using FluentValidation;
+using Freitty.Application.Common;
 using Freitty.Domain.Orders;
 
 namespace Freitty.Application.Orders.RecordOperation;
 
 // The shape of the request, nothing about the state of the order. Each rule keeps out a value the aggregate or the
-// database would reject as a broken contract, which would be a 500: PostgreSQL refuses a control character in text.
+// database would reject as a broken contract, which would be a 500.
 // The two trailer conditions cover every defined type between them.
 public sealed class RecordOperationCommandValidator : AbstractValidator<RecordOperationCommand>
 {
     // The ledger sums quantities as int, and the endpoint is public.
     public const int MaxQuantity = 10_000;
     public const int MaxPhotoCount = 99;
-    public const int MaxTrailerNumberLength = 20;
 
     public RecordOperationCommandValidator()
     {
@@ -28,19 +28,12 @@ public sealed class RecordOperationCommandValidator : AbstractValidator<RecordOp
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
             .WithMessage(command => $"The trailer number is required for {command.Type}.")
-            .MaximumLength(MaxTrailerNumberLength)
-            .Must(trailerNumber => trailerNumber is null || !trailerNumber.Any(char.IsControl))
-            .WithMessage("The trailer number must not contain control characters.")
-            .When(command => MovesThroughTrailer(command.Type));
+            .MaximumLength(Operation.MaxTrailerNumberLength)
+            .WithoutControlCharacters("The trailer number")
+            .When(command => Operation.RequiresTrailer(command.Type));
         RuleFor(command => command.TrailerNumber)
             .Null()
             .WithMessage(command => $"{command.Type} takes no trailer number.")
-            .When(command => Enum.IsDefined(command.Type) && !MovesThroughTrailer(command.Type));
-    }
-
-    // Unloading and Loading move freight between a trailer and the dock, as the aggregate requires.
-    private static bool MovesThroughTrailer(OperationType type)
-    {
-        return type is OperationType.Unloading or OperationType.Loading;
+            .When(command => Enum.IsDefined(command.Type) && !Operation.RequiresTrailer(command.Type));
     }
 }

@@ -1,7 +1,9 @@
 using Freitty.Application.Abstractions;
 using Freitty.Application.Dashboard;
+using Freitty.Application.Orders;
 using Freitty.Infrastructure.Dashboard;
 using Freitty.Infrastructure.Identity;
+using Freitty.Infrastructure.Orders;
 using Freitty.Infrastructure.Persistence;
 using Freitty.Infrastructure.Persistence.Seed;
 using Microsoft.EntityFrameworkCore;

@@ -3,7 +3,7 @@ using Freitty.Domain.Orders;
 namespace Freitty.Application.Orders;
 
 // The ledger of one shipment and Unit Type, summed in SQL: one GROUP BY over its Cargo Lines and Operations.
-public sealed record UnitTypeSums(
+internal sealed record UnitTypeSums(
     Guid ShipmentId,
     UnitType UnitType,
     int Declared,

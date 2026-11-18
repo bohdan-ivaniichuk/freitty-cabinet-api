@@ -11,6 +11,9 @@ namespace Freitty.Domain.Orders;
 // these methods. Every method takes the instant as its last argument and never reads a clock.
 public sealed class Order
 {
+    // The hub works on these; the dashboard counts them as Active.
+    public static readonly IReadOnlyList<OrderStatus> ActiveStatuses = [OrderStatus.Ready, OrderStatus.InProgress];
+
     private const int MinConsolidationShipments = 2;
 
     private readonly List<Shipment> shipments = [];
@@ -382,7 +385,9 @@ public sealed class Order
             return OrderErrors.NotActive(Number, Status);
         }
 
-        Alert? alert = shipments.SelectMany(shipment => shipment.Alerts).FirstOrDefault(candidate => candidate.Id == alertId);
+        Alert? alert = shipments
+            .SelectMany(shipment => shipment.Alerts)
+            .FirstOrDefault(candidate => candidate.Id == alertId);
         if (alert is null)
         {
             return OrderErrors.AlertNotFound(Number, alertId);
@@ -469,7 +474,7 @@ public sealed class Order
         return Result.Success();
     }
 
-    private bool IsActive => Status is OrderStatus.Ready or OrderStatus.InProgress;
+    private bool IsActive => ActiveStatuses.Contains(Status);
 
     private static void EnsureKindMatchesType(OrderType type, CrossDockKind? crossDockKind)
     {
@@ -498,7 +503,7 @@ public sealed class Order
         ArgumentOutOfRangeException.ThrowIfNegative(newOperation.PhotoCount);
         ArgumentOutOfRangeException.ThrowIfNegative(newOperation.CommentCount);
 
-        bool needsTrailer = Operation.TypesWithTrailer.Contains(newOperation.Type);
+        bool needsTrailer = Operation.RequiresTrailer(newOperation.Type);
         if (!needsTrailer && newOperation.TrailerNumber is not null)
         {
             throw new ArgumentException(
@@ -641,6 +646,6 @@ public sealed class Order
 
     private string LabelOf(Shipment shipment)
     {
-        return $"{Number}-{shipment.Position}";
+        return Shipment.LabelOf(Number, shipment.Position);
     }
 }

@@ -2,6 +2,8 @@ namespace Freitty.Domain.Orders;
 
 public sealed class Shipment
 {
+    public const char LabelSeparator = '-';
+
     private static readonly UnitType[] AllUnitTypes = Enum.GetValues<UnitType>();
 
     private readonly List<CargoLine> cargoLines = [];
@@ -63,6 +65,13 @@ public sealed class Shipment
     internal bool HasStock => AllUnitTypes.Any(unitType => OnStock(unitType) > 0);
 
     internal bool HasOpenAlert => alerts.Any(alert => alert.IsOpen);
+
+    // How a shipment is named to a person: <number>-<position> for every shipment, the single one of a Cross-Dock
+    // included.
+    public static string LabelOf(string orderNumber, int position)
+    {
+        return $"{orderNumber}{LabelSeparator}{position}";
+    }
 
     public int DeclaredQuantity(UnitType unitType)
     {

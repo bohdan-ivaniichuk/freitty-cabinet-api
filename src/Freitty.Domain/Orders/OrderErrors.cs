@@ -4,6 +4,11 @@ namespace Freitty.Domain.Orders;
 
 public static class OrderErrors
 {
+    // The codes another layer names: the application reuses one, and the API documents them.
+    public const string NotActiveCode = "order.not_active";
+    public const string ShipmentNotFoundCode = "shipment.not_found";
+    public const string ExceedsStockCode = "operation.exceeds_stock";
+
     public static DomainError NotDraft(string orderNumber, OrderStatus status)
     {
         return DomainError.Conflict(
@@ -21,7 +26,7 @@ public static class OrderErrors
     public static DomainError NotActive(string orderNumber, OrderStatus status)
     {
         return DomainError.Conflict(
-            "order.not_active",
+            NotActiveCode,
             $"Order {orderNumber} is {status}; the hub works only on a Ready or InProgress order.");
     }
 
@@ -68,7 +73,7 @@ public static class OrderErrors
     public static DomainError ShipmentNotFound(string orderNumber, Guid shipmentId)
     {
         return DomainError.NotFound(
-            "shipment.not_found",
+            ShipmentNotFoundCode,
             $"Order {orderNumber} has no shipment {shipmentId}.");
     }
 
@@ -120,7 +125,7 @@ public static class OrderErrors
         int onStock)
     {
         return DomainError.Conflict(
-            "operation.exceeds_stock",
+            ExceedsStockCode,
             $"Cannot {Verb(operationType)} {quantity} {unitType} on {shipmentLabel}: {onStock} on stock.");
     }
 

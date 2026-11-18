@@ -283,7 +283,10 @@ public sealed class HubWorkTests
         Guid shipmentId = order.Shipments.Single().Id;
 
         Assert.ThrowsAny<ArgumentException>(
-            () => order.RecordOperation(shipmentId, TestOrders.OperationOf(OperationType.Loading, 0), TestOrders.At(1)));
+            () => order.RecordOperation(
+                shipmentId,
+                TestOrders.OperationOf(OperationType.Loading, 0),
+                TestOrders.At(1)));
     }
 
     private static DomainError? Perform(Order order, HubWork work, DateTimeOffset now)

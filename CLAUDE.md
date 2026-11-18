@@ -28,7 +28,7 @@ Open questions from `assignment/mockup-analysis.md` are settled in the grooming 
 
 ## Code rules
 
-Every C# change follows [`docs/engineering/code-rules.md`](docs/engineering/code-rules.md). Read it before writing code; formatting is in `.editorconfig`. Before reporting a step as done, do the self-review from rule 18, then run the `code-reviewer` agent on the diff.
+Every C# change follows [`docs/engineering/code-rules.md`](docs/engineering/code-rules.md). Read it before writing code; formatting is in `.editorconfig`. Before reporting a step as done, do the self-review from rule 19, then run the `code-reviewer` agent on the diff.
 
 ## Agents
 

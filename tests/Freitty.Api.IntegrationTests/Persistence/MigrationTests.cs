@@ -7,13 +7,12 @@ public sealed class MigrationTests(PostgresFixture postgres)
     [Fact]
     public async Task EmptyDatabaseIsMigratedWhenApiStarts()
     {
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        string connectionString = await postgres.CreateDatabaseAsync(cancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         await using var database = new TestDatabase(connectionString);
 
         (string[] Known, string[] Applied) migrations = await database.InContextAsync(async db =>
             (db.Database.GetMigrations().ToArray(),
-                (await db.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray()));
+                (await db.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken)).ToArray()));
 
         Assert.NotEmpty(migrations.Known);
         Assert.Equal(migrations.Known, migrations.Applied);
@@ -51,14 +50,14 @@ public sealed class MigrationTests(PostgresFixture postgres)
             definitions);
     }
 
-    // Each start runs both migrations of an empty database; without the lock in DatabaseMigration two of them
-    // would apply the second migration twice and one would fail.
+    // Each start runs every migration of an empty database; without the lock in DatabaseMigration two instances
+    // would apply the same migration twice and one of them would fail.
     [Fact]
     public async Task InstancesStartingTogetherOnAnEmptyDatabaseApplyEachMigrationOnce()
     {
         const int InstanceCount = 4;
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        string connectionString = await postgres.CreateDatabaseAsync(cancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         ApiFactory[] instances = Enumerable.Range(0, InstanceCount)
             .Select(_ => new ApiFactory(connectionString))
             .ToArray();

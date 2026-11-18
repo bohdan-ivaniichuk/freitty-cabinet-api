@@ -11,14 +11,12 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 .fc-nav li.active { background: rgba(46,117,182,.15); color: #fff; border-left-color: #ED1C2E; font-weight: 600; }
 .fc-nav li:hover { color: #fff; }
 .fc-nav .badge { margin-left: auto; background: #ED1C2E; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
-.fc-nav .icon { width: 16px; height: 16px; display: inline-block; background: currentColor; opacity: 0.7; -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }
 
 .fc-main { background: #F7F9FC; }
 .fc-topbar { background: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #E5E7EB; }
 .fc-search { flex: 1; max-width: 420px; background: #F0F2F5; border-radius: 8px; padding: 8px 14px; font-size: 13px; color: #6B7280; display: flex; align-items: center; gap: 8px; }
 .fc-topbar .spacer { flex: 1; }
 .fc-topbar-btn { width: 36px; height: 36px; border-radius: 8px; background: #F0F2F5; display: flex; align-items: center; justify-content: center; font-size: 14px; position: relative; cursor: pointer; }
-.fc-topbar-btn .dot { position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; background: #ED1C2E; border-radius: 50%; border: 2px solid #fff; }
 .fc-user { display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 4px; background: #F0F2F5; border-radius: 20px; }
 .fc-user .avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,#2E75B6,#1F4E79); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
 .fc-user .name { font-size: 13px; font-weight: 600; }
@@ -33,8 +31,6 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .btn-primary { background: #ED1C2E; color: #fff; }
 .btn-secondary { background: #fff; color: #1F4E79; border: 1px solid #2E75B6; }
-.btn-ghost { background: transparent; color: #2E75B6; }
-.btn-dark { background: #1F2A3A; color: #fff; }
 
 /* ---- Status badges ---- */
 .badge { font-size: 10px; padding: 3px 8px; border-radius: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; display: inline-block; }
@@ -54,21 +50,22 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
 .kpi .trend { font-size: 11px; margin-top: 4px; }
 .kpi-accent-blue { border-top: 3px solid #2E75B6; }
 .kpi-accent-green { border-top: 3px solid #16A34A; }
-.kpi-accent-orange { border-top: 3px solid #EA580C; }
 .kpi-accent-red { border-top: 3px solid #DC2626; }
 
 /* ---- Order card ---- */
 .cards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+/* The cards of the previous view stay, dimmed, until the next view arrives. */
+.cards-grid[aria-busy="true"] { opacity: .55; }
 .order-card { background: #fff; border-radius: 10px; border: 1px solid #E5E7EB; padding: 16px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; position: relative; transition: all .15s; }
 .order-card:hover { border-color: #2E75B6; box-shadow: 0 4px 12px rgba(31,78,121,.08); }
 .oc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .oc-num { font-size: 15px; font-weight: 700; color: #1F4E79; }
-/*Ref N — client-provided reference number (primary identifier for clients) */
+/* Ref N, the client's own reference for a shipment: inline for one shipment, a <details> list for
+   several. */
 .oc-id-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .ref-n-inline { display: inline-flex; align-items: baseline; gap: 5px; font-family: monospace; }
 .ref-n-inline .lbl { font-size: 9.5px; color: #9CA3AF; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; font-family: -apple-system, sans-serif; }
 .ref-n-inline .val { color: #ED1C2E; font-weight: 800; font-size: 13px; letter-spacing: .3px; }
-.ref-n-inline .v16 { font-size: 8.5px; color: #B8142A; font-weight: 800; letter-spacing: .3px; font-family: -apple-system, sans-serif; margin-left: 2px; }
 details.ref-n-multi { display: inline-block; }
 details.ref-n-multi summary { display: inline-flex; align-items: baseline; gap: 5px; cursor: pointer; list-style: none; padding: 2px 10px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; user-select: none; }
 details.ref-n-multi summary::-webkit-details-marker { display: none; }
@@ -85,18 +82,13 @@ details.ref-n-multi .sub-id { color: #5B21B6; font-weight: 700; font-family: mon
 details.ref-n-multi .sub-ref { color: #ED1C2E; font-weight: 800; font-family: monospace; font-size: 12px; letter-spacing: .3px; }
 details.ref-n-multi .sub-desc { color: #6B7280; font-size: 10.5px; white-space: nowrap; }
 .oc-type { font-size: 11px; color: #6B7280; }
-/*Created by chip — shows dispatcher who created the order (multi-user companies) */
+/* The "by" chip: who in the client's company created the order. */
 .oc-by { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 10.5px; color: #6B7280; flex-wrap: wrap; }
 .oc-by .lbl { color: #9CA3AF; font-weight: 500; }
 .oc-by .chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 2px; background: #F3F4F6; border-radius: 10px; font-weight: 700; color: #1F2A3A; }
 .oc-by .ava { width: 16px; height: 16px; border-radius: 50%; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; letter-spacing: 0; }
-.oc-by .ava.u1 { background: #5B21B6; }
-.oc-by .ava.u2 { background: #0EA5E9; }
-.oc-by .ava.u3 { background: #16A34A; }
-.oc-by .ava.u4 { background: #D97706; }
 .oc-by .role { font-size: 9px; padding: 1px 5px; border-radius: 4px; background: #EDE9FE; color: #5B21B6; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; }
 .oc-by .role.disp { background: #DBEAFE; color: #1E40AF; }
-.oc-by .v14 { font-size: 9px; color: #B8142A; font-weight: 800; letter-spacing: .3px; margin-left: 2px; }
 .oc-body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 12px; }
 .oc-body .k { color: #6B7280; }
 .oc-body .v { color: #1F2A3A; font-weight: 600; }
@@ -121,12 +113,13 @@ details.ref-n-multi .sub-desc { color: #6B7280; font-size: 10.5px; white-space: 
 /* An element the page hides stays hidden, whatever display its class or style gives it. */
 [hidden] { display: none !important; }
 
-/* The application fills the window; the mockup drew it inside a fixed frame. */
+/* The application fills the window, and the main column may shrink below the width of its content
+   rather than widen the page. */
 .fc-shell { min-height: 100vh; }
 .fc-main { min-width: 0; }
 
-/* Links that replace the mockup's plain elements look like them. Zero specificity, so the
-   element's own class still sets its colour. */
+/* These links look like the text and buttons around them: no underline, the parent's colour. Zero
+   specificity, so the element's own class still sets its colour. */
 :where(a.fc-logo, .fc-nav a, .fc-crumbs a, a.tab, a.oc-num, a.kpi, a.period-btn, a.btn, .next-edit a) { text-decoration: none; color: inherit; }
 a.fc-logo { display: block; }
 /* The whole row of a nav item is its link: the padding moves from the item to the link. */
@@ -148,9 +141,10 @@ a.btn, a.period-btn { line-height: normal; }
 .state-error strong { display: block; margin-bottom: 4px; }
 .state-error a { color: #2E75B6; }
 
-/* Badges the mockup writes with inline colours. */
+/* Two more badge colours: a draft's status and the third supply category. */
 .badge-draft { background: #E5E7EB; color: #374151; }
 .badge-green { background: #DCFCE7; color: #166534; }
+/* The four avatar colours of the "by" chip, on a card and on the detail page. */
 .ava.u1 { background: #5B21B6; }
 .ava.u2 { background: #0EA5E9; }
 .ava.u3 { background: #16A34A; }
@@ -181,7 +175,11 @@ details.ref-n-multi .sub-ref { white-space: nowrap; }
 .period-btn { padding: 5px 12px; border: 1px solid #E2E8F0; background: #fff; border-radius: 999px; font-size: 11px; color: #64748B; font-weight: 600; cursor: pointer; }
 .period-btn.active { border: 1.5px solid #ED1C2E; background: #ED1C2E; color: #fff; font-weight: 700; }
 
-/* Order detail. */
+/* Order detail. A heading without a size of its own takes the size of the text around it, as the
+   reset already removes its margins. The order title lines up its parts like the row it sits in,
+   with only the number bold. */
+h1, h2 { font-size: inherit; }
+.order-title { display: inline-flex; align-items: center; gap: 10px; font-weight: inherit; }
 .meta-today { color: #DC2626; font-weight: 600; }
 .meta-delta { color: #78350F; }
 .flow-current { color: #2563EB; font-weight: 700; }

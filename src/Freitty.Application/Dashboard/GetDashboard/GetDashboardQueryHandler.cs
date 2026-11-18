@@ -17,7 +17,8 @@ public sealed class GetDashboardQueryHandler(
     TimeProvider clock)
     : ICommandHandler<GetDashboardQuery, DashboardDto>
 {
-    private const int CardCount = 4;
+    public const int CardCount = 4;
+
     private const int AlertOrderCount = 3;
 
     // "Completed (30 d)" is rolling: the last 30 times 24 hours, compared with the 30 before them.
@@ -29,8 +30,12 @@ public sealed class GetDashboardQueryHandler(
         DateTimeOffset now = clock.GetUtcNow();
 
         DashboardFigures figures = await dashboardReader.ReadFiguresAsync(user.CompanyId, now, RollingWindow, ct);
-        IReadOnlyList<ActivityBucketDto> buckets =
-            await dashboardReader.ReadActivityAsync(user.CompanyId, now, ActivityAxis.Of(query.Period), ct);
+        IReadOnlyList<ActivityBucketDto> buckets = await dashboardReader.ReadActivityAsync(
+            user.CompanyId,
+            now,
+            query.Period,
+            ActivityBuckets.CountOf(query.Period),
+            ct);
         AttentionCounts attention = await dashboardReader.ReadAttentionCountsAsync(user.CompanyId, ct);
         IReadOnlyList<AlertOrderDto> alertOrders =
             await dashboardReader.ReadAlertOrdersAsync(user.CompanyId, AlertOrderCount, ct);
@@ -60,15 +65,17 @@ public sealed class GetDashboardQueryHandler(
             .FirstOrDefault();
     }
 
-    private async Task<IReadOnlyList<OrderCardDto>> ReadActiveCardsAsync(Guid companyId, CancellationToken ct)
+    private async Task<IReadOnlyList<OrderCardDto>> ReadActiveCardsAsync(
+        Guid companyId,
+        CancellationToken cancellationToken)
     {
         IQueryable<Order> activeOrders = db.Orders
             .AsNoTracking()
-            .Where(order => order.CompanyId == companyId && ActiveOrderStatuses.All.Contains(order.Status));
+            .Where(order => order.CompanyId == companyId && Order.ActiveStatuses.Contains(order.Status));
         List<Guid> orderIds = await OrderListSort.Apply(activeOrders)
             .Take(CardCount)
             .Select(order => order.Id)
-            .ToListAsync(ct);
-        return await cardReader.ReadAsync(companyId, orderIds, ct);
+            .ToListAsync(cancellationToken);
+        return await cardReader.ReadAsync(companyId, orderIds, cancellationToken);
     }
 }

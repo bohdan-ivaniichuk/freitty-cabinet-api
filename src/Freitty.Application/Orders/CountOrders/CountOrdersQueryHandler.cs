@@ -34,7 +34,13 @@ public sealed class CountOrdersQueryHandler(IAppDbContext db, ICurrentUser curre
 
     private IQueryable<Order> Filtered(CountOrdersQuery query, CurrentUser user, OrderStatus? status)
     {
-        return filter.Apply(db.Orders.AsNoTracking(), user.CompanyId, query.Hub, query.Date, status, query.Q);
+        return filter.Apply(
+            db.Orders.AsNoTracking(),
+            user.CompanyId,
+            query.HubId,
+            query.DatePreset,
+            status,
+            query.Search);
     }
 
     private sealed record GroupCount(OrderType Type, OrderStatus Status, int Count);

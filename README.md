@@ -4,6 +4,23 @@ Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail) —
 
 > 🚧 Work in progress. Test assignment — see [`assignment/`](assignment) for the task and [`docs/plan.md`](docs/plan.md) for the implementation plan.
 
+## What is in the box
+
+Three pages, served by the API — under Docker Compose, the Dashboard at http://localhost:8080/, the
+Order List at http://localhost:8080/orders.html and an order at
+http://localhost:8080/order.html?n=FR001383 — the API reference at http://localhost:8080/scalar/ and
+the OpenAPI document at http://localhost:8080/openapi/v1.json. The endpoints:
+
+| Method | Route | What |
+|---|---|---|
+| `GET` | `/api/v1/orders` | One page of order cards, with the tabs, filters and search of the Order List |
+| `GET` | `/api/v1/orders/counts` | The counter of each Order List tab, under the same filters |
+| `GET` | `/api/v1/orders/{number}` | The detail of an order |
+| `POST` | `/api/v1/orders/{number}/operations` | Records an operation on a shipment |
+| `GET` | `/api/v1/dashboard` | The tiles, the first active orders and the activity chart |
+| `GET` | `/api/v1/hubs` | The options of the Hub filter |
+| `GET` | `/api/v1/me` | The current user, the company and the number on the Orders badge |
+
 ## Run locally
 
 ### Prerequisites
@@ -18,7 +35,8 @@ Backend for the Freitty client cabinet (Dashboard, Order List, Order Detail) —
 docker compose up -d --build --wait
 ```
 
-This starts PostgreSQL and the API. When the command returns, both are healthy:
+This starts PostgreSQL and the API; host ports 5432 and 8080 must be free. When the command returns,
+both are healthy:
 
 | URL | What |
 |---|---|
@@ -46,7 +64,9 @@ docker compose up -d --wait postgres
 dotnet run --project src/Freitty.Api
 ```
 
-The API listens on http://localhost:5080 (for example, http://localhost:5080/health/ready).
+The API listens on http://localhost:5080 (for example, http://localhost:5080/health/ready): the cabinet
+at http://localhost:5080/ and the API reference at http://localhost:5080/scalar. In Development the SQL
+that EF Core sends is logged.
 
 ### Sample data
 
@@ -66,7 +86,8 @@ made through the API.
 
 Dates are relative to the day before the database was seeded, so the data ages: a database seeded a
 week ago shows a week-old picture. The API never deletes or refreshes sample data; a database that
-already has a company is left as it is. To start over, empty the database:
+already has a company is left as it is. Recording an operation from an order page changes this data;
+to start over, empty the database:
 
 ```bash
 docker compose down -v
@@ -92,6 +113,9 @@ dotnet ef migrations add <Name> --project src/Freitty.Infrastructure --startup-p
 ```
 
 A migration that has reached `main` is never edited; a change is a new migration.
+
+The first start against an empty database logs one `Failed executing DbCommand` at `ERR`: EF Core
+reads its migrations history table before it has created it. The migrations follow on the next lines.
 
 ### Tests
 

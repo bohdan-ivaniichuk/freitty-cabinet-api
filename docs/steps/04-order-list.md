@@ -26,12 +26,12 @@ their query plans.
 - **OpenAPI with Scalar.** The document is generated from the endpoints (`/openapi/v1.json`); the
   Scalar UI is served at `/scalar`. No Swagger UI. Both are on in every environment: the deployed
   demo shows them.
-- **Enums travel as strings** (rule 11) through `JsonStringEnumConverter`; the OpenAPI schema shows
+- **Enums travel as strings** (rule 12) through `JsonStringEnumConverter`; the OpenAPI schema shows
   the names.
-- **`IAppDbContext` in Application**, implemented by `AppDbContext`: the `DbSet`s that exist today
-  and `SaveChangesAsync`. No `DbSet` is added: children of `Order` are read through
-  `db.Orders … SelectMany(order => order.Shipments)`, which translates, and invoices through
-  `db.Invoices`.
+- **`IAppDbContext` in Application**, implemented by `AppDbContext`: the sets `Orders`, `Invoices`,
+  `Users` and `Hubs`, and one way to save, `TrySaveChangesAsync` ([step 8](08-write-flow.md)).
+  Children of `Order` have no set: they are read through
+  `db.Orders … SelectMany(order => order.Shipments)`, which translates.
 - **The current user is an abstraction** — `ICurrentUser` with
   `ValueTask<CurrentUser> GetAsync(CancellationToken)`, `CurrentUser` being the user id and the
   company id. There is no authentication, so the implementation, scoped, returns the first user
@@ -52,9 +52,9 @@ their query plans.
 
 **The list**
 
-- **Tabs are filters.** All, Cross-Dock, Consolidation, Alerts and Drafts are `type`, `alerts`
-  and `status` values; "All" really is all, drafts included, and a draft counts in the tab of its
-  type.
+- **Tabs are filters.** All, Cross-Dock, Consolidation, Alerts and Drafts are `type`,
+  `hasOpenAlerts` and `status` values; "All" really is all, drafts included, and a draft counts in
+  the tab of its type.
 - **The counters follow the filters.** A tab's counter is the `total` the list would return for
   that tab with the current hub, date, status and search — so a counter never disagrees with the
   list under it. The Drafts counter ignores the status filter: it is a status itself. One
@@ -87,7 +87,7 @@ their query plans.
   and the dashboard cards all use it; the computed members of the aggregate are for the write side
   only ([step 2](02-domain.md)).
 - **The "Next" line is a code with its data**; the page owns the wording. `OrderProgress` derives
-  the stage of the freight and, from it, the `next` code; step 5 returns the stage itself.
+  the stage of the freight and, from it, the `nextStep` code; step 5 returns the stage itself.
 - **Instants are UTC**; the hub's IANA zone travels with them and the page formats local time.
 - **Initials are derived from the name, not projected.** `User.Initials` is a computed property;
   projecting it would make EF Core load the whole user. The projection takes the name and the
@@ -109,10 +109,10 @@ their query plans.
 |---|---|---|
 | `type` | `CrossDock`, `Consolidation` | The Cross-Dock and Consolidation tabs |
 | `status` | `Draft`, `Ready`, `InProgress`, `Completed` | The Status filter; `Draft` is the Drafts tab |
-| `alerts` | `true`; `false` is the same as absent | The Alerts tab: orders with an open Alert on any shipment |
-| `hub` | a hub id | The Hub filter |
-| `date` | `Today`, `ThisWeek`, `Last30Days` | The Date filter on the Scheduled date |
-| `q` | text, 3–50 characters after trimming; absent, empty or white space is no search | Search |
+| `hasOpenAlerts` | `true`; `false` is the same as absent | The Alerts tab: orders with an open Alert on any shipment |
+| `hubId` | a hub id | The Hub filter |
+| `datePreset` | `Today`, `ThisWeek`, `Last30Days` | The Date filter on the Scheduled date |
+| `search` | text, 3–50 characters after trimming; absent, empty or white space is no search | Search |
 | `page` | 1–10 000; default 1 | The upper bound is a named constant: it keeps `OFFSET` inside an `int` |
 | `pageSize` | 1–50; default 12 | |
 
@@ -125,15 +125,15 @@ offset zero:
 | `ThisWeek` | start of this week's Monday | start of next week's Monday |
 | `Last30Days` | start of today − 29 days | start of tomorrow |
 
-**Search.** `q` is trimmed; `%`, `_` and `\` in it are escaped and match themselves —
+**Search.** `search` is trimmed; `%`, `_` and `\` in it are escaped and match themselves —
 `EF.Functions.ILike` with its escape argument, since the two-argument form disables escaping. The
 result is the union of three branches, each restricted to the current company:
 
-1. orders whose number contains `q`;
-2. orders that have a shipment whose Ref N contains `q`;
-3. only when `q` ends in a hyphen and digits — split at the last hyphen — the order whose number
-   equals the part before it, case-insensitively, and that has a shipment at that position. Digits
-   that do not fit an `int` leave this branch out.
+1. orders whose number contains `search`;
+2. orders that have a shipment whose Ref N contains `search`;
+3. only when `search` ends in a hyphen and digits — split at the last hyphen — the order whose
+   number equals the part before it, case-insensitively, and that has a shipment at that position.
+   Digits that do not fit an `int` leave this branch out.
 
 Three characters is the minimum because a trigram index cannot serve a shorter pattern.
 
@@ -157,14 +157,14 @@ Response — the card of FR001674 from the seed, abbreviated:
     "declaredTotal": 20,
     "actualTotal": 18,
     "hasQuantityDelta": true,
-    "outboundTrailers": 1,
+    "outboundTrailerCount": 1,
     "shipments": [
       { "label": "FR001674-1", "refNumber": "REF-1005", "declaredQuantity": 11,
         "actualQuantity": 11, "openAlertTypes": [] },
       { "label": "FR001674-2", "refNumber": "REF-1006", "declaredQuantity": 9,
         "actualQuantity": 7, "openAlertTypes": ["QuantityDelta", "MissingPhoto"] }
     ],
-    "next": { "code": "UploadPhoto", "invoiceNumber": null, "amount": null }
+    "nextStep": { "code": "UploadPhoto", "invoiceNumber": null, "amount": null }
   }],
   "page": 1, "pageSize": 12, "total": 70
 }
@@ -179,7 +179,7 @@ Response — the card of FR001674 from the seed, abbreviated:
 | `declared` | the declared quantity per Unit Type over all shipments, `Standard` first; empty without cargo |
 | `declaredTotal`, `actualTotal` | sums over all shipments and Unit Types |
 | `hasQuantityDelta` | some shipment has a known, non-zero delta for some Unit Type — an excess at once, a shortage once it is received |
-| `outboundTrailers` | the number of distinct trailer numbers of Loadings |
+| `outboundTrailerCount` | the number of distinct trailer numbers of Loadings |
 | `shipments` | ordered by position; `label` is `<number>-<position>` for every shipment, a Cross-Dock's and a draft's included; `declaredQuantity` and `actualQuantity` are sums over Unit Types |
 
 **`OrderProgress`.** The stage of the freight, the first that applies:
@@ -193,7 +193,7 @@ Response — the card of FR001674 from the seed, abbreviated:
 | `Loading` | every shipment is received and something is On stock |
 | `AwaitingCompletion` | every shipment is received and nothing is On stock |
 
-`next.code`, the first that applies:
+`nextStep.code`, the first that applies:
 
 | Code | When | Data |
 |---|---|---|
@@ -207,14 +207,14 @@ Response — the card of FR001674 from the seed, abbreviated:
 
 ### `GET /api/v1/orders/counts`
 
-Takes `hub`, `date`, `status` and `q` with the meaning above. Returns
+Takes `hubId`, `datePreset`, `status` and `search` with the meaning above. Returns
 `{ "all", "crossDock", "consolidation", "alerts", "drafts" }` — for each tab, the `total` of the
 list for that tab under those filters; `drafts` ignores `status`.
 
-Two statements. One groups the orders that pass `hub`, `date` and `q` by type and status — eight
-rows at most — and the handler folds them: a tab adds the rows of its type and of the requested
-status, Drafts adds the rows of status `Draft`. The other counts the orders that pass all four
-filters and have an open Alert.
+Two statements. One groups the orders that pass `hubId`, `datePreset` and `search` by type and
+status — eight rows at most — and the handler folds them: a tab adds the rows of its type and of
+the requested status, Drafts adds the rows of status `Draft`. The other counts the orders that pass
+all four filters and have an open Alert.
 
 ### `GET /api/v1/hubs`
 
@@ -233,56 +233,66 @@ Step 6 adds the number for the sidebar badge.
 
 | Case | Response |
 |---|---|
-| A parameter out of range, an unknown enum value, a `hub` that is not a GUID, `q` shorter than 3 or longer than 50 characters after trimming | `400` with the field errors |
+| A parameter out of range, an unknown enum value, a `hubId` that is not a GUID, `search` shorter than 3 or longer than 50 characters after trimming | `400` with the field errors |
 | An unknown route | `404` `ProblemDetails` |
 | No user to act as (an empty, unseeded database) | `500` `ProblemDetails`; the log line says to seed the database |
 
-A `hub` id that matches no hub is not an error: the list is empty. An empty `hub=` is a `400` —
-it would otherwise bind to the empty GUID and silently return nothing; an empty `type=`, `status=`
-or `date=` is the same as absent. A control character in `q` is a `400`: PostgreSQL cannot store
-one.
+A `hubId` that matches no hub is not an error: the list is empty. An empty `hubId=` is a `400` —
+it would otherwise bind to the empty GUID and silently return nothing; an empty `hasOpenAlerts=`,
+`page=` or `pageSize=` is a `400` too, refused by the binder. An empty `type=`, `status=`,
+`datePreset=` or `search=` is the same as absent. A control character in `search` is a `400`:
+PostgreSQL cannot store one.
 
 Instants are serialised with an explicit offset, `2026-04-13T15:00:00+00:00`.
 
 The body of a `400` is the one FastEndpoints produces, and the pages rely on it:
 
 ```jsonc
-{ "type": "…", "title": "Bad Request", "status": 400, "instance": "/api/v1/orders",
-  "detail": "…the first error…",
+{ "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1", "title": "Bad Request",
+  "status": 400, "instance": "/api/v1/orders", "detail": "…the first error…",
   "errors": [{ "name": "pageSize", "reason": "…" }] }
 ```
 
 `name` is the parameter as the request spells it (camelCase), whether the binder or a validator
-refused it.
+refused it. The `404`, `409` and `500` bodies carry `instance`, the request path, as well.
 
 ### Code
 
 ```
 src/Freitty.Application/
 ├── DependencyInjection.cs   AddApplication(): the application's own services
-├── Abstractions/     IAppDbContext, ICurrentUser, CurrentUser, IOrderSearch
-├── Common/           ReportingCalendar, ReportingTimeZone, DatePreset
-├── Orders/           OrderFilter — the hub, date, status and search filters applied to a query;
-│                     the read model shared with the detail of step 5: UnitTypeSums,
-│                     ShipmentQuantities, ShipmentProgress, OrderProgress, OrderStage, ShipmentLabel
+├── Abstractions/     IAppDbContext, ICurrentUser, CurrentUser
+├── Common/           ReportingCalendar, ReportingTimeZone, DatePreset, InstantRange, UserDto,
+│                     TextRules — the one rule against control characters
+├── Orders/           OrderFilter — the hub, date, status and search filters applied to a query —
+│                     with FilterRules, OrderListSort and IOrderSearch; the read model shared with
+│                     the detail of step 5: UnitTypeSums, ShipmentQuantities, ShipmentProgress,
+│                     OrderProgress, OrderStage
 ├── Orders/Cards/     OrderCardDto and its parts, OrderCardReader
 ├── Orders/ListOrders/    ListOrdersQuery, its handler and validator, the paged result
 ├── Orders/CountOrders/   CountOrdersQuery, its handler and validator, OrderCountsDto
 ├── Hubs/ListHubs/        ListHubsQuery, its handler, HubDto
 └── Me/GetMe/             GetMeQuery, its handler, MeDto
 src/Freitty.Api/
-├── Endpoints/…       one folder per endpoint (rule 4)
+├── Endpoints/        ApiEndpoints — FastEndpoints and its JSON options; ApiRoutes — the route of
+│                     every endpoint; one folder per endpoint, named for its operation (rule 4):
+│                     Orders/ListOrders, Orders/CountOrders, Hubs/ListHubs, Me/GetMe;
+│                     Orders/OrderFilterDescriptions — the parameters the list and the
+│                     counters share
 ├── Pipeline/         the two command middleware classes
-└── …                 FastEndpoints, ProblemDetails, OpenAPI and Scalar, JSON options, the
-                      reporting zone read from configuration
+├── Errors/           ProblemDetails for an unknown route and an unhandled exception
+├── OpenApi/          the OpenAPI document and Scalar
+└── Reporting/        ReportingTimeZoneSetting — the reporting zone read from configuration
 src/Freitty.Infrastructure/
 ├── Identity/         the ICurrentUser implementation
-├── Persistence/      AppDbContext : IAppDbContext; OrderSearch : IOrderSearch
+├── Orders/           OrderSearch : IOrderSearch
+├── Persistence/      AppDbContext : IAppDbContext
 └── Persistence/Migrations/   OrderListIndexes
 ```
 
-- `OrderCardReader` takes a list of order ids and returns their cards in that order; the list
-  handler and, in step 6, the dashboard both call it.
+- `OrderCardReader` takes the company id and a list of order ids and returns their cards in that
+  order, skipping an id that is not the company's; the list handler and, in step 6, the dashboard
+  both call it.
 - `ReportingTimeZone` wraps the `TimeZoneInfo`. Api reads `Cabinet:TimeZone` while the services are
   registered, requires an IANA id the system knows — the rule of the `Hub` constructor, because
   step 6 hands the id to PostgreSQL — and otherwise throws, naming `Cabinet__TimeZone`. It
@@ -299,7 +309,7 @@ each point against the current documentation rather than trusting this list.
 
 | Where | Package |
 |---|---|
-| `Freitty.Application` | `FastEndpoints.Messaging.Core` (`ICommand<T>`, `ICommandHandler<,>`; no dependencies), `FluentValidation`, `Microsoft.EntityFrameworkCore`, `Microsoft.Extensions.DependencyInjection.Abstractions` |
+| `Freitty.Application` | `FastEndpoints.Messaging.Core` (`ICommand<T>`, `ICommandHandler<,>`; no dependencies), `FluentValidation`, `Microsoft.EntityFrameworkCore`, `Microsoft.Extensions.DependencyInjection.Abstractions`; later `Microsoft.EntityFrameworkCore.Relational` ([step 5](05-order-detail.md)) and `Riok.Mapperly` ([step 8](08-write-flow.md)) |
 | `Freitty.Api` | `FastEndpoints`, `FastEndpoints.OpenApi`, `Scalar.AspNetCore`, `FluentValidation.DependencyInjectionExtensions` |
 
 Latest stable versions, looked up (FastEndpoints 9.0.0, Scalar.AspNetCore 3.0.1 and
@@ -308,8 +318,9 @@ FastEndpoints brings, and the `Microsoft.*` packages stay on 10.0.x. `FastEndpoi
 the legacy NSwag path and is not used.
 
 - **Routes.** `RoutePrefix = "api"`, `Versioning.Prefix = "v"`, `Versioning.PrependToRoute = true`
-  (the default appends: `/api/orders/v1`), `Versioning.DefaultVersion = 1`. An endpoint declares
-  `Get("orders")` and is served at `/api/v1/orders`.
+  (the default appends: `/api/orders/v1`), `Versioning.DefaultVersion = 1`. The routes are
+  constants of `ApiRoutes`, one nested class per resource: an endpoint declares
+  `Get(ApiRoutes.Orders.List)`, which is `"orders"`, and is served at `/api/v1/orders`.
 - **A query is an `ICommand<TResult>`**, its handler an `ICommandHandler<,>`; plain
   `AddFastEndpoints()` finds handlers in the Application assembly. The endpoint calls
   `ExecuteAsync` on the query. The list and the counters bind the query record itself — the query
@@ -318,25 +329,29 @@ the legacy NSwag path and is not used.
 - **Pipeline.** Two open-generic `ICommandMiddleware<,>` classes in Api, registered with
   `AddCommandMiddleware` in the order logging, validation. The logging one writes, at
   `Information`, the query's type name, the elapsed time and whether it completed, was rejected by
-  validation, or threw. The validation one resolves `IValidator<TCommand>` from DI — FastEndpoints
-  does not register them, so the validators of the Application assembly are registered with
-  `AddValidatorsFromAssembly` — passes when there is none, and reports failures through
-  `ValidationContext.Instance.AddError(…)` and `ThrowIfAnyErrors()`. Throwing FluentValidation's
-  own exception would be a `500`.
+  validation, was refused (a failed `Result`, with its code), was cancelled, or threw. The
+  validation one resolves `IValidator<TCommand>` from DI — FastEndpoints does not register them, so
+  the validators of the Application assembly are registered with `AddValidatorsFromAssembly` —
+  passes when there is none, and reports failures through `ValidationContext.Instance.AddError(…)`
+  and `ThrowIfAnyErrors()`. Throwing FluentValidation's own exception would be a `500`.
 - **Binding** refuses an unknown enum name, a malformed GUID or number with the same `400` before
   the pipeline runs. It accepts a defined enum number (`status=2`) as well as its name; that is
   left as it is.
-- **Errors.** `c.Errors.UseProblemDetails()` for validation and binding. An unknown route and an
-  unhandled exception are bodiless by default: ASP.NET Core's `AddProblemDetails()` with
-  `UseStatusCodePages()` and `UseExceptionHandler()` gives them a body. The exception handler is
-  the outermost middleware, before the request logging; the exception is logged once and its
-  message is never in the response.
+- **Errors.** `c.Errors.UseProblemDetails()` for validation and binding, with the `type` ASP.NET
+  Core gives a `400` and the first error as `detail`. An unknown route and an unhandled exception
+  are bodiless by default: ASP.NET Core's `AddProblemDetails()` with `UseStatusCodePages()` and
+  `UseExceptionHandler()` gives them a body. The exception handler is the outermost middleware,
+  before the request logging; the exception is logged once and its message is never in the response.
+  A request the client abandons is not an error: the request log records it as 499 at `Information`,
+  without the exception.
 - **JSON.** `JsonStringEnumConverter` is added to `c.Serializer.Options` and to ASP.NET Core's
   `JsonOptions`, which serialise `TypedResults`. Property names are camelCase.
-- **OpenAPI.** `.OpenApiDocument(…)` on `AddFastEndpoints()` with `DocumentName = "v1"` and
-  `MaxEndpointVersion = 1` (the default of 0 lists no versioned endpoint), then `MapOpenApi()` and
-  `MapScalarApiReference()`. `AddOpenApi()` is not called directly. Each endpoint has a summary
-  and describes its responses.
+- **OpenAPI.** `OpenApiDocument(…)` in `OpenApi/ApiDocumentation`, with `DocumentName = "v1"` and
+  `MaxEndpointVersion = 1` (the default of 0 lists no versioned endpoint), both built from
+  `ApiEndpoints.CurrentVersion`, the one place the version is defined; then `MapOpenApi()` and
+  `MapScalarApiReference()`. `AddOpenApi()` is not called directly. Each endpoint has a summary,
+  describes its responses and every query parameter; the descriptions the list and the counters
+  share are in `OrderFilterDescriptions`.
 - **Sending.** `Send.OkAsync(…)` and its siblings; the older `SendAsync` methods no longer exist.
 
 ### Migration `OrderListIndexes`
@@ -345,9 +360,9 @@ the legacy NSwag path and is not used.
 
 | Index | Declared as |
 |---|---|
-| `ix_orders_number_trgm` | `HasIndex(order => order.Number, "ix_orders_number_trgm").HasMethod("gin").HasOperators("gin_trgm_ops")` — the named overload: `orders.number` already has an index, and the unnamed one would reconfigure it |
-| `ix_shipments_ref_number_trgm` | the same on `shipments.ref_number` |
-| `ix_orders_company_id_scheduled_at_id` | `HasIndex(company_id, scheduled_at, id)` with `IsDescending(false, true, true)` and that name |
+| `ix_orders_number_trgm` | `HasIndex(order => order.Number, "ix_orders_number_trgm").HasDatabaseName("ix_orders_number_trgm").IsTrigramIndex()` — the named overload: `orders.number` already has an index, and the unnamed one would reconfigure it; `HasDatabaseName`, since the naming convention would number it. `IsTrigramIndex()` is `HasMethod("gin").HasOperators("gin_trgm_ops")`, in `ConfigurationExtensions` |
+| `ix_shipments_ref_number_trgm` | `HasIndex(shipment => shipment.RefNumber).HasDatabaseName("ix_shipments_ref_number_trgm").IsTrigramIndex()` — the unnamed overload, since `ref_number` alone has no other index |
+| `ix_orders_company_id_scheduled_at_id` | `HasIndex(company_id, scheduled_at, id)` with `IsDescending(false, true, true)`; no explicit name, the naming convention yields this one |
 
 `docs/er-diagram.md` gets a short "Indexes" section naming them.
 
@@ -364,14 +379,12 @@ docs/explain/
 
 How:
 
-1. A throwaway PostgreSQL 18 container on a port of its own (`docker run -d --name
-   freitty-explain -e POSTGRES_PASSWORD=… -p 55432:5432 postgres:18-alpine`), removed afterwards.
-   Nothing is generated into the Compose database and nothing volume-related ships in the
-   application.
-2. Migrate it by starting the API once against it with the seed off
-   (`ConnectionStrings__Postgres=… dotnet run --project src/Freitty.Api`), then stop the API.
-3. Run `generate-volume.sql` through `docker exec -i freitty-explain psql`: about 200 000 orders
-   in 50 companies, with one to three shipments each, cargo lines and Operations, then
+1. A throwaway PostgreSQL 18 container and one start of the API against it with
+   `Seed__Enabled=false`; the exact commands are in
+   [`docs/explain/README.md`](../explain/README.md), *How to repeat*. Nothing is generated into
+   the Compose database and nothing volume-related ships in the application.
+2. Run `generate-volume.sql` through `docker exec -i freitty-explain psql`: about 200 000 orders
+   in 50 companies, with one or three shipments each, cargo lines and Operations, then
    `VACUUM ANALYZE`. Ids have no column default; PostgreSQL 18 has `uuidv7()`. The script must
    satisfy every constraint of [step 2](02-domain.md) — on `orders`: the enum lists, the
    Cross-Dock kind only on a Cross-Dock, the carrier or driver matching the transport kind, a
@@ -380,16 +393,16 @@ How:
    `shipments`: positions from 1, unique position and Ref N per order, arrival and dock columns all
    or none; on `cargo_lines`: one line per Unit Type; on `operations`: a trailer number exactly for
    Unloading and Loading.
-4. The statements are the ones EF Core sends: copied from the SQL log of `dotnet run` in
+3. The statements are the ones EF Core sends: copied from the SQL log of `dotnet run` in
    Development while calling the endpoint, with the parameters replaced by literals for one
    generated company. The search uses a selective pattern — a whole Ref N, a whole number.
-5. "Before" is measured in a transaction that drops the index and rolls back:
+4. "Before" is measured in a transaction that drops the index and rolls back:
    `BEGIN; DROP INDEX …; EXPLAIN (ANALYZE, BUFFERS) …; ROLLBACK;`. The search is one statement
    using both trigram indexes: `search-number.md` searches by a number and drops
    `ix_orders_number_trgm`, `search-ref-number.md` searches by a Ref N and drops
    `ix_shipments_ref_number_trgm`. `list-default.md` is the page query of the default list and
    drops `ix_orders_company_id_scheduled_at_id`.
-6. Also measured there and stated in `README.md`: the `OR EXISTS` form of the search against the
+5. Also measured there and stated in `README.md`: the `OR EXISTS` form of the search against the
    `UNION` form.
 
 ## Acceptance criteria
@@ -400,14 +413,15 @@ because "today" moves:
 - [ ] `GET /api/v1/orders` returns 12 items and `total` 70, in this order: DRAFT-003, FR001681,
       FR001679, FR001678, FR001383, FR001677, FR001672, then history and the remaining scripted
       orders by Scheduled date.
-- [ ] `?alerts=true` returns FR001383 and FR001674; `?status=Draft` returns DRAFT-003;
-      `?q=REF-1006` and `?q=fr001674-2` return FR001674 only; `?hub=<Toronto>&status=Ready`
-      returns FR001681 only; `?date=Today` returns FR001679 only.
+- [ ] `?hasOpenAlerts=true` returns FR001383 and FR001674; `?status=Draft` returns DRAFT-003;
+      `?search=REF-1006` and `?search=fr001674-2` return FR001674 only;
+      `?hubId=<Toronto>&status=Ready` returns FR001681 only; `?datePreset=Today` returns FR001679
+      only.
 - [ ] `GET /api/v1/orders/counts` returns 70 / 51 / 19 / 2 / 1, and for every combination tried the
       counter of a tab equals the `total` of the list.
 - [ ] The scripted orders' cards:
 
-      | Order | `next` | Also |
+      | Order | `nextStep` | Also |
       |---|---|---|
       | FR001383 | `ReviewQuantityDelta` | declared 10, actual 12, delta, 1 trailer |
       | FR001676 | `Loading` | 15 Standard + 3 ExtraLarge, 2 trailers |
@@ -420,10 +434,10 @@ because "today" moves:
       | FR001668 | `AwaitingPayment` | invoice `001809`, 1540.00; transfer hub Toronto; 2 trailers |
       | DRAFT-003 | `ContinueEditing` | no shipments; `scheduledAt` set |
 
-- [ ] An invalid `pageSize`, enum value or `hub` is a `400` `ProblemDetails` with field errors; an
+- [ ] An invalid `pageSize`, enum value or `hubId` is a `400` `ProblemDetails` with field errors; an
       unknown route under `/api` is a `404` `ProblemDetails`.
-- [ ] `/scalar` serves the Scalar page and `/openapi/v1.json` lists the four endpoints under
-      `/api/v1` with their parameters and schemas; enums are strings.
+- [ ] `/scalar` serves the Scalar page and `/openapi/v1.json` lists the four endpoints of this step
+      under `/api/v1` with their parameters and schemas; enums are strings.
 
 Elsewhere:
 
@@ -434,16 +448,18 @@ Elsewhere:
 - [ ] `dotnet ef migrations has-pending-model-changes` reports none; `docs/er-diagram.md` names the
       indexes.
 - [ ] Build with 0 warnings, `dotnet format --verify-no-changes` clean, `dotnet test` green.
-- [ ] *Browser session:* `/scalar` renders the four endpoints and a request sent from it succeeds.
+- [ ] *Browser session:* `/scalar` renders the four endpoints of this step and a request sent from
+      it succeeds.
 
 ## Tests
 
 Integration, through HTTP (the pattern of
 [ADR 0002](../adr/0002-integration-tests-on-real-postgres.md) returns with the first endpoint), in
-`Freitty.Api.IntegrationTests/Orders/`.
+the feature folders of `tests/Freitty.Api.IntegrationTests/` — `Orders/`, `Hubs/` and `Me/` — with
+the shared helpers in `Support/`.
 
-- `ApiFactory` gains an optional `ICurrentUser`. Every HTTP test passes its own: in the shared
-  database the default implementation would find some other test's Admin.
+- The test host of the API takes an optional `ICurrentUser`. Every HTTP test passes its own: in the
+  shared database the default implementation would find some other test's Admin.
 - Each test class builds its orders through the aggregate under a company and user of its own,
   with builders added to the test project as needed — a Consolidation, a completed order, an event
   at a chosen instant — and starts the API with that user and a `FakeTimeProvider`.
@@ -455,17 +471,18 @@ What is covered:
 - The date presets at their boundaries in the reporting zone, including an order scheduled at
   23:30 local time today and one at 00:30 tomorrow; an order without a Scheduled date matches none.
 - Search by order number, by Ref N, by a part of either, by a sub-order label, case-insensitively;
-  a `%` or `_` in `q` matches literally; two characters are a `400`; white space is no search.
+  a `%` or `_` in `search` matches literally; two characters are a `400`; white space is no search.
 - Pagination: page boundaries, the total, the last partial page, a page past the end is empty; the
   order is stable across pages when several orders share a Scheduled date.
 - The default sort, with unscheduled orders first.
 - A card with a known ledger: declared per Unit Type, totals, the delta flag for an excess and for
   a shortage before and after receiving, outbound trailers, shipment rows, open Alert types.
-- Each stage and each `next` code, including an order whose only shipment never arrived and was
+- Each stage and each `nextStep` code, including an order whose only shipment never arrived and was
   finished: `AwaitingCompletion`, not `AwaitingTruck`.
 - The counters equal the list's totals for the same filters; `drafts` ignores `status`.
 - Validation and binding failures as `ProblemDetails` with the name of the field; an unknown
-  route under `/api` is a `404` with a body; the OpenAPI document lists the four endpoints.
+  route under `/api` is a `404` with a body; the OpenAPI document lists the four endpoints of this
+  step.
 - Orders of another company never appear, in the list, in the counters or in a search.
 - `/hubs` contains the test's own hubs in name order; `/me` returns the test's user and company.
 - The migration: the three indexes exist and the model has no pending changes.

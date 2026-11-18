@@ -12,7 +12,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 
 | Role emphasis | How it shows up here |
 |---|---|
-| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, composite indexes for list filters, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency |
+| PostgreSQL: indexes, query plans, transactions, isolation levels | `pg_trgm` GIN index for search, a composite index for the default list and its date filter, `EXPLAIN ANALYZE` before/after in `docs/`, one write flow in a transaction with optimistic concurrency |
 | EF Core: change tracking, N+1, eager loading, query optimization | `AsNoTracking` + projections in read handlers, `AsSplitQuery` on the detail query, no lazy loading |
 | API: contracts, versioning, error handling | `/api/v1/...`, `ProblemDetails` everywhere, OpenAPI + Scalar |
 | Git · Docker · CI/CD — "can build and deploy myself" | Dockerfile, docker-compose for the whole local stack (API + Postgres), GitHub Actions: build → test → image → deploy |
@@ -28,7 +28,7 @@ The vacancy (Backend .NET, logistics/freight, cross-docking platform) stresses t
 - **FastEndpoints command bus** with a pipeline: logging → **FluentValidation** → handler (no MediatR — commercial since 2025)
 - **Mapperly** (source-generated mapping; no AutoMapper — commercial). Read-side projections stay in `Select` / `IQueryable` so SQL does the work
 - **EF Core + Npgsql** for the domain and writes; **Dapper** for dashboard aggregates
-- **PostgreSQL**: migrations, seed on startup, `pg_trgm`, composite indexes, optimistic concurrency token
+- **PostgreSQL**: migrations, seed on startup, `pg_trgm`, a composite index for the default list and its date filter, optimistic concurrency token
 - **ProblemDetails**, `/api/v1`, **Scalar** (OpenAPI UI)
 - **Serilog**
 - **xUnit + Testcontainers**
@@ -93,15 +93,15 @@ Key decisions (presentation material):
 
 ```
 GET  /api/v1/dashboard?period=            KPIs + first active orders + activity series
-GET  /api/v1/orders?type=&status=&alerts=&hub=&date=&q=&page=&pageSize=
-GET  /api/v1/orders/counts?hub=&date=&status=&q=   tab counters, following the filters
+GET  /api/v1/orders?type=&status=&hasOpenAlerts=&hubId=&datePreset=&search=&page=&pageSize=
+GET  /api/v1/orders/counts?hubId=&datePreset=&status=&search=   tab counters, following the filters
 GET  /api/v1/orders/{number}              detail: shipments, cargo, services, operations, supplies
 POST /api/v1/orders/{number}/operations   the one write flow (see below)
 GET  /api/v1/hubs                         options of the Hub filter
 GET  /api/v1/me                           the shell: user, company balance, attention badge
 ```
 
-- Filtering, search and pagination in SQL. Search: `ILIKE` on number and Ref N (further fields are decided in step 4), backed by `pg_trgm` GIN indexes. Pagination: offset/limit (mention keyset as the scale-up path).
+- Filtering, search and pagination in SQL. Search: `ILIKE` on the order number and the Ref N of any shipment, plus a sub-order label typed in full, backed by `pg_trgm` GIN indexes. Pagination: offset/limit (mention keyset as the scale-up path).
 - Dashboard KPIs and charts: Dapper + SQL (`date_trunc`, `FILTER (WHERE ...)`, CTEs).
 - **Write flow** (not required by the task, added to show transactions/isolation): add an operation → in one transaction append it to the ledger and open/resolve the quantity delta alert; optimistic concurrency on the order row (`Order.Version` as the token, [ADR 0013](adr/0013-optimistic-concurrency-on-order-version.md)), 409 ProblemDetails on conflict.
 - Validation (FluentValidation): page and pageSize bounds, search length, enum values, operation payload.
@@ -111,7 +111,7 @@ GET  /api/v1/me                           the shell: user, company balance, atte
 Same HTML, kept 1:1:
 - Cut the mockup into three pages in `src/Freitty.Api/wwwroot`: `index.html` (Dashboard), `orders.html` (Order List), `order.html?n=FR001383` (Detail). Drop the fake browser frame; keep `.fc-shell`. Shared styles → `app.css`, class names untouched.
 - Hardcoded cards → `<template>` elements with the same markup; small vanilla JS (`fetch` + clone template + fill).
-- Tabs, filters, search and Prev/Next are plain navigations that change the query string. Card click → detail page.
+- The view lives in the query string. The three pages are linked as ordinary pages; within a page, tabs, filters, search, Prev/Next and the dashboard's period rewrite the URL through the History API and reload only the affected blocks, so a copied link, Reload and Back keep the view. Card click → detail page.
 - Served by the same ASP.NET app (static files): one origin, no CORS, one deployable.
 - No React/Blazor: the task says the markup is done; the evaluation is the backend.
 
@@ -119,11 +119,13 @@ Same HTML, kept 1:1:
 
 ```
 assignment/   inputs, never modified
-docs/         plan.md, adr/, er-diagram.md (mermaid), explain/ (query plans), presentation (Marp/Slidev)
+docs/         plan.md, adr/, steps/ (a spec per step), engineering/ (code rules), er-diagram.md (mermaid),
+              explain/ (query plans); the presentation (Marp/Slidev) arrives in step 10
 src/          solution
 tests/
 .github/workflows/
-CLAUDE.md, .claude/ (hooks, skills)
+.githooks/    commit-msg check
+CLAUDE.md, CONTEXT.md (domain vocabulary), .claude/ (agents, hooks, skills)
 Dockerfile, docker-compose.yml, README.md
 ```
 

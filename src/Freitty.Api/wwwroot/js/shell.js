@@ -1,9 +1,9 @@
 // The frame every page shares: the sidebar and the top bar, filled from GET /api/v1/me, the search
-// box, the loading, empty and error states the blocks of a page show, and the lookup of the
-// data-field elements of a cloned template.
+// box, the loading, empty and error states the blocks of a page show, the cloning of a template
+// and the lookup of its data-field elements, and the "by" chip of a card and of the detail page.
 
 import { ApiError, getJson } from './api.js';
-import { DASH, formatMoney } from './format.js';
+import { DASH, avatarClass, formatMoney, roleTag } from './format.js';
 
 const SEARCH_MIN_LENGTH = 3;
 const SEARCH_MAX_LENGTH = 50;
@@ -14,21 +14,56 @@ const PAGE_FAILURE = {
     + 'the browser console has the details.',
 };
 
-// A search the API accepts, or null: shorter or longer text would be a 400.
+// A search the API accepts, or null: shorter or longer text, or text with a control character,
+// would be a 400.
 export function searchText(value) {
   const text = (value ?? '').trim();
-  return text.length >= SEARCH_MIN_LENGTH && text.length <= SEARCH_MAX_LENGTH ? text : null;
+  const fits = text.length >= SEARCH_MIN_LENGTH && text.length <= SEARCH_MAX_LENGTH;
+  return fits && !/\p{Cc}/u.test(text) ? text : null;
 }
 
-function listSearchUrl(text) {
-  return text ? `orders.html?${new URLSearchParams({ q: text })}` : null;
+// A search made anywhere but on the list opens the list; an empty one does nothing.
+function openListSearch(text) {
+  if (text) {
+    location.assign(`orders.html?${new URLSearchParams({ search: text })}`);
+  }
 }
 
-// Enter in the search box navigates to searchUrl(text), text being null for an empty box. The
-// list passes its own URL builder; elsewhere a search opens the list, and an empty one does nothing.
-export function initShell({ query = '', searchUrl = listSearchUrl } = {}) {
+// A plain left click on a link, which a page may answer in place. A modified click keeps its
+// meaning: a new tab, a new window, a download.
+export function isPlainClick(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+// The link of the view that is shown, among the links that switch views in place.
+export function markCurrent(link, isCurrent) {
+  if (isCurrent) {
+    link.setAttribute('aria-current', 'page');
+  } else {
+    link.removeAttribute('aria-current');
+  }
+}
+
+export function showSearchQuery(text) {
+  document.getElementById('search').value = text ?? '';
+}
+
+// Enter in the search box calls onSearch(text), text being null for an empty box; the list shows
+// the result in place. Back can restore a page from the back/forward cache with the counters and
+// statuses it showed before a write: onRestore loads them again.
+export function initShell({
+  query = '',
+  onSearch = openListSearch,
+  onRestore = () => location.reload(),
+} = {}) {
+  window.addEventListener('pageshow', event => {
+    if (event.persisted) {
+      onRestore();
+    }
+  });
+
   const input = document.getElementById('search');
-  input.value = query;
+  showSearchQuery(query);
   input.addEventListener('input', () => input.setCustomValidity(''));
   input.addEventListener('keydown', event => {
     if (event.key !== 'Enter' || event.isComposing) {
@@ -42,10 +77,7 @@ export function initShell({ query = '', searchUrl = listSearchUrl } = {}) {
       return;
     }
 
-    const url = searchUrl(searchText(typed));
-    if (url) {
-      location.assign(url);
-    }
+    onSearch(searchText(typed));
   });
 }
 
@@ -63,8 +95,8 @@ export async function loadMe() {
 
 function renderMe(me) {
   const badge = document.getElementById('nav-attention');
-  badge.textContent = me.needAttention;
-  badge.hidden = me.needAttention === 0;
+  badge.textContent = me.needAttentionCount;
+  badge.hidden = me.needAttentionCount === 0;
   document.getElementById('balance').textContent = formatMoney(me.company.balance);
   document.getElementById('user-initials').textContent = me.user.initials;
   document.getElementById('user-name').textContent = me.user.name;
@@ -106,7 +138,26 @@ export function describeError(error) {
   return PAGE_FAILURE;
 }
 
+export function cloneTemplate(id) {
+  return document.getElementById(id).content.cloneNode(true);
+}
+
 // The elements of a cloned template are found by their data-field name.
 export function fieldsOf(root) {
   return name => root.querySelector(`[data-field="${name}"]`);
+}
+
+// The avatar with its colour, the name after it and the role tag; place is 'card' or 'detail'.
+export function fillCreatedBy(field, createdBy, place) {
+  const avatar = field('initials');
+  avatar.textContent = createdBy.initials;
+  avatar.classList.add(avatarClass(createdBy.initials));
+  avatar.after(createdBy.name);
+
+  const tag = roleTag(createdBy.role, place);
+  const role = field('role');
+  role.textContent = tag.text;
+  if (tag.className) {
+    role.classList.add(tag.className);
+  }
 }

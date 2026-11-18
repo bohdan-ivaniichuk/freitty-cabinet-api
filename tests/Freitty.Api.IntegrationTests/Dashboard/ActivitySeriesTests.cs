@@ -1,12 +1,11 @@
-using Freitty.Api.IntegrationTests.Orders;
 using Freitty.Application.Dashboard;
 using Freitty.Application.Dashboard.GetDashboard;
 using Freitty.Domain.Orders;
 
 namespace Freitty.Api.IntegrationTests.Dashboard;
 
-// The API's clock stands at 12:00 on Wednesday 15 April 2026 in Toronto. The twelve weeks of the default series
-// begin on Monday 26 January and span the change to daylight saving time on Sunday 8 March.
+// The twelve weeks of the default series end with the week of CabinetApi.Now: they begin on Monday 26 January and
+// span the change to daylight saving time on Sunday 8 March.
 public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDisposable
 {
     private readonly CabinetApi api = new(postgres.ConnectionString);
@@ -22,7 +21,7 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
         string firstStart,
         string lastStart)
     {
-        await api.SaveAsync();
+        await api.SaveReferenceDataAsync();
 
         ActivityDto activity = await ActivityAsync(period);
 
@@ -36,9 +35,9 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
     [Fact]
     public async Task PeriodIsAWeekWhenLeftOut()
     {
-        await api.SaveAsync();
+        await api.SaveReferenceDataAsync();
 
-        DashboardDto dashboard = await api.GetAsync<DashboardDto>("/api/v1/dashboard");
+        DashboardDto dashboard = await api.GetAsync<DashboardDto>(ApiUrls.Dashboard);
 
         Assert.Equal(ActivityPeriod.Week, dashboard.Activity.Period);
         Assert.Equal(12, dashboard.Activity.Buckets.Count);
@@ -48,9 +47,9 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
     public async Task QuarterBucketsStartOnTheFirstDayOfAQuarter()
     {
         await using var midQuarterApi = new CabinetApi(postgres.ConnectionString, Toronto.At(2026, 5, 15, 12));
-        await midQuarterApi.SaveAsync();
+        await midQuarterApi.SaveReferenceDataAsync();
 
-        DashboardDto dashboard = await midQuarterApi.GetAsync<DashboardDto>("/api/v1/dashboard?period=Quarter");
+        DashboardDto dashboard = await midQuarterApi.GetAsync<DashboardDto>($"{ApiUrls.Dashboard}?period=Quarter");
 
         Assert.Equal(
             [new DateOnly(2025, 7, 1), new DateOnly(2025, 10, 1), new DateOnly(2026, 1, 1), new DateOnly(2026, 4, 1)],
@@ -66,7 +65,7 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
         var middayOnTheEighth = new DateTimeOffset(2026, 9, 8, 12, 0, 0, TimeSpan.FromHours(-3));
         await santiagoApi.SaveAsync(santiagoApi.Orders.Completed(completedAt: middayOnTheEighth));
 
-        DashboardDto dashboard = await santiagoApi.GetAsync<DashboardDto>("/api/v1/dashboard?period=Day");
+        DashboardDto dashboard = await santiagoApi.GetAsync<DashboardDto>($"{ApiUrls.Dashboard}?period=Day");
 
         IReadOnlyList<ActivityBucketDto> buckets = dashboard.Activity.Buckets;
         Assert.Equal(
@@ -163,7 +162,7 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
 
         ActivityDto activity = await ActivityAsync("Week");
 
-        Assert.Equal(new ActivityBucketDto(new DateOnly(2026, 4, 6), 2, 200.00m), activity.Summary.Best);
+        Assert.Equal(new ActivityBucketDto(new DateOnly(2026, 4, 6), 2, 200.00m), activity.Summary.BestBucket);
     }
 
     [Fact]
@@ -179,7 +178,7 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
 
         ActivityDto activity = await ActivityAsync("Week");
 
-        Assert.Equal(new DateOnly(2026, 4, 6), activity.Summary.Best?.Start);
+        Assert.Equal(new DateOnly(2026, 4, 6), activity.Summary.BestBucket?.Start);
     }
 
     [Fact]
@@ -222,7 +221,7 @@ public sealed class ActivitySeriesTests(PostgresFixture postgres) : IAsyncDispos
 
     private async Task<ActivityDto> ActivityAsync(string period)
     {
-        DashboardDto dashboard = await api.GetAsync<DashboardDto>($"/api/v1/dashboard?period={period}");
+        DashboardDto dashboard = await api.GetAsync<DashboardDto>($"{ApiUrls.Dashboard}?period={period}");
         return dashboard.Activity;
     }
 }

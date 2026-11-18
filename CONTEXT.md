@@ -80,7 +80,7 @@ _Avoid_: Order item, pallet line
 
 **Unit Type**:
 The kind of handling unit a quantity is counted in — Standard (48×40) or XL.
-_Avoid_: Pallet type, unit
+_Avoid_: Pallet type, unit (the form's label "Unit" only)
 
 **Declared quantity**:
 What the bill of lading says should arrive, per **Cargo Line**. The declared quantity of a
@@ -104,12 +104,25 @@ An **Order** the hub has started work on and has not completed. Any action of th
 
 **Completed**:
 An **Order** the hub has finished: every **Shipment** is **Received**, nothing is left
-**On stock** and no **Alert** is open. The UI also labels it "Done" and "Closed".
+**On stock** and no **Alert** is open. The mockup also labels it "Done" and "Closed"; the cabinet
+shows "Completed".
 _Avoid_: Done, closed, paid
 
 **Active**:
 An **Order** that is **Ready** or **In progress** — the "Active Orders" of the dashboard.
 _Avoid_: Open (that word is for an **Alert**)
+
+**Stage**:
+Where the freight of an **Order** is in the hub's work, derived from its status and its
+**Shipments**: Draft, Awaiting truck, Unloading, Loading, Awaiting completion or Completed. Unlike
+the status, it tells the hub's work apart; an **Alert** does not change it.
+_Avoid_: Status (the status has four values and does not say what the hub is doing)
+
+**Next step**:
+What an **Order** card says happens next: an action of the client — continue editing a **Draft**,
+upload a photo, review a **Quantity delta** — the hub's next **Stage**, or, for a **Completed**
+**Order**, payment of its **Invoice**. "Closed" is the next step of a **Completed** **Order**
+without an **Invoice**, not a status.
 
 ### What the hub does
 
@@ -167,6 +180,15 @@ same difference does not raise it again.
 The **Alert** raised when an **Operation** that documents the condition of freight — Unloading or
 Disposal — was recorded without a photo. It ends when someone resolves it.
 
+**Awaiting action**:
+**Orders** that only the client can move: **Drafts** and **Orders** with an unpaid **Invoice**.
+_Avoid_: Pending
+
+**Need attention**:
+What waits for the client, the dashboard tile and the number on the Orders badge: the **Orders**
+**Awaiting action** plus the **Orders** with an open **Alert**. An **Order** that is both is
+counted in each.
+
 ### What the client pays for
 
 **Service**:
@@ -187,6 +209,18 @@ _Avoid_: Order supply, purchase
 A request for payment issued to a **Company** for one **Order**. Whether an **Order** is paid is a
 fact of its **Invoice**, never of its status.
 _Avoid_: Bill, payment
+
+### Reporting
+
+**Reporting time zone**:
+The one time zone in which the cabinet decides where a day, a week or a month begins — for "today"
+and "this week" of the Date filter and for the periods of **Activity**. A single event is still
+shown in the local time of its **Hub**.
+_Avoid_: Local time, user's time zone
+
+**Activity**:
+The dashboard's chart of **Orders** completed and of spend — the amounts of the **Invoices**
+issued — per day, week, month or quarter. Not the **Operations** of an **Order**.
 
 ## Relationships
 

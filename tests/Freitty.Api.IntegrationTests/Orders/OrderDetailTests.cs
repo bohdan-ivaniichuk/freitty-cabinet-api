@@ -1,6 +1,4 @@
 using System.Net;
-using System.Text.Json;
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Common;
 using Freitty.Application.Orders;
 using Freitty.Application.Orders.GetOrderDetail;
@@ -8,8 +6,6 @@ using Freitty.Domain.Billing;
 using Freitty.Domain.Catalog;
 using Freitty.Domain.Companies;
 using Freitty.Domain.Orders;
-using Freitty.Infrastructure.Persistence;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Freitty.Api.IntegrationTests.Orders;
 
@@ -22,11 +18,11 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
     {
         Order order = api.Orders.Draft();
         api.Orders.AddShipment(order, OrderBuilder.DeclaredStandard);
-        TestData.Succeed(order.AddService(api.Data.Service.Id, TestData.Now));
-        TestData.Succeed(order.AddService(api.Data.OtherService.Id, TestData.Now));
-        TestData.Succeed(order.ArrangeCarrier(api.Data.Carrier.Id, TestData.Now));
+        order.AddService(api.Data.Service.Id, OrderBuilder.BuiltAt).MustSucceed();
+        order.AddService(api.Data.OtherService.Id, OrderBuilder.BuiltAt).MustSucceed();
+        order.ArrangeCarrier(api.Data.Carrier.Id, OrderBuilder.BuiltAt).MustSucceed();
         OrderBuilder.Submit(order, CabinetApi.Now);
-        TestData.Succeed(order.TransferTo(api.Data.OtherHub.Id, TestData.Now));
+        order.TransferTo(api.Data.OtherHub.Id, OrderBuilder.BuiltAt).MustSucceed();
         await api.SaveAsync(order);
 
         OrderDetailDto detail = await api.DetailAsync(order.Number);
@@ -41,7 +37,9 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         Assert.Equal(new DetailHubDto(api.Data.Hub.Name, "Mark", "ON", "America/Toronto"), detail.Hub);
         Assert.Equal(new TransferHubDto(api.Data.OtherHub.Name, "Tor"), detail.TransferHub);
         Assert.Equal(CabinetApi.Now, detail.ScheduledAt);
-        Assert.Equal(new DestinationDto("Montreal", "QC"), detail.Destination);
+        Assert.Equal(
+            new DestinationDto(OrderBuilder.DestinationCity, OrderBuilder.DestinationRegion),
+            detail.Destination);
         Assert.Equal(
             new DetailTransportDto(TransportKind.Carrier, api.Data.Carrier.Name, "+1 416 555 0100", null),
             detail.Transport);
@@ -70,8 +68,8 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         Assert.Equal([new UnitQuantityDto(UnitType.Standard, 12)], totals.Actual);
         Assert.Equal([new UnitQuantityDto(UnitType.Standard, 5)], totals.OnStock);
         Assert.Equal(
-            (QuantityDeltas: 1, Photos: 7, Comments: 1, OutboundTrailers: 1),
-            (totals.QuantityDeltas, totals.Photos, totals.Comments, totals.OutboundTrailers));
+            (QuantityDeltaCount: 1, PhotoCount: 7, CommentCount: 1, OutboundTrailerCount: 1),
+            (totals.QuantityDeltaCount, totals.PhotoCount, totals.CommentCount, totals.OutboundTrailerCount));
         Assert.Equal(OrderStage.Loading, detail.Stage);
     }
 
@@ -82,9 +80,9 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         var secondStrap = new SupplyItem(TestData.Unique("S2-"), "Securement", 18.50m);
         var firstStrap = new SupplyItem(TestData.Unique("S1-"), "Securement", 12.25m);
         Order order = api.Orders.Ready();
-        TestData.Succeed(order.AddSupply(wrap, 2, TestData.Now));
-        TestData.Succeed(order.AddSupply(secondStrap, 4, TestData.Now));
-        TestData.Succeed(order.AddSupply(firstStrap, 3, TestData.Now));
+        order.AddSupply(wrap, 2, OrderBuilder.BuiltAt).MustSucceed();
+        order.AddSupply(secondStrap, 4, OrderBuilder.BuiltAt).MustSucceed();
+        order.AddSupply(firstStrap, 3, OrderBuilder.BuiltAt).MustSucceed();
         await api.SaveAsync(wrap, secondStrap, firstStrap, order);
 
         SuppliesDto supplies = (await api.DetailAsync(order.Number)).Supplies;
@@ -113,9 +111,9 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         OrderDetailDto receivedDetail = await api.DetailAsync(received.Number);
 
         Assert.Null(Assert.Single(Assert.Single(stillArrivingDetail.Shipments).Quantities).Delta);
-        Assert.Equal(0, stillArrivingDetail.Totals.QuantityDeltas);
+        Assert.Equal(0, stillArrivingDetail.Totals.QuantityDeltaCount);
         Assert.Equal(-2, Assert.Single(Assert.Single(receivedDetail.Shipments).Quantities).Delta);
-        Assert.Equal(1, receivedDetail.Totals.QuantityDeltas);
+        Assert.Equal(1, receivedDetail.Totals.QuantityDeltaCount);
     }
 
     [Fact]
@@ -149,7 +147,7 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         OrderBuilder.Arrive(order, shipments[0]);
         OrderBuilder.AssignDock(order, shipments[0], "12");
         OrderBuilder.Unload(order, shipments[0], OrderBuilder.DeclaredStandard);
-        TestData.Succeed(order.SetWarehouseNote(shipments[0].Id, "Counted on arrival.", TestData.Now));
+        order.SetWarehouseNote(shipments[0].Id, "Counted on arrival.", OrderBuilder.BuiltAt).MustSucceed();
         OrderBuilder.Receive(order, shipments[0]);
         OrderBuilder.DisposeOf(order, shipments[0], 1, photos: 2, comments: 1);
         OrderBuilder.Unload(order, shipments[1], OrderBuilder.DeclaredStandard + 1, photos: 0);
@@ -162,10 +160,14 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         DetailShipmentDto first = detail.Shipments[0];
         Assert.Equal((1, $"{order.Number}-1", shipments[0].RefNumber), (first.Position, first.Label, first.RefNumber));
         Assert.Equal(
-            new ArrivalDto(TrailerType.DryVan53, OrderBuilder.TruckNumber, OrderBuilder.TrailerNumber, TestData.Now),
+            new ArrivalDto(
+                TrailerType.DryVan53,
+                OrderBuilder.TruckNumber,
+                OrderBuilder.TrailerNumber,
+                OrderBuilder.BuiltAt),
             first.Arrival);
-        Assert.Equal(new DockDto("12", OrderBuilder.Bay, OrderBuilder.FloorLead, TestData.Now), first.Dock);
-        Assert.Equal(TestData.Now, first.ReceivedAt);
+        Assert.Equal(new DockDto("12", OrderBuilder.Bay, OrderBuilder.FloorLead, OrderBuilder.BuiltAt), first.Dock);
+        Assert.Equal(OrderBuilder.BuiltAt, first.ReceivedAt);
         Assert.Equal("Counted on arrival.", first.WarehouseNote);
         Assert.Empty(first.Alerts);
         Assert.Equal(
@@ -203,8 +205,8 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         Assert.Equal([new UnitQuantityDto(UnitType.Standard, 21)], totals.Actual);
         Assert.Equal([new UnitQuantityDto(UnitType.Standard, 20)], totals.OnStock);
         Assert.Equal(
-            (QuantityDeltas: 1, Photos: 7, Comments: 1),
-            (totals.QuantityDeltas, totals.Photos, totals.Comments));
+            (QuantityDeltaCount: 1, PhotoCount: 7, CommentCount: 1),
+            (totals.QuantityDeltaCount, totals.PhotoCount, totals.CommentCount));
     }
 
     [Fact]
@@ -219,14 +221,14 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
 
         OrderDetailDto detail = await api.DetailAsync(order.Number);
 
-        Assert.Equal(2, detail.Totals.OutboundTrailers);
+        Assert.Equal(2, detail.Totals.OutboundTrailerCount);
     }
 
     [Fact]
     public async Task OwnDriverTransportNamesTheDriverAndNoCarrier()
     {
         Order order = api.Orders.Draft();
-        TestData.Succeed(order.ArrangeOwnDriver("User 5", TestData.Now));
+        order.ArrangeOwnDriver("User 5", OrderBuilder.BuiltAt).MustSucceed();
         await api.SaveAsync(order);
 
         OrderDetailDto detail = await api.DetailAsync(order.Number);
@@ -266,7 +268,7 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         OrderBuilder.Unload(order, shipment, OrderBuilder.DeclaredStandard - 1, photos: 0, at: At(minutes: 1));
         OrderBuilder.Receive(order, shipment, At(minutes: 2));
         Alert missingPhoto = shipment.Alerts.Single(alert => alert.Type == AlertType.MissingPhoto);
-        TestData.Succeed(order.ResolveAlert(missingPhoto.Id, At(minutes: 3)));
+        order.ResolveAlert(missingPhoto.Id, At(minutes: 3)).MustSucceed();
         await api.SaveAsync(order);
 
         OrderDetailDto detail = await api.DetailAsync(order.Number);
@@ -300,16 +302,20 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
     public async Task InvoicesComeBackInIssueOrderWithTheirPayment()
     {
         Order order = api.Orders.Completed();
-        Invoice unpaid = OrderBuilder.IssueInvoice(order, 1540.00m, TestData.Now.AddHours(2), paid: false);
-        Invoice paid = OrderBuilder.IssueInvoice(order, 280.00m, TestData.Now.AddHours(1), paid: true);
+        Invoice unpaid = OrderBuilder.IssueInvoice(order, 1540.00m, OrderBuilder.BuiltAt.AddHours(2), paid: false);
+        Invoice paid = OrderBuilder.IssueInvoice(order, 280.00m, OrderBuilder.BuiltAt.AddHours(1), paid: true);
         await api.SaveAsync(order, unpaid, paid);
 
         OrderDetailDto detail = await api.DetailAsync(order.Number);
 
         Assert.Equal(
             [
-                new InvoiceDto(paid.Number, 280.00m, TestData.Now.AddHours(1), TestData.Now.AddHours(1)),
-                new InvoiceDto(unpaid.Number, 1540.00m, TestData.Now.AddHours(2), null),
+                new InvoiceDto(
+                    paid.Number,
+                    280.00m,
+                    OrderBuilder.BuiltAt.AddHours(1),
+                    OrderBuilder.BuiltAt.AddHours(1)),
+                new InvoiceDto(unpaid.Number, 1540.00m, OrderBuilder.BuiltAt.AddHours(2), null),
             ],
             detail.Invoices);
     }
@@ -332,9 +338,10 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         Assert.Empty(detail.Totals.Declared);
         Assert.Empty(detail.Totals.Actual);
         Assert.Empty(detail.Totals.OnStock);
+        OrderTotalsDto totals = detail.Totals;
         Assert.Equal(
-            (QuantityDeltas: 0, Photos: 0, Comments: 0, OutboundTrailers: 0),
-            (detail.Totals.QuantityDeltas, detail.Totals.Photos, detail.Totals.Comments, detail.Totals.OutboundTrailers));
+            (QuantityDeltaCount: 0, PhotoCount: 0, CommentCount: 0, OutboundTrailerCount: 0),
+            (totals.QuantityDeltaCount, totals.PhotoCount, totals.CommentCount, totals.OutboundTrailerCount));
         Assert.Empty(detail.Supplies.Lines);
         Assert.Equal(0m, detail.Supplies.Subtotal);
         Assert.Empty(detail.Invoices);
@@ -343,7 +350,7 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
     [Fact]
     public async Task NumberIsMatchedCaseInsensitively()
     {
-        Order order = api.Data.Draft(TestData.Unique("Draft-Mixed-"));
+        Order order = api.Orders.Draft(draftNumber: TestData.Unique("Draft-Mixed-"));
         await api.SaveAsync(order);
 
         OrderDetailDto lowerCased = await api.DetailAsync(order.Number.ToLowerInvariant());
@@ -361,7 +368,7 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         await api.SaveAsync(requested, other);
 
         OrderDetailDto detail = await api.GetAsync<OrderDetailDto>(
-            $"/api/v1/orders/{requested.Number}?number={other.Number}");
+            $"{ApiUrls.Order(requested.Number)}?number={other.Number}");
 
         Assert.Equal(requested.Number, detail.Number);
     }
@@ -397,7 +404,7 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         Order order = api.Orders.Draft(OrderType.Consolidation);
         Shipment first = api.Orders.AddShipment(order, standard: 10, extraLarge: 3);
         Shipment second = api.Orders.AddShipment(order, standard: 8);
-        TestData.Succeed(order.ArrangeSelfPickup(TestData.Now));
+        order.ArrangeSelfPickup(OrderBuilder.BuiltAt).MustSucceed();
         OrderBuilder.Submit(order, CabinetApi.Now);
         OrderBuilder.Unload(order, first, 11);
         OrderBuilder.Unload(order, first, 2, UnitType.ExtraLarge, photos: 0);
@@ -405,12 +412,11 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
         OrderBuilder.DisposeOf(order, first, 1);
         OrderBuilder.Load(order, first, 4);
         OrderBuilder.Unload(order, second, 6);
-        TestData.Succeed(order.AddSupply(api.Data.SupplyItem, 3, TestData.Now));
+        order.AddSupply(api.Data.SupplyItem, 3, OrderBuilder.BuiltAt).MustSucceed();
         await api.SaveAsync(order);
 
         OrderDetailDto detail = await api.DetailAsync(order.Number);
-        Order loaded = await api.InScopeAsync(services =>
-            services.GetRequiredService<AppDbContext>().LoadOrderAsync(order.Id));
+        Order loaded = await api.InContextAsync(db => db.LoadOrderAsync(order.Id));
 
         Assert.Equal(loaded.Shipments.Count, detail.Shipments.Count);
         foreach (Shipment shipment in loaded.Shipments)
@@ -440,7 +446,7 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
 
     private static DateTimeOffset At(int minutes)
     {
-        return TestData.Now.AddMinutes(minutes);
+        return OrderBuilder.BuiltAt.AddMinutes(minutes);
     }
 
     private Order OrderAt(OrderStage stage)
@@ -471,12 +477,12 @@ public sealed class OrderDetailTests(PostgresFixture postgres) : IAsyncDisposabl
 
     private async Task AssertNotFoundAsync(string number)
     {
-        using HttpResponseMessage response = await api.SendGetAsync($"/api/v1/orders/{number}");
-        JsonElement problem = await ProblemResponse.ReadAsync(response);
+        using HttpResponseMessage response = await api.SendGetAsync(ApiUrls.Order(number));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal(404, problem.GetProperty("status").GetInt32());
-        Assert.Equal("order.not_found", problem.GetProperty("code").GetString());
-        Assert.Equal($"Order {number} not found.", problem.GetProperty("detail").GetString());
+        await ProblemResponse.AssertDomainProblemAsync(
+            response,
+            HttpStatusCode.NotFound,
+            "order.not_found",
+            $"Order {number} not found.");
     }
 }

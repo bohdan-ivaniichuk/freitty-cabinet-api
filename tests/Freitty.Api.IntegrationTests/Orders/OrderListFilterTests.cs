@@ -1,4 +1,3 @@
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Orders.ListOrders;
 using Freitty.Domain.Orders;
 
@@ -62,7 +61,7 @@ public sealed class OrderListFilterTests(PostgresFixture postgres) : IAsyncDispo
         Order withoutAlert = api.Orders.Received();
         await api.SaveAsync(withAlert, withResolvedAlert, withoutAlert);
 
-        string[] numbers = await api.ListNumbersAsync("?alerts=true");
+        string[] numbers = await api.ListNumbersAsync("?hasOpenAlerts=true");
 
         Assert.Equal(withAlert.Number, Assert.Single(numbers));
     }
@@ -75,7 +74,7 @@ public sealed class OrderListFilterTests(PostgresFixture postgres) : IAsyncDispo
         Order withoutAlert = api.Orders.Ready();
         await api.SaveAsync(withAlert, withoutAlert);
 
-        string[] numbers = await api.ListNumbersAsync("?alerts=false");
+        string[] numbers = await api.ListNumbersAsync("?hasOpenAlerts=false");
 
         Assert.Equal(2, numbers.Length);
     }
@@ -84,11 +83,11 @@ public sealed class OrderListFilterTests(PostgresFixture postgres) : IAsyncDispo
     public async Task HubFilterMatchesTheHubThatHandlesTheOrderNotItsTransferHub()
     {
         Order atHub = api.Orders.Ready(hub: api.Data.Hub);
-        TestData.Succeed(atHub.TransferTo(api.Data.OtherHub.Id, TestData.Now));
+        atHub.TransferTo(api.Data.OtherHub.Id, OrderBuilder.BuiltAt).MustSucceed();
         Order atOtherHub = api.Orders.Ready(hub: api.Data.OtherHub);
         await api.SaveAsync(atHub, atOtherHub);
 
-        string[] numbers = await api.ListNumbersAsync($"?hub={api.Data.OtherHub.Id}");
+        string[] numbers = await api.ListNumbersAsync($"?hubId={api.Data.OtherHub.Id}");
 
         Assert.Equal(atOtherHub.Number, Assert.Single(numbers));
     }
@@ -98,7 +97,7 @@ public sealed class OrderListFilterTests(PostgresFixture postgres) : IAsyncDispo
     {
         await api.SaveAsync(api.Orders.Ready());
 
-        OrderPageDto page = await api.ListAsync($"?hub={Guid.NewGuid()}");
+        OrderPageDto page = await api.ListAsync($"?hubId={Guid.NewGuid()}");
 
         Assert.Equal(0, page.Total);
         Assert.Empty(page.Items);
@@ -117,7 +116,7 @@ public sealed class OrderListFilterTests(PostgresFixture postgres) : IAsyncDispo
         await api.SaveAsync(match, wrongHub, wrongType, withoutAlert);
 
         string[] numbers = await api.ListNumbersAsync(
-            $"?type=Consolidation&status=InProgress&alerts=true&hub={api.Data.OtherHub.Id}");
+            $"?type=Consolidation&status=InProgress&hasOpenAlerts=true&hubId={api.Data.OtherHub.Id}");
 
         Assert.Equal(match.Number, Assert.Single(numbers));
     }
@@ -130,7 +129,7 @@ public sealed class OrderListFilterTests(PostgresFixture postgres) : IAsyncDispo
         Order foreign = new OrderBuilder(otherCompany).Ready(hub: api.Data.Hub);
         await api.SaveAsync([.. otherCompany.Entities(), own, foreign]);
 
-        string[] numbers = await api.ListNumbersAsync($"?hub={api.Data.Hub.Id}");
+        string[] numbers = await api.ListNumbersAsync($"?hubId={api.Data.Hub.Id}");
 
         Assert.Equal(own.Number, Assert.Single(numbers));
     }

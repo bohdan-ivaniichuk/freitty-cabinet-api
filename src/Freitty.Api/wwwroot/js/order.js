@@ -4,19 +4,29 @@
 // /api/v1/orders/{number}/operations with the version the page shows.
 
 import { getJson, postJson } from './api.js';
+import { ALERT_TYPE, OPERATION_TYPE, ORDER_TYPE, STATUS, UNIT_TYPE, VERSION_CONFLICT } from './codes.js';
 import * as format from './format.js';
-import { describeError, errorBox, fieldsOf, initShell, loadMe, stateBox } from './shell.js';
+import {
+  cloneTemplate,
+  describeError,
+  errorBox,
+  fieldsOf,
+  fillCreatedBy,
+  initShell,
+  loadMe,
+  stateBox,
+} from './shell.js';
 
 const NOT_FOUND = 404;
 // The URL parser folds /api/v1/orders/. and /.. into other endpoints: no order has such a number.
+// Other numbers can name an endpoint too — "counts" gets the 200 of /api/v1/orders/counts — so a
+// response is also checked to be an order.
 const UNREACHABLE_NUMBERS = ['.', '..'];
 
 // The hub works only on these; on the others the "+ Operation" buttons are disabled.
-const ACTIVE_STATUSES = ['Ready', 'InProgress'];
-const NOT_ACTIVE = 'The order is not active';
+const ACTIVE_STATUSES = [STATUS.Ready, STATUS.InProgress];
 // These move freight through a trailer: they take its number and are billable by default.
-const TRAILER_TYPES = ['Unloading', 'Loading'];
-const VERSION_CONFLICT = 'order.version_conflict';
+const TRAILER_TYPES = [OPERATION_TYPE.Unloading, OPERATION_TYPE.Loading];
 
 const number = new URLSearchParams(location.search).get('n')?.trim();
 const operationDialog = document.getElementById('operation-dialog');
@@ -28,7 +38,12 @@ const control = name => operationForm.elements.namedItem(name);
 let shownOrder = null;
 
 if (number) {
-  initShell();
+  initShell({
+    onRestore: () => {
+      loadMe();
+      loadOrder();
+    },
+  });
   initOperationForm();
   document.getElementById('crumbs').append(number);
   loadMe();
@@ -47,8 +62,13 @@ async function loadOrder() {
 
   try {
     const order = await getJson(`/api/v1/orders/${encodeURIComponent(number)}`);
+    // A number such as "counts" reaches another endpoint, which answers 200 with something else.
     const isOrder = typeof order?.number === 'string';
     shownOrder = isOrder ? order : null;
+    if (isOrder) {
+      document.title = format.orderPageTitle(order.number);
+    }
+
     region.replaceChildren(isOrder ? renderOrder(order) : notFound(notFoundDetail()));
   } catch (error) {
     region.replaceChildren(error.status === NOT_FOUND ? notFound(error.detail) : errorBox(error));
@@ -56,27 +76,16 @@ async function loadOrder() {
 }
 
 function notFoundDetail() {
-  return `Order ${number} not found.`;
+  return format.orderNotFound(number);
 }
 
 function notFound(detail) {
   const state = cloneTemplate('order-not-found');
-  state.querySelector('[data-field="detail"]').textContent = detail;
+  fieldsOf(state)('detail').textContent = detail;
   return state;
 }
 
-function cloneTemplate(id) {
-  return document.getElementById(id).content.cloneNode(true);
-}
-
-// The fields of the order itself. A shipment block has fields of the same names, so a field inside
-// the shipments container is never the order's.
-function orderFieldsOf(view) {
-  return name => [...view.querySelectorAll(`[data-field="${name}"]`)]
-    .find(element => !element.parentElement?.closest('[data-field="shipments"]'));
-}
-
-// A cell shows its value in the element the mockup styles it with, or a plain dash without one.
+// A cell shows its value in its styled child element, or a plain dash without one.
 function fillOrDash(cell, text) {
   if (text === format.DASH) {
     cell.replaceChildren(format.DASH);
@@ -87,9 +96,9 @@ function fillOrDash(cell, text) {
 
 function renderOrder(order) {
   const view = cloneTemplate('order-view');
-  const field = orderFieldsOf(view);
+  const field = fieldsOf(view);
   const timeZone = order.hub.timeZone;
-  const isCrossDock = order.type === 'CrossDock';
+  const isCrossDock = order.type === ORDER_TYPE.CrossDock;
 
   field('management').textContent = format.managementTitle(order.type);
   renderHeader(field, order);
@@ -105,11 +114,12 @@ function renderOrder(order) {
 
   const shipments = field('shipments');
   if (order.shipments.length === 0) {
-    const empty = stateBox('No shipments yet');
+    const empty = stateBox(format.NO_SHIPMENTS);
     empty.classList.add('shipments-empty');
     shipments.replaceChildren(empty);
   } else {
-    shipments.replaceChildren(...order.shipments.map(shipment => renderShipment(order, shipment, isCrossDock)));
+    shipments.replaceChildren(
+      ...order.shipments.map(shipment => renderShipment(order, shipment, isCrossDock)));
   }
 
   renderSupplies(field, order.supplies);
@@ -129,7 +139,7 @@ function renderHeader(field, order) {
   field('stage').classList.add(stage.badge);
 
   if (order.shipments.length === 1) {
-    field('ref').textContent = order.shipments[0].refNumber ?? format.DASH;
+    field('order-ref').textContent = order.shipments[0].refNumber ?? format.DASH;
   } else {
     field('ref-single').remove();
   }
@@ -140,19 +150,13 @@ function renderHeader(field, order) {
     field('sub-orders').remove();
   }
 
-  const avatar = field('initials');
-  avatar.textContent = order.createdBy.initials;
-  avatar.classList.add(format.avatarClass(order.createdBy.initials));
-  const role = field('role');
-  role.before(order.createdBy.name);
-  role.textContent = format.roleTag(order.createdBy.role);
-  role.classList.add(order.createdBy.role === 'Admin' ? 'badge-consol' : 'badge-prog');
+  fillCreatedBy(field, order.createdBy, 'detail');
 
-  field('delta').hidden = order.totals.quantityDeltas === 0;
+  field('order-delta').hidden = order.totals.quantityDeltaCount === 0;
   field('missing-photo').hidden = !order.shipments.some(shipment =>
-    format.openAlertTypes(shipment).includes('MissingPhoto'));
-  field('comments').textContent = order.totals.comments;
-  field('photos').textContent = order.totals.photos;
+    format.openAlertTypes(shipment).includes(ALERT_TYPE.MissingPhoto));
+  field('comments').textContent = order.totals.commentCount;
+  field('photos').textContent = order.totals.photoCount;
 }
 
 function renderMeta(field, order, timeZone) {
@@ -161,27 +165,27 @@ function renderMeta(field, order, timeZone) {
   renderServices(field('services'), order.services);
 
   const date = field('date');
-  const today = format.isToday(order.scheduledAt, timeZone);
-  date.textContent = format.formatDate(order.scheduledAt, timeZone) + (today ? ' · today' : '');
-  date.classList.toggle('meta-today', today);
+  const scheduled = format.scheduledDate(order.scheduledAt, timeZone);
+  date.textContent = scheduled.text;
+  date.classList.toggle('meta-today', scheduled.isToday);
 
   const deltaOf = unitType => format.unitDelta(order.shipments, unitType);
-  renderQuantities(field('declared'), order.totals.declared, () => 0);
-  renderQuantities(field('actual'), order.totals.actual, deltaOf);
+  renderQuantities(field('declared-total'), order.totals.declared, () => 0);
+  renderQuantities(field('actual-total'), order.totals.actual, deltaOf);
   const hasDelta = order.totals.actual.some(entry => deltaOf(entry.unitType) !== 0);
-  field('actual').classList.toggle('meta-delta', hasDelta);
+  field('actual-total').classList.toggle('meta-delta', hasDelta);
 
   field('carrier').textContent = format.transportLabel(order.transport);
   field('phone').textContent = order.transport?.carrierPhone ?? format.DASH;
   field('destination').textContent = format.destinationLabel(order.destination);
 
-  for (const status of format.STATUSES) {
+  for (const status of Object.values(STATUS)) {
     const step = field('meta').querySelector(`[data-status="${status}"]`);
     step.textContent = format.statusLabel(status);
     step.classList.toggle('flow-current', status === order.status);
   }
 
-  field('deltas').textContent = format.deltasDetected(order.totals.quantityDeltas);
+  field('deltas').textContent = format.deltasDetected(order.totals.quantityDeltaCount);
 }
 
 function renderServices(cell, services) {
@@ -228,7 +232,8 @@ function fillShipmentFacts(root, shipment) {
   const fact = name => root.querySelector(`[data-fact="${name}"]`);
   const arrival = shipment?.arrival ?? null;
   const dock = shipment?.dock ?? null;
-  fillOrDash(fact('trailer-type'), arrival ? format.trailerTypeLabel(arrival.trailerType) : format.DASH);
+  const trailerType = arrival ? format.trailerTypeLabel(arrival.trailerType) : format.DASH;
+  fillOrDash(fact('trailer-type'), trailerType);
   fillOrDash(fact('truck'), format.truckAndTrailer(arrival));
   fillOrDash(fact('dock'), format.dockLabel(dock));
   fillOrDash(fact('floor-lead'), format.floorLeadLabel(dock));
@@ -262,7 +267,7 @@ function renderShipment(order, shipment, isCrossDock) {
 
 function prepareAddOperation(button, status, position) {
   if (!ACTIVE_STATUSES.includes(status)) {
-    button.title = NOT_ACTIVE;
+    button.title = format.ORDER_NOT_ACTIVE;
     return;
   }
 
@@ -341,26 +346,30 @@ function renderOperations(field, shipment, timeZone) {
   for (const alertType of format.openAlertTypes(shipment)) {
     const marker = document.createElement('span');
     marker.className = 'operations-alert';
-    marker.textContent = `⚠ ${format.alertLabel(alertType)}`;
+    marker.textContent = format.openAlertsText([alertType]);
     title.append(marker);
   }
 
   const rows = shipment.operations.map(operation => operationRow(operation, timeZone));
-  field('operations').replaceChildren(...(rows.length === 0 ? [emptyRow('No operations yet')] : rows));
+  field('operations').replaceChildren(...(rows.length === 0 ? [emptyRow(format.NO_OPERATIONS)] : rows));
 }
 
 function operationRow(operation, timeZone) {
   const row = cloneTemplate('operation-row');
   const field = fieldsOf(row);
-  const isDisposal = operation.type === 'Disposal';
+  const isDisposal = operation.type === OPERATION_TYPE.Disposal;
   row.firstElementChild.classList.toggle('op-disposal', isDisposal);
 
   if (!operation.isBillable) {
     field('billable').remove();
   }
 
-  if (!isDisposal) {
-    field('disposal').replaceWith(operation.type);
+  // A Disposal is shown as a badge, any other type as plain text.
+  const label = format.operationLabel(operation.type);
+  if (isDisposal) {
+    field('disposal').textContent = label;
+  } else {
+    field('disposal').replaceWith(label);
   }
 
   field('trailer').textContent = operation.trailerNumber ?? format.DASH;
@@ -390,7 +399,7 @@ function renderSupplies(field, supplies) {
     cell('line-total').textContent = format.formatMoney(line.lineTotal);
     return row;
   });
-  field('supplies').replaceChildren(...(rows.length === 0 ? [emptyRow('No supplies')] : rows));
+  field('supplies').replaceChildren(...(rows.length === 0 ? [emptyRow(format.NO_SUPPLIES)] : rows));
   field('subtotal').textContent = format.formatMoney(supplies.subtotal);
 }
 
@@ -410,9 +419,14 @@ function renderInvoices(field, invoices, timeZone) {
 // --- The dialog that records an Operation. It lives outside #order, so a refetch behind it keeps
 // what was typed.
 
-// While a request is in flight the dialog cannot be closed, so its outcome lands in the dialog
-// that sent it; Escape is refused like Cancel.
+// The outcome of a request must land in the dialog that sent it, so while it is in flight Cancel is
+// disabled and Escape is refused. A browser may still close the dialog on a second Escape: a failure
+// then opens it again (recordOperation).
 function initOperationForm() {
+  control('type').replaceChildren(...Object.values(OPERATION_TYPE)
+    .map(type => new Option(format.operationLabel(type), type)));
+  control('unitType').replaceChildren(...Object.values(UNIT_TYPE)
+    .map(unitType => new Option(format.unitLabel(unitType, 'operation'), unitType)));
   control('shipmentPosition').addEventListener('change', applyShipmentDefaults);
   control('type').addEventListener('change', applyTypeDefaults);
   operationField('cancel').addEventListener('click', () => operationDialog.close());
@@ -464,6 +478,10 @@ async function recordOperation(event) {
     await Promise.all([loadOrder(), loadMe()]);
     focusAddOperation(request.shipmentPosition);
   } catch (error) {
+    if (!operationDialog.open) {
+      operationDialog.showModal();
+    }
+
     showOperationError(error);
     if (error.code === VERSION_CONFLICT) {
       await loadOrder();

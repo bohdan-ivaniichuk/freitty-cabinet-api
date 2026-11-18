@@ -1,6 +1,4 @@
 using System.Net;
-using System.Text.Json;
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Orders.GetOrderDetail;
 using Freitty.Domain.Orders;
 
@@ -19,9 +17,7 @@ public sealed class RecordOperationRaceTests(PostgresFixture postgres) : IAsyncD
         await api.SaveAsync(order);
         api.CompetingSave.Arm(() => UnloadElsewhereAsync(order, quantity: 3, photos: 1));
 
-        using HttpResponseMessage response = await api.SendPostAsync(
-            OperationRequest.UrlOf(order.Number),
-            OperationRequest.Unloading(order, 4));
+        using HttpResponseMessage response = await api.RecordAsync(order.Number, OperationRequest.Unloading(order, 4));
 
         await AssertLostAsync(response, order.Number);
         OrderDetailDto detail = await api.DetailAsync(order.Number);
@@ -36,8 +32,8 @@ public sealed class RecordOperationRaceTests(PostgresFixture postgres) : IAsyncD
         await api.SaveAsync(order);
         api.CompetingSave.Arm(() => UnloadElsewhereAsync(order, quantity: 3, photos: 0));
 
-        using HttpResponseMessage response = await api.SendPostAsync(
-            OperationRequest.UrlOf(order.Number),
+        using HttpResponseMessage response = await api.RecordAsync(
+            order.Number,
             OperationRequest.Unloading(order, 4, photos: 0));
 
         await AssertLostAsync(response, order.Number);
@@ -55,8 +51,8 @@ public sealed class RecordOperationRaceTests(PostgresFixture postgres) : IAsyncD
         OperationRequest unloading = OperationRequest.Unloading(order, 4);
 
         HttpResponseMessage[] responses = await Task.WhenAll(
-            api.SendPostAsync(OperationRequest.UrlOf(order.Number), unloading),
-            api.SendPostAsync(OperationRequest.UrlOf(order.Number), unloading));
+            api.RecordAsync(order.Number, unloading),
+            api.RecordAsync(order.Number, unloading));
         HttpStatusCode[] statuses = DisposeAll(responses);
 
         Assert.Equal([HttpStatusCode.Created, HttpStatusCode.Conflict], statuses.Order());
@@ -79,15 +75,13 @@ public sealed class RecordOperationRaceTests(PostgresFixture postgres) : IAsyncD
         return statuses;
     }
 
-    private static async Task AssertLostAsync(HttpResponseMessage response, string number)
+    private static Task AssertLostAsync(HttpResponseMessage response, string number)
     {
-        JsonElement problem = await ProblemResponse.ReadAsync(response);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("order.version_conflict", problem.GetProperty("code").GetString());
-        Assert.Equal(
-            $"Order {number} was changed while this request was being processed. Reload and try again.",
-            problem.GetProperty("detail").GetString());
+        return ProblemResponse.AssertDomainProblemAsync(
+            response,
+            HttpStatusCode.Conflict,
+            "order.version_conflict",
+            $"Order {number} was changed while this request was being processed. Reload and try again.");
     }
 
     private Task UnloadElsewhereAsync(Order order, int quantity, int photos)

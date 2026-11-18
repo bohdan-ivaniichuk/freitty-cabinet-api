@@ -15,7 +15,7 @@ resolves, all or nothing.
 - **The handler orchestrates, the aggregate decides** (rule 1): find the order, check the version,
   resolve the shipment, call `RecordOperation`, save. The validator checks the shape of the
   request and nothing about the state of the order.
-- **One `SaveChangesAsync`, one transaction.** The Operation, the Alert it raises or resolves, the
+- **One save, one transaction.** The Operation, the Alert it raises or resolves, the
   status change and the order row are written together or not at all.
 - **Optimistic concurrency on `Order.Version`** —
   [ADR 0013](../adr/0013-optimistic-concurrency-on-order-version.md). `Version` becomes the EF Core
@@ -27,12 +27,13 @@ resolves, all or nothing.
 - **A lost race has two faces, both `409`.** `DbUpdateConcurrencyException` on the order row, and a
   unique violation on the open-alert index when two writers raise the same Alert — EF Core inserts
   the Alert before it updates the order, so the index answers first. Both are recognised where the
-  provider is known: `IAppDbContext` gains `Task<bool> TrySaveChangesAsync(cancellationToken)`,
-  `false` meaning "another writer changed the same order first"; `AppDbContext` implements it by
-  catching exactly those two failures. The violation is matched by `SqlState` `23505` and the name
-  of that index, which is pinned with `HasDatabaseName` to the name it already has
-  (`ix_alerts_shipment_id_type`) through one constant. Application never sees Npgsql, and the
-  handler turns `false` into a refusal, not an exception (rule 6).
+  provider is known: `IAppDbContext` saves only through
+  `Task<bool> TrySaveChangesAsync(cancellationToken)`, `false` meaning "another writer changed the
+  same order first"; `AppDbContext` implements it by catching exactly those two failures. The
+  violation is matched by `SqlState` `23505` and the name of that index, which is pinned with
+  `HasDatabaseName` to the name it already has (`ix_alerts_shipment_id_type`) through one constant.
+  Application never sees Npgsql, and the handler turns `false` into a refusal, not an exception
+  (rule 6).
 - **No retry inside the request.** A `409` goes back to the caller, who reloads and decides.
 - **A refusal is a `Result`, never an exception.** It becomes a `ProblemDetails` through the
   mapper of step 5; the HTTP status follows `DomainError.Kind` — `NotFound` → `404`, `Conflict` →
@@ -46,11 +47,13 @@ resolves, all or nothing.
   read is already stale and the save fails.
 - **The instant comes from `TimeProvider`.** The seed dates nothing later than the day before it
   ran, so `now >= UpdatedAt` holds for every seeded order.
-- **Mapping is Mapperly** (rule 4): the request to the command in Api, the command to
-  `NewOperation` in Application. The build treats warnings as errors, so the members without a
-  counterpart are declared: `CommentCount` is a constant zero (`[MapValue]`), and the command's
-  order number, shipment position and expected version are ignored as sources
-  (`[MapperIgnoreSource]`).
+- **Mapping is Mapperly** (rule 4): the request to the command in Api; in Application the command
+  to `NewOperation`, and the response — `Operation` to `OperationDto` and `Order` to
+  `RecordedOrderDto`, the latter mapping only the target's members
+  (`[MapperRequiredMapping(RequiredMappingStrategy.Target)]`). The build treats warnings as errors,
+  so the members without a counterpart are declared: `CommentCount` is a constant zero
+  (`[MapValue]`), and the command's order number, shipment position and expected version and the
+  Operation's `ShipmentId` are ignored as sources (`[MapperIgnoreSource]`).
 
 ## Contract
 
@@ -106,8 +109,15 @@ aggregate that it would reject as a broken contract, which would be a `500`:
 | `expectedVersion` | required; 1 or more |
 
 An unknown enum name or a malformed number never reaches the validator: the binder refuses it
-with the same `400`, naming the field. Its messages are replaced with plain ones — the defaults of
+with the same `400`, naming the field. A body that is not a JSON object (`[]`, `42`, a string), is
+empty or cannot be parsed at all is refused as a whole: `errors[0].name` is `serializerErrors` and
+the reason "The request body is not valid JSON for this endpoint." A body that is not sent as JSON
+is a `415`. The binder's messages are replaced with plain ones — the defaults of
 `System.Text.Json` and of the binder name .NET types.
+
+The trailer rules use the domain's own `Operation.RequiresTrailer(type)` and
+`Operation.MaxTrailerNumberLength`; the control-character rule is
+`TextRules.WithoutControlCharacters`, the one the search of step 4 uses.
 
 **Then, in this order:**
 
@@ -120,7 +130,10 @@ with the same `400`, naming the field. Its messages are replaced with plain ones
 | `TrySaveChangesAsync` returns `true` | `409` | `order.version_conflict` | `Order FR001383 was changed while this request was being processed. Reload and try again.` |
 
 So a draft without shipments answers `404` for any position, and a draft that has the shipment
-answers `409` `order.not_active`.
+answers `409` `order.not_active`. The codes are public constants —
+`OrderRequestErrors.OrderNotFoundCode` and `VersionConflictCode` in Application,
+`OrderErrors.NotActiveCode`, `ShipmentNotFoundCode` and `ExceedsStockCode` in the domain — and the
+endpoint's description interpolates them.
 
 ### Schema
 
@@ -134,8 +147,10 @@ proves both.
 
 ```
 src/Freitty.Application/Orders/RecordOperation/   RecordOperationCommand, its handler and validator,
-                                                  the result DTO, the Mapperly mapper to NewOperation
-src/Freitty.Application/Common/                   the three application errors
+                                                  RecordedOperationDto and RecordedOrderDto, the
+                                                  Mapperly mapper
+src/Freitty.Application/Orders/                   OrderRequestErrors — the application's errors;
+                                                  OrderQueries.WithNumber, shared with step 5
 src/Freitty.Api/Endpoints/Orders/RecordOperation/ the endpoint, its request record, the Mapperly
                                                   mapper to the command
 src/Freitty.Infrastructure/Persistence/           IsConcurrencyToken in OrderConfiguration; the

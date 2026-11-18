@@ -4,8 +4,9 @@ namespace Freitty.Application.Common;
 // columns. Weeks start on Monday.
 public sealed class ReportingCalendar(TimeProvider clock, ReportingTimeZone reportingTimeZone)
 {
+    public const int DaysInLast30Days = 30;
+
     private const int DaysInWeek = 7;
-    private const int DaysInLast30Days = 30;
 
     public InstantRange RangeOf(DatePreset preset)
     {

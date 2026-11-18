@@ -2,21 +2,20 @@ using Freitty.Domain.Orders;
 
 namespace Freitty.Api.IntegrationTests.Orders;
 
-// The API's clock stands at 12:00 on Wednesday 15 April 2026 in Toronto, the reporting zone; daylight saving time
-// (UTC−4) is in effect from 8 March, so every instant below is local summer time.
 public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposable
 {
-    private static readonly TimeSpan TorontoSummerOffset = TimeSpan.FromHours(-4);
-
     private readonly CabinetApi api = new(postgres.ConnectionString);
 
     [Fact]
     public async Task TodayRunsFromLocalMidnightToTheNextOne()
     {
-        string[] inside = await ScheduleAsync(Local(4, 15, 0, 0), Local(4, 15, 23, 30));
-        await ScheduleAsync(Local(4, 14, 23, 59), Local(4, 16, 0, 0), Local(4, 16, 0, 30));
+        string[] inside = await ScheduleAsync(Toronto.At(2026, 4, 15, 0, 0), Toronto.At(2026, 4, 15, 23, 30));
+        await ScheduleAsync(
+            Toronto.At(2026, 4, 14, 23, 59),
+            Toronto.At(2026, 4, 16, 0, 0),
+            Toronto.At(2026, 4, 16, 0, 30));
 
-        string[] numbers = await api.ListNumbersAsync("?date=Today");
+        string[] numbers = await api.ListNumbersAsync("?datePreset=Today");
 
         Assert.Equivalent(inside, numbers, strict: true);
     }
@@ -24,10 +23,16 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
     [Fact]
     public async Task ThisWeekRunsFromMondayToTheNextMonday()
     {
-        string[] inside = await ScheduleAsync(Local(4, 13, 0, 0), Local(4, 13, 0, 30), Local(4, 19, 23, 30));
-        await ScheduleAsync(Local(4, 12, 23, 30), Local(4, 20, 0, 0), Local(4, 20, 0, 30));
+        string[] inside = await ScheduleAsync(
+            Toronto.At(2026, 4, 13, 0, 0),
+            Toronto.At(2026, 4, 13, 0, 30),
+            Toronto.At(2026, 4, 19, 23, 30));
+        await ScheduleAsync(
+            Toronto.At(2026, 4, 12, 23, 30),
+            Toronto.At(2026, 4, 20, 0, 0),
+            Toronto.At(2026, 4, 20, 0, 30));
 
-        string[] numbers = await api.ListNumbersAsync("?date=ThisWeek");
+        string[] numbers = await api.ListNumbersAsync("?datePreset=ThisWeek");
 
         Assert.Equivalent(inside, numbers, strict: true);
     }
@@ -35,10 +40,16 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
     [Fact]
     public async Task Last30DaysEndWithTodayAndStartTwentyNineDaysEarlier()
     {
-        string[] inside = await ScheduleAsync(Local(3, 17, 0, 0), Local(3, 17, 0, 30), Local(4, 15, 23, 30));
-        await ScheduleAsync(Local(3, 16, 23, 30), Local(4, 16, 0, 0), Local(4, 16, 0, 30));
+        string[] inside = await ScheduleAsync(
+            Toronto.At(2026, 3, 17, 0, 0),
+            Toronto.At(2026, 3, 17, 0, 30),
+            Toronto.At(2026, 4, 15, 23, 30));
+        await ScheduleAsync(
+            Toronto.At(2026, 3, 16, 23, 30),
+            Toronto.At(2026, 4, 16, 0, 0),
+            Toronto.At(2026, 4, 16, 0, 30));
 
-        string[] numbers = await api.ListNumbersAsync("?date=Last30Days");
+        string[] numbers = await api.ListNumbersAsync("?datePreset=Last30Days");
 
         Assert.Equivalent(inside, numbers, strict: true);
     }
@@ -46,13 +57,13 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
     [Fact]
     public async Task TodayIsTheDateInTorontoNotInUtc()
     {
-        DateTimeOffset eveningInToronto = Local(4, 15, 21, 0);
+        DateTimeOffset eveningInToronto = Toronto.At(2026, 4, 15, 21, 0);
         await using var lateApi = new CabinetApi(postgres.ConnectionString, eveningInToronto);
-        Order today = lateApi.Orders.Ready(scheduledAt: Local(4, 15, 9, 0));
-        Order tomorrow = lateApi.Orders.Ready(scheduledAt: Local(4, 16, 9, 0));
+        Order today = lateApi.Orders.Ready(scheduledAt: Toronto.At(2026, 4, 15, 9, 0));
+        Order tomorrow = lateApi.Orders.Ready(scheduledAt: Toronto.At(2026, 4, 16, 9, 0));
         await lateApi.SaveAsync(today, tomorrow);
 
-        string[] numbers = await lateApi.ListNumbersAsync("?date=Today");
+        string[] numbers = await lateApi.ListNumbersAsync("?datePreset=Today");
 
         Assert.Equal(today.Number, Assert.Single(numbers));
     }
@@ -62,12 +73,12 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
     public async Task TodayFollowsTheClockChange()
     {
         DateTimeOffset startOfDay = new(2026, 3, 8, 0, 0, 0, TimeSpan.FromHours(-5));
-        DateTimeOffset endOfDay = new(2026, 3, 9, 0, 0, 0, TorontoSummerOffset);
+        DateTimeOffset endOfDay = new(2026, 3, 9, 0, 0, 0, TimeSpan.FromHours(-4));
         await using var dayOfChange = new CabinetApi(postgres.ConnectionString, startOfDay.AddHours(12));
         string[] inside = await ScheduleAsync(dayOfChange, startOfDay, endOfDay.AddMinutes(-30));
         await ScheduleAsync(dayOfChange, startOfDay.AddMinutes(-1), endOfDay, endOfDay.AddMinutes(30));
 
-        string[] numbers = await dayOfChange.ListNumbersAsync("?date=Today");
+        string[] numbers = await dayOfChange.ListNumbersAsync("?datePreset=Today");
 
         Assert.Equivalent(inside, numbers, strict: true);
     }
@@ -84,7 +95,7 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
         string[] inside = await ScheduleAsync(santiago, startOfDay);
         await ScheduleAsync(santiago, startOfDay.AddMinutes(-1));
 
-        string[] numbers = await santiago.ListNumbersAsync("?date=Today");
+        string[] numbers = await santiago.ListNumbersAsync("?datePreset=Today");
 
         Assert.Equivalent(inside, numbers, strict: true);
     }
@@ -102,7 +113,7 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
         string[] inside = await ScheduleAsync(azores, firstMidnight, firstMidnight.AddMinutes(30));
         await ScheduleAsync(azores, firstMidnight.AddMinutes(-1));
 
-        string[] numbers = await azores.ListNumbersAsync("?date=Today");
+        string[] numbers = await azores.ListNumbersAsync("?datePreset=Today");
 
         Assert.Equivalent(inside, numbers, strict: true);
     }
@@ -115,7 +126,7 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
     {
         await api.SaveAsync(api.Orders.Draft());
 
-        string[] numbers = await api.ListNumbersAsync($"?date={preset}");
+        string[] numbers = await api.ListNumbersAsync($"?datePreset={preset}");
 
         Assert.Empty(numbers);
     }
@@ -123,11 +134,6 @@ public sealed class OrderListDateTests(PostgresFixture postgres) : IAsyncDisposa
     public async ValueTask DisposeAsync()
     {
         await api.DisposeAsync();
-    }
-
-    private static DateTimeOffset Local(int month, int day, int hour, int minute)
-    {
-        return new DateTimeOffset(2026, month, day, hour, minute, 0, TorontoSummerOffset);
     }
 
     private Task<string[]> ScheduleAsync(params DateTimeOffset[] scheduledDates)

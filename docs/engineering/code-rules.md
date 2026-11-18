@@ -86,17 +86,32 @@ dependencies is a primary constructor. Where a field is genuinely needed, it has
 A variable is named for what it holds, not for the verb that produced it: `operationResult`, not
 `added`; `orderDtos`, not `dtos`.
 
-### 9. Lambda and `out` parameters get real names
+### 9. A name says what the value is
+
+Someone who opens a query, a command or a DTO should know what goes into each field without
+reading the handler. The same names travel to the wire: query parameters and JSON fields are
+these names in camelCase.
+
+- An identifier is `…Id`: `HubId`, not `Hub`. `Hub` is a hub itself — the entity or its DTO.
+- A flag reads as a predicate, `Is…` / `Has…` / `Can…`: `HasOpenAlerts`, not `Alerts`.
+- A number of things is `…Count`: `PhotoCount`, not `Photos`, which would be the photos. The
+  members of a type that is itself a set of counters or figures need no suffix:
+  `OrderCountsDto.Drafts`, `CompletedOrdersDto.Last30Days`.
+- No abbreviations and no single letters: `Search`, not `Q`.
+- A name that is clear only next to its type or its owner takes the qualifier: `OrderNumber` on a
+  command that records an operation, `BestBucket`, `NextStep`.
+
+### 10. Lambda and `out` parameters get real names
 
 `orders.Where(order => order.Status == OrderStatus.Draft)`, not `o =>`. In EF configuration use
 `builder` / `entity`. The discard `_` and `catch (Exception ex)` are fine.
 
-### 10. A number or a string with meaning gets a name
+### 11. A number or a string with meaning gets a name
 
 A limit, a default, a threshold, a status word the code branches on is a named constant:
 `MaxPageSize`, not `100`. `0`, `1` and `string.Empty` in their obvious roles need no ceremony.
 
-### 11. A closed set is an enum
+### 12. A closed set is an enum
 
 Order type, status, unit type, operation type — enums, never strings. Every member has an explicit
 value (`Draft = 1`), because persisted values must not depend on declaration order. Enums travel as
@@ -104,21 +119,21 @@ strings in JSON through one globally registered converter, never a `ToString()` 
 
 ## C# mechanics
 
-### 12. Time is injected
+### 13. Time is injected
 
 Never `DateTime.UtcNow` / `DateTimeOffset.UtcNow`. Inject `TimeProvider`. "Completed in the last
 30 days", "today" and chart periods are untestable against a static clock.
 
-### 13. `CancellationToken` is propagated
+### 14. `CancellationToken` is propagated
 
 Every async method takes `CancellationToken cancellationToken` as its last parameter, without a
 default, and passes it to every call that accepts one. Framework overrides keep the base signature.
 
-### 14. No `ConfigureAwait(false)`
+### 15. No `ConfigureAwait(false)`
 
 ASP.NET Core has no synchronization context; in application code it only adds noise.
 
-### 15. `var` when the type is written, explicit when it is not
+### 16. `var` when the type is written, explicit when it is not
 
 ```csharp
 var orders = new List<OrderDto>();                 // the type is right there
@@ -128,7 +143,7 @@ int pageSize = 20;                                 // built-in types stay explic
 
 `var` only when the right-hand side is `new T(...)`, a cast or `as T`.
 
-### 16. Class layout and usings
+### 17. Class layout and usings
 
 Constants, fields, constructor, public members, private members, nested types — in that order.
 No unused usings; `System*` first, the rest alphabetical, outside a file-scoped namespace. A type
@@ -136,7 +151,7 @@ gets a `using`, not a fully qualified name inline.
 
 ## Tests
 
-### 17. A behaviour change comes with tests
+### 18. A behaviour change comes with tests
 
 Every meaningful branch, failure path and state transition the change introduces. Domain rules get
 unit tests; filters, search, pagination and the write flow get integration tests against a real
@@ -150,7 +165,7 @@ PostgreSQL (Testcontainers).
 
 ## Before a commit
 
-### 18. Self-review, in this order
+### 19. Self-review, in this order
 
 1. Read the whole diff hunk by hunk, looking for defects — not the summary of what was done.
 2. Check it against the task: everything asked, nothing that was not.
@@ -161,7 +176,8 @@ Questions worth the two minutes:
 
 - Does a handler decide something an entity could decide?
 - Does any class need "and" to describe it?
-- Does every business literal have a name, and every variable say what it holds?
+- Does every business literal have a name, and every variable, field and parameter say what it
+  holds — an id `…Id`, a flag a predicate, a count `…Count`?
 - Does any `bool` hide a richer outcome?
 - Is a pattern applied in this file but not its neighbour?
 - Could the read query be answered by SQL instead of memory?

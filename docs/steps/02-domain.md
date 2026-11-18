@@ -69,7 +69,7 @@ The words used here are defined in [`CONTEXT.md`](../../CONTEXT.md); the tables 
   `RecordOperation`.
 - A domain method receives the instant as an argument (`now`). It never reads a clock: a handler
   takes the instant from `TimeProvider`, the seed passes past dates, a test passes a literal. This
-  is why the domain tests need no `FakeTimeProvider`, which rule 17 otherwise asks for.
+  is why the domain tests need no `FakeTimeProvider`, which rule 18 otherwise asks for.
 - A refusal that depends on the state of the aggregate is a `Result` carrying a `DomainError` with a
   stable code and a message that names what is wrong — rules 2 and 6. A broken calling contract — a
   quantity of zero, an empty string, `null`, a value that is not a member of its enum, an instant
@@ -96,11 +96,11 @@ The words used here are defined in [`CONTEXT.md`](../../CONTEXT.md); the tables 
 **Persistence**
 
 - Keys are UUID v7, created by the entity — [ADR 0006](../adr/0006-uuid-v7-keys-from-the-domain.md).
-  This is the one place the domain touches the system clock; rule 12 is about business time, and
+  This is the one place the domain touches the system clock; rule 13 is about business time, and
   the timestamp inside the key only orders the index.
 - `snake_case` names through `EFCore.NamingConventions`, plural table names set explicitly: the
   dashboard SQL of step 6 is written by hand, and quoted identifiers make it hard to read.
-- Enums are stored as integers (rule 11 already requires explicit values). Hand-written SQL receives
+- Enums are stored as integers (rule 12 already requires explicit values). Hand-written SQL receives
   them as parameters taken from the enum, never as literals.
 - Instants are `DateTimeOffset` in code and `timestamptz` in the database, always UTC. `timestamptz`
   stores no zone, so `Hub.TimeZone` (IANA id) is what later steps use to show and group by hub-local
@@ -189,7 +189,7 @@ Latest stable versions at implementation time, looked up; `Microsoft.*` and `dot
 A property is named after its column, so three nullable ones share the name of their enum:
 `Order.CrossDockKind`, `Order.TransportKind`, `Shipment.TrailerType`. Inside those classes
 `TransportKind.Carrier` then binds to the property and does not compile. The file refers to the
-enum through a `using` alias; that is a `using`, not the inline qualified name rule 16 forbids.
+enum through a `using` alias; that is a `using`, not the inline qualified name rule 17 forbids.
 
 ### Schema
 

@@ -5,8 +5,8 @@ using Freitty.Domain.Orders;
 namespace Freitty.Application.Orders.CountOrders;
 
 public sealed record CountOrdersQuery(
-    Guid? Hub = null,
-    DatePreset? Date = null,
+    Guid? HubId = null,
+    DatePreset? DatePreset = null,
     OrderStatus? Status = null,
-    string? Q = null)
+    string? Search = null)
     : ICommand<OrderCountsDto>;

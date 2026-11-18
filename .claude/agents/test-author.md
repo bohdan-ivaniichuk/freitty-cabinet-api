@@ -12,7 +12,7 @@ You write tests that run and catch regressions — not coverage theatre.
 
 ## Before writing
 
-1. Read `docs/engineering/code-rules.md` (rule 17 and the C# mechanics) and the existing tests in
+1. Read `docs/engineering/code-rules.md` (rule 18 and the C# mechanics) and the existing tests in
    `tests/`. Match their framework, assertion style, fixtures and naming. Do not introduce a new
    library.
 2. Read the code under test and list the real behaviours: happy path, validation failures, not found,

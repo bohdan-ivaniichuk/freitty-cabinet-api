@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Freitty.Domain.Common;
 
-public sealed class Result
+public sealed class Result : IDomainResult
 {
     private static readonly Result SuccessResult = new(error: null);
 

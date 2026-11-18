@@ -37,12 +37,12 @@ sidebar badge comes from the same SQL.
 - **The axis is stepped in local wall-clock time.** `timestamptz ± interval` and the
   three-argument `generate_series` step in the session zone, which is UTC: across a daylight
   saving change the generated starts stop matching what `date_trunc` returns, and most buckets
-  come back empty. Stepping instants in the zone (`generate_series(…, @step, @zone)`) fixes
+  come back empty. Stepping instants in the zone (`generate_series(…, @Step, @Zone)`) fixes
   Toronto but not a zone whose clocks skip midnight: once a start lands on 01:00 it stays there.
   The form that holds everywhere: generate local timestamps —
-  `generate_series(date_trunc(@unit, @now AT TIME ZONE @zone) - @step * (@buckets - 1), date_trunc(@unit, @now AT TIME ZONE @zone), @step)`
-  — and convert each once with `AT TIME ZONE @zone`. `start` is the local timestamp's date; the
-  data is still cut with `date_trunc(@unit, instant, @zone)` and joined on the converted start.
+  `generate_series(date_trunc(@Unit, @Now AT TIME ZONE @Zone) - @Step::interval * (@BucketCount - 1), date_trunc(@Unit, @Now AT TIME ZONE @Zone), @Step::interval)`
+  — and convert each once with `AT TIME ZONE @Zone`. `start` is the local timestamp's date; the
+  data is still cut with `date_trunc(@Unit, instant, @Zone)` and joined on the converted start.
 - **Rounding happens in SQL** (`round`, half away from zero), so the same number comes out of
   `psql` and out of the API.
 - **The period switch works**: one statement, a different unit and length.
@@ -73,7 +73,7 @@ its numbers are illustrative.
       "completedChangePercent": 20,
       "spendLast30Days": 9876.00,
       "averageSpendPerOrder": 411.50,
-      "best": { "start": "2026-03-16", "completedOrders": 7, "spend": 2890.00 }
+      "bestBucket": { "start": "2026-03-16", "completedOrders": 7, "spend": 2890.00 }
     }
   }
 }
@@ -82,7 +82,7 @@ its numbers are illustrative.
 | Field | Definition |
 |---|---|
 | `activeOrders.count` | orders in `Ready` or `InProgress` |
-| `activeOrders.changeThisWeek` | that count minus the orders that were active at the start of this week — `submitted_at < start AND (completed_at IS NULL OR completed_at >= start)`, with `start = date_trunc('week', @now, @zone)` |
+| `activeOrders.changeThisWeek` | that count minus the orders that were active at the start of this week — `submitted_at < start AND (completed_at IS NULL OR completed_at >= start)`, with `start = date_trunc('week', @Now, @Zone)` |
 | `completed.last30Days`, `previous30Days` | orders by `completed_at` in the two rolling windows |
 | `needAttention.awaitingAction` | drafts + orders with at least one invoice where `paid_at IS NULL` |
 | `needAttention.alerts` | orders with an open Alert — equals `alerts` of `/orders/counts` without filters |
@@ -94,14 +94,14 @@ its numbers are illustrative.
 | `summary.completedChangePercent` | `(last − previous) / previous × 100`, rounded to a whole number; `null` when `previous` is zero |
 | `summary.spendLast30Days` | invoice amounts with `issued_at` in the last 30 days |
 | `summary.averageSpendPerOrder` | that spend divided by the number of orders invoiced in the window, two decimals; `null` when none |
-| `summary.best` | the bucket of the series with the highest spend, the later one on a tie; `null` when every bucket has zero spend |
+| `summary.bestBucket` | the bucket of the series with the highest spend, the later one on a tie; `null` when every bucket has zero spend |
 
 Everything is scoped to the company of the current user.
 
 ### `GET /api/v1/me`
 
-Gains a number — `"needAttention": 4` — equal to `needAttention.total` of the dashboard and read
-by the same statement. The shell shows it on the "Orders" badge.
+Gains a number — `"needAttentionCount": 4` — equal to `needAttention.total` of the dashboard and
+read by the same statement. The shell shows it on the "Orders" badge.
 
 ### Errors
 
@@ -110,15 +110,22 @@ An unknown `period` → `400` `ProblemDetails` with the field error.
 ### Code
 
 ```
-src/Freitty.Application/Dashboard/               IDashboardReader and what `/me` shares with it;
-                                                 the periods, limits and window as named values
-src/Freitty.Application/Dashboard/GetDashboard/  the query, its handler, the DTOs
-src/Freitty.Infrastructure/Dashboard/            DashboardReader (Dapper) and its SQL
-src/Freitty.Api/Endpoints/Dashboard/             the endpoint
+src/Freitty.Application/Dashboard/               IDashboardReader and what `/me` shares with it
+                                                 (AttentionCounts); ActivityPeriod; ActivityBuckets
+                                                 — the number of buckets of a period (14, 12, 6, 4);
+                                                 DashboardFigures, ActivityBucketDto, AlertOrderDto
+src/Freitty.Application/Dashboard/GetDashboard/  the query, its handler and validator, the DTOs; the
+                                                 card count, the alert-order limit and the rolling
+                                                 window are constants of the handler
+src/Freitty.Infrastructure/Dashboard/            DashboardReader (Dapper), which maps a period to
+                                                 PostgreSQL's unit and step, and its SQL, DashboardSql
+src/Freitty.Api/Endpoints/Dashboard/GetDashboard/ the endpoint
 ```
 
-The query has no validator: `period` is an enum, and the binder refuses every value that is not
-one — an unknown name, an undefined number, an empty value — with the `400` of step 4.
+`IDashboardReader.ReadActivityAsync` takes the `ActivityPeriod` and the number of buckets, which the
+handler takes from `ActivityBuckets.CountOf(period)`. `GetDashboardQueryValidator` holds `period`
+to the enum (`IsInEnum`); the binder already refuses every value that is not one — an unknown name,
+an undefined number, an empty value — with the `400` of step 4.
 
 - Four statements at most per dashboard request for the aggregates: the KPIs, the series, the
   attention counts, the alert orders. `/me` runs only the attention counts. The SQL is raw string
@@ -171,7 +178,7 @@ company of the test's own:
 - `completedChangePercent` is `null` when the previous window is empty.
 - Orders of another company change nothing.
 - An unknown period → `400`.
-- `/me` returns a `needAttention` equal to the dashboard's `needAttention.total`.
+- `/me` returns a `needAttentionCount` equal to the dashboard's `needAttention.total`.
 - An order with an open Alert and an unpaid invoice is counted in both figures.
 
 ## Out of scope

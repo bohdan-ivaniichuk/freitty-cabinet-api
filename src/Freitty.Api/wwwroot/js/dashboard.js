@@ -1,12 +1,14 @@
 // index.html: GET /api/v1/dashboard for the tiles, the active orders and the activity charts.
-// The period is the URL's `period`; the period buttons are links that change it.
+// The period is the URL's `period`. A period button rewrites it through the History API and
+// redraws the activity block in place.
 
 import { getJson } from './api.js';
 import { openCardsOnClick, renderCard } from './card.js';
+import { PERIOD } from './codes.js';
 import * as format from './format.js';
-import { errorBox, initShell, loadMe, stateBox } from './shell.js';
+import { errorBox, initShell, isPlainClick, loadMe, markCurrent, stateBox } from './shell.js';
 
-const PERIODS = { day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter' };
+const PERIODS = { day: PERIOD.Day, week: PERIOD.Week, month: PERIOD.Month, quarter: PERIOD.Quarter };
 const DEFAULT_PERIOD = 'week';
 const SVG = 'http://www.w3.org/2000/svg';
 const TONES = { up: 'trend-up', down: 'trend-down', flat: 'trend-flat' };
@@ -25,48 +27,101 @@ const DOT = { r: 3, fill: SPEND_COLOUR };
 const PEAK_DOT = { r: 4, fill: SPEND_COLOUR, stroke: '#fff', 'stroke-width': 2 };
 const NO_DATA = { x: 200, y: 60, 'font-size': 11, fill: '#94A3B8', 'text-anchor': 'middle' };
 
-// An unknown or empty period would be a 400 for the API: the page asks for the default instead.
-const periodKey = new URLSearchParams(location.search).get('period');
-const period = PERIODS[Object.hasOwn(PERIODS, periodKey) ? periodKey : DEFAULT_PERIOD];
+let periodKey = readPeriodKey();
+// Only the answer to the latest request is shown: an earlier one may arrive after it.
+let latestRequest = 0;
 
-initShell();
+initShell({
+  onRestore: () => {
+    loadMe();
+    loadDashboard();
+  },
+});
 openCardsOnClick(document.getElementById('active-orders'));
-markActivePeriod(period);
+bindPeriods();
+markActivePeriod();
 loadMe().then(renderWelcome);
 loadDashboard();
 
+// An unknown or empty period would be a 400 for the API: the page asks for the default instead.
+function readPeriodKey() {
+  const key = new URLSearchParams(location.search).get('period');
+  return Object.hasOwn(PERIODS, key) ? key : DEFAULT_PERIOD;
+}
+
+// A plain click on a period is answered in place; the href stays for a new tab and for copying.
+function bindPeriods() {
+  for (const link of document.querySelectorAll('[data-period]')) {
+    link.addEventListener('click', event => {
+      if (!isPlainClick(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      if (link.dataset.period !== periodKey) {
+        history.pushState(null, '', link.href);
+        showPeriod(link.dataset.period);
+      }
+    });
+  }
+
+  window.addEventListener('popstate', () => showPeriod(readPeriodKey()));
+}
+
+// The tiles and the cards do not depend on the period: only the activity block is drawn again.
+function showPeriod(key) {
+  periodKey = key;
+  markActivePeriod();
+  loadDashboard({ activityOnly: true });
+}
+
 function renderWelcome(me) {
   if (me) {
-    document.getElementById('welcome').textContent = `Welcome, ${me.user.name} 👋`;
+    document.getElementById('welcome').textContent = format.welcomeText(me.user.name);
   }
 }
 
-function markActivePeriod(active) {
+function markActivePeriod() {
   for (const link of document.querySelectorAll('[data-period]')) {
-    const isActive = PERIODS[link.dataset.period] === active;
+    const isActive = link.dataset.period === periodKey;
     link.classList.toggle('active', isActive);
-    if (isActive) {
-      link.setAttribute('aria-current', 'page');
-    }
+    markCurrent(link, isActive);
   }
 }
 
-async function loadDashboard() {
+async function loadDashboard({ activityOnly = false } = {}) {
   const state = document.getElementById('dashboard-state');
+  const content = document.getElementById('dashboard');
+  const request = ++latestRequest;
   try {
-    const dashboard = await getJson('/api/v1/dashboard', { period });
-    renderTiles(dashboard);
-    renderActiveOrders(dashboard.orders);
+    const dashboard = await getJson('/api/v1/dashboard', { period: PERIODS[periodKey] });
+    if (request !== latestRequest) {
+      return;
+    }
+
+    if (!activityOnly) {
+      renderTiles(dashboard);
+      renderActiveOrders(dashboard.orders);
+    }
+
     renderActivity(dashboard.activity);
-    state.remove();
-    document.getElementById('dashboard').hidden = false;
+    state.hidden = true;
+    content.hidden = false;
   } catch (error) {
-    state.replaceWith(errorBox(error));
+    if (request !== latestRequest) {
+      return;
+    }
+
+    state.replaceChildren(errorBox(error));
+    state.hidden = false;
+    content.hidden = true;
   }
 }
 
+// Drawn again when the page is restored, so the tone of the last time is replaced, not added to.
 function setTrend(element, trend) {
   element.textContent = trend.text;
+  element.classList.remove(...Object.values(TONES));
   element.classList.add(TONES[trend.tone]);
 }
 
@@ -90,7 +145,7 @@ function renderTiles({ activeOrders, completed, needAttention }) {
 function renderActiveOrders(orders) {
   const grid = document.getElementById('active-orders');
   const cards = orders.map(order => renderCard(order, { openAlertRefs: true }));
-  grid.replaceChildren(...(cards.length === 0 ? [stateBox('No active orders')] : cards));
+  grid.replaceChildren(...(cards.length === 0 ? [stateBox(format.NO_ACTIVE_ORDERS)] : cards));
 }
 
 function renderActivity({ period: bucketPeriod, buckets, summary }) {
@@ -127,7 +182,7 @@ function axisLabels(labels, xs, anchorOf) {
 
 function drawBars(plot, values, labels) {
   if (format.isFlat(values)) {
-    plot.replaceChildren(svgElement('text', NO_DATA, 'No data'));
+    plot.replaceChildren(svgElement('text', NO_DATA, format.CHART_NO_DATA));
     return;
   }
 
@@ -140,7 +195,7 @@ function drawBars(plot, values, labels) {
 // A centred label on the first point would be clipped at the left edge.
 function drawLine(plot, values, labels) {
   if (format.isFlat(values)) {
-    plot.replaceChildren(svgElement('text', NO_DATA, 'No data'));
+    plot.replaceChildren(svgElement('text', NO_DATA, format.CHART_NO_DATA));
     return;
   }
 
@@ -163,23 +218,23 @@ function emphasis(text, className) {
   return strong;
 }
 
+// A summary line: its lead, its figure in bold when it has one, and the rest.
+function fillSummaryLine(element, line, className) {
+  const figure = line.emphasis === null ? [] : [emphasis(line.emphasis, className)];
+  element.replaceChildren(line.lead, ...figure, line.text);
+}
+
 function renderSummary(summary, bucketPeriod) {
   const change = format.completedChange(summary);
-  const completed = document.getElementById('summary-completed');
-  if (change.emphasis) {
-    completed.replaceChildren('📈 ', emphasis(change.emphasis, TONES[change.tone]), change.text);
-  } else {
-    completed.textContent = `📈 ${change.text}`;
-  }
-
-  document.getElementById('summary-spend').replaceChildren(
-    '💰 ',
-    emphasis(format.formatMoney(summary.spendLast30Days), 'spend-emphasis'),
-    format.averageSpendText(summary.averageSpendPerOrder));
+  fillSummaryLine(document.getElementById('summary-completed'), change, TONES[change.tone]);
+  fillSummaryLine(
+    document.getElementById('summary-spend'),
+    format.spendSummary(summary.spendLast30Days, summary.averageSpendPerOrder),
+    'spend-emphasis');
 
   const best = document.getElementById('summary-best');
-  best.hidden = summary.best === null;
-  if (summary.best) {
-    best.textContent = format.bestBucketText(summary.best, bucketPeriod);
+  best.hidden = summary.bestBucket === null;
+  if (summary.bestBucket) {
+    best.textContent = format.bestBucketText(summary.bestBucket, bucketPeriod);
   }
 }

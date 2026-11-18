@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Freitty.Domain.Common;
 
-public sealed class Result<T>
+public sealed class Result<T> : IDomainResult
     where T : notnull
 {
     private readonly T? value;

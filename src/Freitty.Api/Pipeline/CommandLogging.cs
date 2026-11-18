@@ -1,15 +1,17 @@
 using FastEndpoints;
+using Freitty.Domain.Common;
 
 namespace Freitty.Api.Pipeline;
 
-// The outer step of every query and command: what ran, how long it took and how it ended. A thrown exception is
-// only named here; the request log records it with its stack trace, once.
+// The outer step of every query and command: what ran, how long it took and how it ended — a refusal of the domain
+// with its code. A thrown exception is only named here; the request log records it with its stack trace, once.
 internal sealed class CommandLogging<TCommand, TResult>(ILoggerFactory loggerFactory, TimeProvider clock)
     : ICommandMiddleware<TCommand, TResult>
     where TCommand : ICommand<TResult>
 {
     private const string Category = "Freitty.Api.Pipeline.CommandLogging";
     private const string Completed = "completed";
+    private const string WasRefused = "was refused with";
     private const string RejectedByValidation = "was rejected by validation";
     private const string WasCancelled = "was cancelled";
     private const string Threw = "threw";
@@ -23,7 +25,7 @@ internal sealed class CommandLogging<TCommand, TResult>(ILoggerFactory loggerFac
         try
         {
             TResult result = await next();
-            outcome = Completed;
+            outcome = result is IDomainResult { Error: { } error } ? $"{WasRefused} {error.Code}" : Completed;
             return result;
         }
         catch (ValidationFailureException)

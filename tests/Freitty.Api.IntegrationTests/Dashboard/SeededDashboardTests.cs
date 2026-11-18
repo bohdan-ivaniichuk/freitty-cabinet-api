@@ -1,5 +1,4 @@
-using System.Net.Http.Json;
-using Freitty.Api.IntegrationTests.Seed;
+using Freitty.Application.Dashboard;
 using Freitty.Application.Dashboard.GetDashboard;
 using Microsoft.EntityFrameworkCore;
 
@@ -59,12 +58,8 @@ public sealed class SeededDashboardTests(SeededDatabase seeded)
         Assert.Equal(invoiced, dashboard.Activity.Buckets.Sum(bucket => bucket.Spend));
     }
 
-    private async Task<DashboardDto> DashboardAsync(string period)
+    private Task<DashboardDto> DashboardAsync(string period)
     {
-        using HttpClient client = seeded.CreateClient();
-        return (await client.GetFromJsonAsync<DashboardDto>(
-            $"/api/v1/dashboard?period={period}",
-            ApiJson.Options,
-            TestContext.Current.CancellationToken))!;
+        return seeded.GetAsync<DashboardDto>($"{ApiUrls.Dashboard}?period={period}");
     }
 }

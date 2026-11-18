@@ -6,9 +6,9 @@ public sealed class CountOrdersQueryValidator : AbstractValidator<CountOrdersQue
 {
     public CountOrdersQueryValidator()
     {
-        RuleFor(query => query.Date).IsInEnum();
+        RuleFor(query => query.DatePreset).IsInEnum();
         RuleFor(query => query.Status).IsInEnum();
-        RuleFor(query => query.Hub).MustBeAHubId();
-        RuleFor(query => query.Q).MustBeSearchable();
+        RuleFor(query => query.HubId).MustBeAHubId();
+        RuleFor(query => query.Search).MustBeSearchable();
     }
 }

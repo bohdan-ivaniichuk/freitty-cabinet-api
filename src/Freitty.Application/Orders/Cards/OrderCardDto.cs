@@ -20,6 +20,6 @@ public sealed record OrderCardDto(
     int DeclaredTotal,
     int ActualTotal,
     bool HasQuantityDelta,
-    int OutboundTrailers,
+    int OutboundTrailerCount,
     IReadOnlyList<CardShipmentDto> Shipments,
-    NextStepDto Next);
+    NextStepDto NextStep);

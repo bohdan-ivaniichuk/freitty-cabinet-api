@@ -1,4 +1,4 @@
-using Freitty.Api.IntegrationTests.Orders;
+using Freitty.Application.Dashboard;
 using Freitty.Application.Dashboard.GetDashboard;
 using Freitty.Application.Me.GetMe;
 using Freitty.Application.Orders.CountOrders;
@@ -108,7 +108,7 @@ public sealed class NeedAttentionTests(PostgresFixture postgres) : IAsyncDisposa
             api.Orders.Ready());
 
         NeedAttentionDto needAttention = await NeedAttentionAsync();
-        OrderCountsDto counts = await api.GetAsync<OrderCountsDto>("/api/v1/orders/counts");
+        OrderCountsDto counts = await api.GetAsync<OrderCountsDto>(ApiUrls.OrderCounts);
 
         Assert.Equal(counts.Alerts, needAttention.Alerts);
     }
@@ -123,11 +123,11 @@ public sealed class NeedAttentionTests(PostgresFixture postgres) : IAsyncDisposa
             OrderBuilder.IssueInvoice(unpaid, 100.00m, Invoiced, paid: false),
             WithMissingPhoto(Toronto.At(2026, 3, 10, 9)));
 
-        MeDto me = await api.GetAsync<MeDto>("/api/v1/me");
+        MeDto me = await api.GetAsync<MeDto>(ApiUrls.Me);
         NeedAttentionDto needAttention = await NeedAttentionAsync();
 
         Assert.Equal(3, needAttention.Total);
-        Assert.Equal(needAttention.Total, me.NeedAttention);
+        Assert.Equal(needAttention.Total, me.NeedAttentionCount);
     }
 
     public async ValueTask DisposeAsync()
@@ -144,7 +144,7 @@ public sealed class NeedAttentionTests(PostgresFixture postgres) : IAsyncDisposa
 
     private async Task<NeedAttentionDto> NeedAttentionAsync()
     {
-        DashboardDto dashboard = await api.GetAsync<DashboardDto>("/api/v1/dashboard");
+        DashboardDto dashboard = await api.GetAsync<DashboardDto>(ApiUrls.Dashboard);
         return dashboard.NeedAttention;
     }
 }

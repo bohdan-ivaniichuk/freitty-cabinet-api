@@ -41,7 +41,7 @@
 
 <dialog id="operation-dialog" aria-labelledby="operation-title">
   <form id="operation-form" novalidate autocomplete="off">
-    <div style="font-size:16px;font-weight:700;color:#1F2A3A;margin-bottom:14px" id="operation-title">Record an operation</div>
+    <h2 style="font-size:16px;font-weight:700;color:#1F2A3A;margin-bottom:14px" id="operation-title">Record an operation</h2>
     <div class="field" data-field="shipment-field">
       <label for="operation-shipment">Sub-order</label>
       <select id="operation-shipment" name="shipmentPosition"></select>
@@ -50,20 +50,12 @@
     <div class="field-row">
       <div class="field">
         <label for="operation-type">Operation</label>
-        <select id="operation-type" name="type">
-          <option value="Unloading">Unloading</option>
-          <option value="Disposal">Disposal</option>
-          <option value="Restack">Restack</option>
-          <option value="Loading">Loading</option>
-        </select>
+        <select id="operation-type" name="type"></select>
         <div class="field-error" data-error="type"></div>
       </div>
       <div class="field">
         <label for="operation-unit">Unit</label>
-        <select id="operation-unit" name="unitType">
-          <option value="Standard">Standard (48×40)</option>
-          <option value="ExtraLarge">XL</option>
-        </select>
+        <select id="operation-unit" name="unitType"></select>
         <div class="field-error" data-error="unitType"></div>
       </div>
     </div>
@@ -99,24 +91,23 @@
 <template id="order-view">
   <div style="display:flex;align-items:center;gap:12px;padding:8px 0 14px;border-bottom:1px solid #E5E7EB;margin-bottom:14px">
     <div style="width:40px;height:40px;background:#ED1C2E;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:22px">F</div>
-    <div style="font-size:18px;font-weight:700;color:#1F2A3A" data-field="management"></div>
+    <h2 style="font-size:18px;font-weight:700;color:#1F2A3A" data-field="management"></h2>
     <div style="margin-left:auto;width:36px;height:36px;background:#F3F4F6;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#6B7280" role="button" aria-disabled="true" title="Not part of this assignment" aria-label="Menu">☰</div>
   </div>
 
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
     <a class="btn btn-secondary" href="orders.html" style="padding:6px 10px;font-size:14px" aria-label="Back to the orders">←</a>
     <span style="color:#2563EB;font-size:20px" aria-hidden="true">📦</span>
-    <span style="font-size:13px;color:#6B7280">Order#:</span>
-    <strong style="font-size:15px;color:#1F2A3A" data-field="number"></strong>
-    <span style="color:#16A34A;font-size:16px;font-weight:700" data-field="invoiced">$</span>
-    <span style="color:#6B7280;font-size:16px" data-field="transport">🚚</span>
+    <h1 class="order-title"><span style="font-size:13px;color:#6B7280">Order#:</span> <strong style="font-size:15px;color:#1F2A3A" data-field="number"></strong></h1>
+    <span style="color:#16A34A;font-size:16px;font-weight:700" role="img" title="Invoiced" aria-label="Invoiced" data-field="invoiced">$</span>
+    <span style="color:#6B7280;font-size:16px" role="img" title="Transport arranged" aria-label="Transport arranged" data-field="transport">🚚</span>
     <span class="badge" style="background:#DBEAFE;color:#1E40AF" data-field="type"></span>
     <span class="badge" style="background:#D1FAE5;color:#065F46" data-field="on-stock">● On Stock</span>
     <span class="badge" data-field="stage"></span>
-    <span class="ref-n-inline" data-field="ref-single"><span class="lbl">Ref N:</span><span class="val" data-field="ref"></span></span>
+    <span class="ref-n-inline" data-field="ref-single"><span class="lbl">Ref N:</span><span class="val" data-field="order-ref"></span></span>
     <span style="font-size:13px;color:#6B7280" data-field="sub-orders"></span>
     <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;background:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;font-size:11.5px;font-weight:700;color:#1F2A3A"><span style="color:#9CA3AF;font-weight:500">by</span><span class="ava" style="width:18px;height:18px;border-radius:50%;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800" data-field="initials"></span><span style="font-size:9px;padding:1px 5px;border-radius:3px;font-weight:800;letter-spacing:.3px" data-field="role"></span></span>
-    <span class="badge" style="background:#FEF3C7;color:#92400E" data-field="delta">⚠ Actual ≠ Expected</span>
+    <span class="badge" style="background:#FEF3C7;color:#92400E" data-field="order-delta">⚠ Actual ≠ Expected</span>
     <span class="badge badge-alert" data-field="missing-photo">⚠ Missing photo</span>
   </div>
 
@@ -145,8 +136,8 @@
       <div style="color:#6B7280">Hub</div><div data-field="hub"></div>
       <div style="color:#6B7280">Services</div><div data-field="services"></div>
       <div style="color:#6B7280">Date</div><div data-field="date"></div>
-      <div style="color:#6B7280">Declared q-ty</div><div style="font-weight:600" data-field="declared"></div>
-      <div style="color:#6B7280">Actual q-ty</div><div style="font-weight:600" data-field="actual"></div>
+      <div style="color:#6B7280">Declared q-ty</div><div style="font-weight:600" data-field="declared-total"></div>
+      <div style="color:#6B7280">Actual q-ty</div><div style="font-weight:600" data-field="actual-total"></div>
       <div style="color:#6B7280" data-crossdock>Trailer type</div><div data-crossdock data-fact="trailer-type"><span class="badge" style="background:#F3F4F6;color:#374151"></span></div>
     </div>
     <div style="display:grid;grid-template-columns:130px 1fr;gap:6px 14px;font-size:13px">
@@ -166,7 +157,7 @@
   <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #E5E7EB">
       <div style="display:flex;align-items:center;gap:8px">
-        <strong style="color:#1F2A3A">Supplies</strong>
+        <h2 style="color:#1F2A3A">Supplies</h2>
         <span style="font-size:11px;color:#6B7280">mandatory stock items purchased as Platform Sale</span>
       </div>
       <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled title="Not part of this assignment">+ Supply</button>
@@ -195,7 +186,7 @@
 
   <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;margin-top:14px" data-field="invoices">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #E5E7EB">
-      <strong style="color:#1F2A3A">Invoices</strong>
+      <h2 style="color:#1F2A3A">Invoices</h2>
     </div>
     <div data-field="invoice-lines"></div>
   </div>
@@ -219,7 +210,7 @@
 
     <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;margin-bottom:16px">
       <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:14px">
-        <div style="font-size:11px;text-transform:uppercase;color:#6B7280;font-weight:700;margin-bottom:10px">Your assigned dock</div>
+        <h2 style="font-size:11px;text-transform:uppercase;color:#6B7280;font-weight:700;margin-bottom:10px">Your assigned dock</h2>
         <div style="background:linear-gradient(180deg,#F9FAFB,#E5E7EB);border-radius:8px;padding:14px;position:relative;height:150px;overflow:hidden" data-field="dock-schematic">
           <div style="position:absolute;top:12px;left:12px;right:12px;height:22px;background:#1F2A3A;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;letter-spacing:1px" data-field="dock-wall"></div>
           <div style="position:absolute;top:44px;left:50%;transform:translateX(-50%);width:70px;height:50px;background:#ED1C2E;border:2px solid #991B1B;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700" data-field="dock-door"></div>
@@ -253,7 +244,7 @@
     <div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #E5E7EB">
         <div style="display:flex;align-items:center;gap:10px" data-field="operations-title">
-          <div style="font-weight:700;color:#1F2A3A">Operations</div>
+          <h2 style="font-weight:700;color:#1F2A3A">Operations</h2>
         </div>
         <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" disabled title="Not part of this assignment" data-field="add-operation">+ Operation</button>
       </div>
@@ -294,7 +285,7 @@
 
 <template id="operation-row">
   <tr style="border-top:1px solid #F3F4F6">
-    <td style="padding:10px 14px"><span style="color:#059669;font-weight:700" data-field="billable">$</span> <span class="badge" style="background:#FEE2E2;color:#991B1B" data-field="disposal">Disposal</span></td>
+    <td style="padding:10px 14px"><span style="color:#059669;font-weight:700" role="img" title="Billable" aria-label="Billable" data-field="billable">$</span> <span class="badge" style="background:#FEE2E2;color:#991B1B" data-field="disposal"></span></td>
     <td style="padding:10px 6px" data-field="trailer"></td>
     <td class="op-qty" style="padding:10px 6px;text-align:right;font-weight:600" data-field="quantity"></td>
     <td style="padding:10px 6px" data-field="unit"></td>

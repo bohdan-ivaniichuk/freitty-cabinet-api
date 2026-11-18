@@ -25,6 +25,6 @@ internal sealed class OperationConfiguration : IEntityTypeConfiguration<Operatio
                 $"(type IN ({Unloading}, {Loading})) = (trailer_number IS NOT NULL)");
         });
         builder.Property(operation => operation.Id).ValueGeneratedNever();
-        builder.Property(operation => operation.TrailerNumber).HasMaxLength(20);
+        builder.Property(operation => operation.TrailerNumber).HasMaxLength(Operation.MaxTrailerNumberLength);
     }
 }

@@ -11,6 +11,8 @@ public sealed class StaticPagesTests(PostgresFixture postgres) : IAsyncDisposabl
 
     private readonly CabinetApi api = new(postgres.ConnectionString);
 
+    public static TheoryData<string> UrlsBesideThePages => ["/health/ready", ApiUrls.Me];
+
     [Theory]
     [InlineData("/", Html)]
     [InlineData("/index.html", Html)]
@@ -47,16 +49,14 @@ public sealed class StaticPagesTests(PostgresFixture postgres) : IAsyncDisposabl
     {
         using HttpResponseMessage response = await api.SendGetAsync("/missing.html");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal(ProblemResponse.ContentType, response.Content.Headers.ContentType?.MediaType);
+        await ProblemResponse.AssertProblemAsync(response, HttpStatusCode.NotFound);
     }
 
     [Theory]
-    [InlineData("/health/ready")]
-    [InlineData("/api/v1/me")]
+    [MemberData(nameof(UrlsBesideThePages))]
     public async Task ApiStillAnswersBesideThePages(string url)
     {
-        await api.SaveAsync();
+        await api.SaveReferenceDataAsync();
 
         using HttpResponseMessage response = await api.SendGetAsync(url);
 

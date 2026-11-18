@@ -5,4 +5,4 @@ public sealed record ActivitySummaryDto(
     int? CompletedChangePercent,
     decimal SpendLast30Days,
     decimal? AverageSpendPerOrder,
-    ActivityBucketDto? Best);
+    ActivityBucketDto? BestBucket);

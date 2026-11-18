@@ -1,4 +1,3 @@
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Application.Common;
 using Freitty.Application.Orders;
 using Freitty.Application.Orders.Cards;
@@ -17,7 +16,7 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
     public async Task CardCarriesTheOrderHeader()
     {
         Order order = api.Orders.Ready(scheduledAt: CabinetApi.Now);
-        TestData.Succeed(order.TransferTo(api.Data.OtherHub.Id, TestData.Now));
+        order.TransferTo(api.Data.OtherHub.Id, OrderBuilder.BuiltAt).MustSucceed();
         await api.SaveAsync(order);
 
         OrderCardDto card = await CardAsync(order);
@@ -54,7 +53,7 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
     public async Task OwnDriverTransportNamesTheDriver()
     {
         Order order = api.Orders.Draft();
-        TestData.Succeed(order.ArrangeOwnDriver("User 5", TestData.Now));
+        order.ArrangeOwnDriver("User 5", OrderBuilder.BuiltAt).MustSucceed();
         await api.SaveAsync(order);
 
         OrderCardDto card = await CardAsync(order);
@@ -68,7 +67,7 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
         Order order = api.Orders.Draft(OrderType.Consolidation);
         Shipment first = api.Orders.AddShipment(order, standard: 10, extraLarge: 3, refNumber: "REF-A");
         Shipment second = api.Orders.AddShipment(order, standard: 8, refNumber: "REF-B");
-        TestData.Succeed(order.ArrangeSelfPickup(TestData.Now));
+        order.ArrangeSelfPickup(OrderBuilder.BuiltAt).MustSucceed();
         OrderBuilder.Submit(order, CabinetApi.Now);
         OrderBuilder.Unload(order, first, 10);
         OrderBuilder.Unload(order, first, 3, UnitType.ExtraLarge);
@@ -163,7 +162,7 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
 
         Assert.Equal(OrderBuilder.DeclaredStandard, card.ActualTotal);
         Assert.False(card.HasQuantityDelta);
-        Assert.Equal(NextStepCode.AwaitingCompletion, card.Next.Code);
+        Assert.Equal(NextStepCode.AwaitingCompletion, card.NextStep.Code);
     }
 
     [Fact]
@@ -178,7 +177,7 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
 
         OrderCardDto card = await CardAsync(order);
 
-        Assert.Equal(2, card.OutboundTrailers);
+        Assert.Equal(2, card.OutboundTrailerCount);
     }
 
     [Fact]
@@ -289,9 +288,9 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
     public async Task CompletedOrderWithUnpaidInvoiceAwaitsPaymentOfTheFirstUnpaid()
     {
         Order order = api.Orders.Completed();
-        Invoice paid = OrderBuilder.IssueInvoice(order, 100.00m, TestData.Now.AddHours(1), paid: true);
-        Invoice laterUnpaid = OrderBuilder.IssueInvoice(order, 300.00m, TestData.Now.AddHours(3), paid: false);
-        Invoice firstUnpaid = OrderBuilder.IssueInvoice(order, 280.00m, TestData.Now.AddHours(2), paid: false);
+        Invoice paid = OrderBuilder.IssueInvoice(order, 100.00m, OrderBuilder.BuiltAt.AddHours(1), paid: true);
+        Invoice laterUnpaid = OrderBuilder.IssueInvoice(order, 300.00m, OrderBuilder.BuiltAt.AddHours(3), paid: false);
+        Invoice firstUnpaid = OrderBuilder.IssueInvoice(order, 280.00m, OrderBuilder.BuiltAt.AddHours(2), paid: false);
 
         NextStepDto next = await SaveAndReadNextStepAsync(order, paid, laterUnpaid, firstUnpaid);
 
@@ -302,8 +301,8 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
     public async Task CompletedOrderWithEveryInvoicePaidShowsTheLastInvoice()
     {
         Order order = api.Orders.Completed();
-        Invoice last = OrderBuilder.IssueInvoice(order, 1540.00m, TestData.Now.AddHours(2), paid: true);
-        Invoice earlier = OrderBuilder.IssueInvoice(order, 100.00m, TestData.Now.AddHours(1), paid: true);
+        Invoice last = OrderBuilder.IssueInvoice(order, 1540.00m, OrderBuilder.BuiltAt.AddHours(2), paid: true);
+        Invoice earlier = OrderBuilder.IssueInvoice(order, 100.00m, OrderBuilder.BuiltAt.AddHours(1), paid: true);
 
         NextStepDto next = await SaveAndReadNextStepAsync(order, last, earlier);
 
@@ -337,6 +336,6 @@ public sealed class OrderCardTests(PostgresFixture postgres) : IAsyncDisposable
     private async Task<NextStepDto> SaveAndReadNextStepAsync(Order order, params Invoice[] invoices)
     {
         await api.SaveAsync([order, .. invoices]);
-        return (await CardAsync(order)).Next;
+        return (await CardAsync(order)).NextStep;
     }
 }

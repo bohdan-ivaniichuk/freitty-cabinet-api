@@ -1,4 +1,3 @@
-using Freitty.Api.IntegrationTests.Persistence;
 using Freitty.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -29,7 +28,7 @@ public sealed class SeedStartupTests(PostgresFixture postgres)
     [Fact]
     public async Task SecondStartOnSeededDatabaseAddsNothing()
     {
-        string connectionString = await postgres.CreateDatabaseAsync(TestContext.Current.CancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         int[] rowsAfterFirstStart;
         await using (TestDatabase first = await SeededDatabase.StartSeededAsync(connectionString, SeededDatabase.Now))
         {
@@ -46,7 +45,7 @@ public sealed class SeedStartupTests(PostgresFixture postgres)
     [Fact]
     public async Task EmptyDatabaseStaysEmptyWhenSeedIsNotEnabled()
     {
-        string connectionString = await postgres.CreateDatabaseAsync(TestContext.Current.CancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         await using var database = new TestDatabase(connectionString);
 
         int[] rows = await database.InContextAsync(CountRowsAsync);
@@ -57,7 +56,7 @@ public sealed class SeedStartupTests(PostgresFixture postgres)
     [Fact]
     public async Task StartupFailsWhenSeedSettingIsNotBoolean()
     {
-        string connectionString = await postgres.CreateDatabaseAsync(TestContext.Current.CancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         await using var api = new ApiFactory(connectionString);
         await using WebApplicationFactory<Program> factory =
             api.WithWebHostBuilder(builder => builder.UseSetting("Seed:Enabled", "yes"));
@@ -73,7 +72,7 @@ public sealed class SeedStartupTests(PostgresFixture postgres)
     public async Task NoInstantButScheduledDateIsLaterThanNowWhenSeededJustAfterMidnight()
     {
         var now = new DateTimeOffset(2026, 4, 18, 4, 5, 0, TimeSpan.Zero);
-        string connectionString = await postgres.CreateDatabaseAsync(TestContext.Current.CancellationToken);
+        string connectionString = await postgres.CreateDatabaseAsync();
         await using TestDatabase database = await SeededDatabase.StartSeededAsync(connectionString, now);
 
         DateTimeOffset? latest = await database.InContextAsync(db => db.Database

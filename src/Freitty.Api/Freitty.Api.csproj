@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The tests build their URLs from ApiRoutes, so a renamed route is renamed in them too. -->
+    <InternalsVisibleTo Include="Freitty.Api.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Freitty.Application\Freitty.Application.csproj" />
     <ProjectReference Include="..\Freitty.Infrastructure\Freitty.Infrastructure.csproj" />
   </ItemGroup>
