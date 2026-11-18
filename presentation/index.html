@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Freitty Cabinet API — як це зроблено</title>
+<meta name="description" content="Бекенд клієнтського кабінету крос-док платформи: обсяг, домен, база даних, реалізація і результат.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="deck.css">
+</head>
+<body>
+<p id="deck-status" class="visually-hidden" aria-live="polite"></p>
+
+<main id="stage" class="stage" data-sections="Обсяг і підхід|Домен|База даних|Реалізація|Результат">
+
+<!-- ============================== 01 Обсяг і підхід ============================== -->
+
+<section class="slide slide--title" data-section="1">
+  <p class="label">Тестове завдання · Backend .NET</p>
+  <h1 class="title">Freitty Cabinet API<span class="grad">бекенд клієнтського кабінету крос-док платформи</span></h1>
+  <p class="lede">Три екрани — Dashboard, Order List і Order Detail — отримують усі дані з API. Фільтри, пошук і пагінація працюють у PostgreSQL, записи йдуть через доменний агрегат з optimistic concurrency, а застосунок розгорнуто в Azure з CD.</p>
+  <p class="stackline"><span>.NET 10</span><span>FastEndpoints</span><span>EF Core + Dapper</span><span>PostgreSQL 18</span><span>Azure Container Apps</span></p>
+  <div class="links">
+    <a class="linkcard" href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/">
+      <span class="label">Живе демо</span><strong>Кабінет у браузері</strong>
+      <span class="url">freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io</span>
+    </a>
+    <a class="linkcard" href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/">
+      <span class="label">API reference</span><strong>Scalar з запитами зі сторінки</strong>
+      <span class="url">…/scalar/</span>
+    </a>
+    <a class="linkcard" href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api">
+      <span class="label">Репозиторій</span><strong>Код, ADR, специфікації кроків</strong>
+      <span class="url">github.com/bohdan-ivaniichuk/freitty-cabinet-api</span>
+    </a>
+  </div>
+  <p class="hint">Кожен слайд читається сам: заголовок — твердження, під ним доказ і посилання на файл. Навігація — <kbd>←</kbd> <kbd>→</kbd>, огляд усіх слайдів — <kbd>O</kbd>.</p>
+</section>
+
+<section class="slide has-bignum" data-section="1">
+  <span class="bignum" aria-hidden="true">01</span>
+  <p class="label">01 · Обсяг</p>
+  <h2 class="title">Завдання — три екрани з готовою версткою<span class="grad">і бекенд, який їх наповнює</span></h2>
+  <div class="body grid g-3">
+    <div class="card">
+      <p class="label">Що вимагалося</p>
+      <ul class="list">
+        <li>Готовий макет трьох екранів: Dashboard, Order List, Order Detail. Розмітку й стилі не переписувати.</li>
+        <li>Бекенд на .NET і PostgreSQL, з якого екрани беруть усі дані.</li>
+        <li>Фільтри, пошук і пагінація — на боці бази, а не в пам'яті.</li>
+        <li>Розгорнутий застосунок, README і коротка презентація.</li>
+      </ul>
+    </div>
+    <div class="card card--accent">
+      <p class="label">Додав понад завдання</p>
+      <ul class="list">
+        <li>Запис операції на Shipment: транзакція й optimistic concurrency.</li>
+        <li>Pipeline-дошка в Order List і submit чернетки — перетягуванням або кнопкою.</li>
+        <li>Фото операцій у blob storage; завантаження закриває Missing photo alert.</li>
+        <li>CSV-експорт відфільтрованого списку і табличний вигляд.</li>
+        <li>CI/CD: у прод іде саме той образ, який пройшов перевірку.</li>
+        <li>Демо-дані, що перебудовуються від «сьогодні» на кожному старті й щоночі.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="label">Свідомо не робив</p>
+      <ul class="list">
+        <li>Вхід і ролі: поточний користувач — перший Admin засіяної компанії.</li>
+        <li>Справжні платежі: оплата — лише факт Invoice.</li>
+        <li>Створення й редагування замовлення: домен це вміє (<code>Order.StartDraft</code>, <code>AddShipment</code>, <code>DeclareCargo</code>…), але екрана для цього в макеті немає.</li>
+        <li>Кнопки поза трьома екранами (New Order, Settings, BOL PDF…) лишилися на місці з позначкою «Not part of this assignment».</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="1">
+  <p class="label">01 · Пріоритети</p>
+  <h2 class="title">Найбільше уваги — тому, що важко виправити потім<span class="grad">модель, запити, тести, реліз</span></h2>
+  <div class="body grid g-4" style="flex:none">
+    <div class="card tile">
+      <p class="label">Доменна модель</p>
+      <span class="stat__n">178</span>
+      <p>Один агрегат <code>Order</code>, правила — у його методах. Юніт-тести домену без бази й без вебхоста.</p>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0003-order-is-one-aggregate.md">ADR 0003</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/CONTEXT.md">CONTEXT.md</a></p>
+    </div>
+    <div class="card tile">
+      <p class="label">Запити в базі</p>
+      <span class="stat__n">0,04 мс</span>
+      <p>Фільтри, пошук через <code>pg_trgm</code> і пагінація — у SQL. Плани <code>EXPLAIN ANALYZE</code> до й після індексу на 200 000 замовлень.</p>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/explain/README.md">docs/explain</a></p>
+    </div>
+    <div class="card tile">
+      <p class="label">Справжній PostgreSQL</p>
+      <span class="stat__n">465</span>
+      <p>Інтеграційні тести через HTTP на PostgreSQL 18 і Azurite у Testcontainers. Гонку двох записів теж відтворено в тестах.</p>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0002-integration-tests-on-real-postgres.md">ADR 0002</a></p>
+    </div>
+    <div class="card tile">
+      <p class="label">Чесний реліз</p>
+      <span class="stat__n">0</span>
+      <p>збійних запитів, коли нова ревізія перебирала трафік на живому застосунку. Ревізія, що не стартує, трафіку не отримує.</p>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/deployment.md">docs/deployment.md</a></p>
+    </div>
+  </div>
+  <p class="lede small" style="margin-top:28px">0,04 мс замість 4,3 — перша сторінка списку компанії з 4 000 замовлень після індексу <code>ix_orders_company_id_scheduled_at_id</code>. 178 + 465 = 643 тести, усі зелені на останньому прогоні.</p>
+</section>
+
+<section class="slide" data-section="1">
+  <p class="label">01 · Процес</p>
+  <h2 class="title">Спершу план і правила, потім дванадцять кроків<span class="grad">кожен: специфікація → код → незалежне рев'ю → моя перевірка → коміт</span></h2>
+  <div class="body stack" style="gap:26px">
+    <div class="stats">
+      <div><span class="stat__n">12</span><span class="stat__l">кроків плану</span></div>
+      <div><span class="stat__n">17</span><span class="stat__l">ADR</span></div>
+      <div><span class="stat__n">19</span><span class="stat__l">правил коду</span></div>
+      <div><span class="stat__n">643</span><span class="stat__l">тести</span></div>
+      <div><span class="stat__n">5</span><span class="stat__l">міграцій</span></div>
+      <div><span class="stat__n">13</span><span class="stat__l">endpoints</span></div>
+    </div>
+    <ol class="timeline">
+      <li><span class="n">01</span><span>Скелет: solution, health checks, Docker Compose, CI</span></li>
+      <li><span class="n">02</span><span>Домен: агрегат <code>Order</code>, схема, перша міграція</span></li>
+      <li><span class="n">03</span><span>Демо-дані, побудовані через агрегат</span></li>
+      <li><span class="n">04</span><span>Order List: фільтри, пошук, сторінки, індекси, конвеєр команд</span></li>
+      <li><span class="n">05</span><span>Order Detail: одна відповідь, split queries</span></li>
+      <li><span class="n">06</span><span>Dashboard: агрегати на Dapper і SQL</span></li>
+      <li><span class="n">07</span><span>Три сторінки з тієї ж верстки, ванільний JS</span></li>
+      <li><span class="n">08</span><span>Запис операції з optimistic concurrency</span></li>
+      <li><span class="n">09</span><span>Azure Container Apps і CD</span></li>
+      <li><span class="n">10</span><span>Документація, README і ця презентація</span></li>
+      <li><span class="n">11</span><span>Pipeline-дошка і submit чернетки</span></li>
+      <li><span class="n">12</span><span>Фото операцій у blob storage</span></li>
+    </ol>
+    <p class="ref">План: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/plan.md">docs/plan.md</a> · специфікації: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/docs/steps">docs/steps/</a> · рішення: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/docs/adr">docs/adr/</a> · після кроку 8 — окреме рев'ю кроків 4–8, прочитаних разом: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/9769ecf">9769ecf</a></p>
+  </div>
+</section>
+
+<section class="slide" data-section="1">
+  <p class="label">01 · Робота з AI</p>
+  <h2 class="title">Рішення ухвалював я, рутину делегував<span class="grad">а правила записані в репозиторії, не в голові</span></h2>
+  <div class="body grid g-3">
+    <div class="card card--accent">
+      <p class="label">Робив сам</p>
+      <ul class="list">
+        <li>План і рішення до першого рядка коду: <code>docs/plan.md</code>, 17 ADR.</li>
+        <li>Правила для людей і агентів: <code>CLAUDE.md</code> і 19 правил у <code>code-rules.md</code>.</li>
+        <li>Grooming кожного кроку — специфікація в <code>docs/steps/</code>: рішення, контракт, критерії приймання, тести.</li>
+        <li>Остаточна перевірка кожного кроку. Коміт і push — лише після мого «так».</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="label">Делегував</p>
+      <ul class="list">
+        <li>Реалізацію — у свіжій сесії, яка отримує лише специфікацію і <code>CLAUDE.md</code>. Чого специфікація не каже — питати, а не вгадувати.</li>
+        <li>Тести — агент <code>test-author</code>: запускає їх і звітує реальний результат.</li>
+        <li>Рев'ю — агент <code>code-reviewer</code> у чистому контексті й на іншій моделі, ніж автор коду. Бачить лише diff, спершу збирає й ганяє тести, нічого не править, лише звітує.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <p class="label">Запобіжники в репозиторії</p>
+      <ul class="list">
+        <li><code>secrets-scan</code> — блокує вміст, схожий на справжній секрет.</li>
+        <li><code>dotnet-format</code> — форматує кожен змінений <code>.cs</code>.</li>
+        <li><code>git-commit-push-confirm</code> — кожен commit і push підтверджую вручну.</li>
+        <li><code>ai-trailer-guard</code> і <code>.githooks/commit-msg</code> — жодної AI-атрибуції в історії.</li>
+        <li>CI: <code>dotnet format --verify-no-changes</code>, warnings as errors.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="ref" style="margin-top:22px"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/CLAUDE.md">CLAUDE.md</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/.claude/hooks">.claude/hooks</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/.claude/agents">.claude/agents</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/engineering/code-rules.md">docs/engineering/code-rules.md</a></p>
+</section>
+
+<section class="slide" data-section="1">
+  <p class="label">01 · Робота з AI</p>
+  <h2 class="title">Що змінилося після перевірок<span class="grad">приклади, які видно в історії репозиторію</span></h2>
+  <div class="body stack" style="gap:18px">
+    <div class="table-wrap">
+      <table class="t t--compact">
+        <thead><tr><th style="width:33%">Що виявилося</th><th>Що стало</th><th style="width:19%">Де видно</th></tr></thead>
+        <tbody>
+          <tr><td>Кроки 4–8 по одному пройшли рев'ю, але разом робили одне й те саме по-різному</td><td>Назва каже, що це за значення: <code>hubId</code>, не <code>hub</code>; <code>search</code>, не <code>q</code>; <code>hasOpenAlerts</code>, <code>photoCount</code>. Записано як правило коду 9</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/9769ecf">9769ecf</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/engineering/code-rules.md#9-a-name-says-what-the-value-is">правило 9</a></td></tr>
+          <tr><td>Тести писали URL вручну, окремо від маршрутів endpoint</td><td>Константи в <code>ApiRoutes</code>; тести будують URL з них, тож перейменований маршрут перейменовується і в тестах</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Api/Endpoints/ApiRoutes.cs">ApiRoutes.cs</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Api.IntegrationTests/Support/ApiUrls.cs">ApiUrls.cs</a></td></tr>
+          <tr><td>Вкладка, фільтр чи сторінка перезавантажували всю сторінку</td><td>Вигляд змінюється на місці через History API: оновлюються лише потрібні блоки, а посилання, Reload і Back працюють</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0012-static-pages-served-by-the-api.md">ADR 0012</a></td></tr>
+          <tr><td>Перше розгортання розійшлося з runbook</td><td>В образі Azure CLI немає <code>awk</code>; <code>grant()</code> відмовляє на порожньому scope; публічний доступ PostgreSQL вмикається до правила firewall</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/a70645a">a70645a</a></td></tr>
+          <tr><td>Хибне налаштування storage проявилося б уже після міграції схеми</td><td>Storage готується до міграцій, тож реліз падає раніше, ніж схема зміниться</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Api/Program.cs#L37-L39">Program.cs</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0017-photos-in-blob-storage-behind-the-api.md">ADR 0017</a></td></tr>
+          <tr><td>Відмовлений submit міг би забрати номер із послідовності</td><td>Агрегат спершу відповідає <code>CanSubmit</code>, і лише потім береться <code>nextval</code></td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0016-official-order-numbers-from-a-sequence.md">ADR 0016</a></td></tr>
+          <tr><td>Старіша ревізія не перебудувала б дані, коли новіша додала таблицю</td><td>Один <code>TRUNCATE … CASCADE</code> по всіх таблицях моделі</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/9761c71">9761c71</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="grid g-even-left" style="gap:24px; align-items:center">
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/deployment.md?plain=1#L87-L88">docs/deployment.md</a><span class="lines">рядки 87–88</span></figcaption><pre><code class="lang-sh">grant() {  # role, principal object ID, scope; an empty scope would mean the whole subscription
+  [ -n "$2" ] &amp;&amp; [ -n "$3" ] || { echo "grant: empty principal or scope"; return 1; }</code></pre></figure>
+      <p class="muted small">Порожній scope в <code>az role assignment create</code> означав би всю підписку, тож функція відмовляє раніше, ніж Azure щось видасть. Скрізь ішов один цикл: агент пропонує → рев'ю або живий запуск знаходить проблему → я вирішую, що міняти, і записую рішення в специфікацію, ADR чи правило, щоб наступний крок уже його знав.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 02 Домен ============================== -->
+
+<section class="slide has-bignum" data-section="2">
+  <span class="bignum" aria-hidden="true">02</span>
+  <p class="label">02 · Мова домену</p>
+  <h2 class="title">Одна мова для коду, документів і розмови<span class="grad">назви в коді беруться зі словника</span></h2>
+  <p class="lede">Повні визначення, яких слів уникати й приклад діалогу — у <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/CONTEXT.md">CONTEXT.md</a>.</p>
+  <dl class="body glossary">
+    <div><dt>Order</dt><dd>Запит компанії-клієнта, щоб хаб обробив її вантаж.</dd></div>
+    <div><dt>Cross-Dock</dt><dd>Order з одним Shipment; вид — Storage або Pickup.</dd></div>
+    <div><dt>Consolidation</dt><dd>Кілька Shipment у спільні вихідні трейлери; щонайменше два.</dd></div>
+    <div><dt>Shipment</dt><dd>Одна партія за одним bill of lading, з Ref N клієнта. В UI — «sub-order».</dd></div>
+    <div><dt>Cargo Line</dt><dd>Рядок bill of lading: Unit Type і задекларована кількість.</dd></div>
+    <div><dt>Operation</dt><dd>Фізична дія хабу: Unloading, Disposal, Restack або Loading.</dd></div>
+    <div><dt>Actual quantity</dt><dd>Сума Unloading. Окремо ніколи не вводиться.</dd></div>
+    <div><dt>On stock</dt><dd>Розвантажено − утилізовано − завантажено.</dd></div>
+    <div><dt>Received</dt><dd>Хаб оголосив, що приймання партії завершено.</dd></div>
+    <div><dt>Quantity delta</dt><dd>Actual − Declared на Shipment і Unit Type. Нестача — лише після Received.</dd></div>
+    <div><dt>Alert</dt><dd>Запис, що клієнта повідомили про проблему з Shipment. Не статус.</dd></div>
+    <div><dt>Photo</dt><dd>Документує Operation; до десяти на операцію. Без нього — Missing photo alert.</dd></div>
+    <div><dt>Статус</dt><dd>Draft → Ready → In progress → Completed. Лише про вантаж.</dd></div>
+    <div><dt>Active · Need attention</dt><dd>Ready або In progress · чернетки, неоплачені Invoice і відкриті Alert.</dd></div>
+    <div><dt>Invoice</dt><dd>Запит на оплату. «Оплачено» — факт Invoice, не статус Order.</dd></div>
+    <div><dt>Stage</dt><dd>Де вантаж у роботі хабу; виводиться зі статусу і Shipment.</dd></div>
+  </dl>
+</section>
+
+<section class="slide" data-section="2">
+  <p class="label">02 · Агрегат</p>
+  <h2 class="title"><code style="font-size:0.86em">Order</code> — один агрегат, і єдиний з правилами<span class="grad">усе всередині змінюється лише через його методи</span></h2>
+  <div class="body grid g-even-left" style="align-items:start">
+    <figure class="diagram" role="img" aria-label="Агрегат Order: Order містить Shipment, Supply line і Order service; Shipment містить Cargo line, Operation і Alert; Operation містить до десяти Photo. Поза агрегатом — довідники за id і Invoice як окремий агрегат.">
+      <svg viewBox="0 0 760 520" aria-hidden="true">
+        <text class="d-l" x="10" y="16">АГРЕГАТ ORDER</text>
+        <rect class="d-boundary" x="8" y="28" width="744" height="402" rx="16"/>
+        <rect class="d-box d-box--root" x="270" y="52" width="220" height="66" rx="10"/>
+        <text class="d-t" x="380" y="80" text-anchor="middle">Order</text>
+        <text class="d-s" x="380" y="102" text-anchor="middle">Number · Status · Version</text>
+        <path class="d-line" d="M380 118 V144 M150 144 H630 M150 144 V170 M390 144 V170 M630 144 V170"/>
+        <text class="d-m" x="158" y="164">1..n</text>
+        <text class="d-m" x="398" y="164">0..n</text>
+        <text class="d-m" x="638" y="164">0..n</text>
+        <rect class="d-box" x="40" y="170" width="220" height="58" rx="10"/>
+        <text class="d-t d-t--sm" x="150" y="194" text-anchor="middle">Shipment</text>
+        <text class="d-s" x="150" y="215" text-anchor="middle">Ref N · Arrival · Dock</text>
+        <rect class="d-box" x="300" y="170" width="180" height="58" rx="10"/>
+        <text class="d-t d-t--sm" x="390" y="194" text-anchor="middle">Supply line</text>
+        <text class="d-s" x="390" y="215" text-anchor="middle">знімок ціни</text>
+        <rect class="d-box" x="520" y="170" width="220" height="58" rx="10"/>
+        <text class="d-t d-t--sm" x="630" y="194" text-anchor="middle">Order service</text>
+        <text class="d-s" x="630" y="215" text-anchor="middle">обрані Services</text>
+        <path class="d-line" d="M150 228 V254 M99 254 H441 M99 254 V280 M270 254 V280 M441 254 V280"/>
+        <text class="d-m" x="107" y="274">1 на Unit Type</text>
+        <text class="d-m" x="278" y="274">0..n</text>
+        <text class="d-m" x="449" y="274">0..n</text>
+        <rect class="d-box" x="24" y="280" width="150" height="58" rx="10"/>
+        <text class="d-t d-t--sm" x="99" y="304" text-anchor="middle">Cargo Line</text>
+        <text class="d-s" x="99" y="325" text-anchor="middle">Declared</text>
+        <rect class="d-box d-box--accent" x="190" y="280" width="160" height="58" rx="10"/>
+        <text class="d-t d-t--sm" x="270" y="304" text-anchor="middle">Operation</text>
+        <text class="d-s" x="270" y="325" text-anchor="middle">лише додається</text>
+        <rect class="d-box" x="366" y="280" width="150" height="58" rx="10"/>
+        <text class="d-t d-t--sm" x="441" y="304" text-anchor="middle">Alert</text>
+        <text class="d-s" x="441" y="325" text-anchor="middle">raised · resolved</text>
+        <path class="d-line" d="M270 338 V364"/>
+        <text class="d-m" x="278" y="358">≤ 10</text>
+        <rect class="d-box" x="190" y="364" width="160" height="50" rx="10"/>
+        <text class="d-t d-t--sm" x="270" y="386" text-anchor="middle">Photo</text>
+        <text class="d-s" x="270" y="405" text-anchor="middle">рядок + blob</text>
+        <text class="d-s d-s--sans" x="540" y="330">Actual, On stock, Δ —</text>
+        <text class="d-s d-s--sans" x="540" y="350">рахуються з Operation</text>
+        <text class="d-s d-s--sans" x="540" y="370">і Cargo Line, не</text>
+        <text class="d-s d-s--sans" x="540" y="390">зберігаються</text>
+        <text class="d-l" x="10" y="462">ПОЗА АГРЕГАТОМ — ЛИШЕ ЗА ID</text>
+        <rect class="d-box d-box--chip" x="8" y="474" width="92" height="34" rx="8"/><text class="d-s" x="54" y="496" text-anchor="middle">Company</text>
+        <rect class="d-box d-box--chip" x="108" y="474" width="70" height="34" rx="8"/><text class="d-s" x="143" y="496" text-anchor="middle">User</text>
+        <rect class="d-box d-box--chip" x="186" y="474" width="64" height="34" rx="8"/><text class="d-s" x="218" y="496" text-anchor="middle">Hub</text>
+        <rect class="d-box d-box--chip" x="258" y="474" width="88" height="34" rx="8"/><text class="d-s" x="302" y="496" text-anchor="middle">Carrier</text>
+        <rect class="d-box d-box--chip" x="354" y="474" width="88" height="34" rx="8"/><text class="d-s" x="398" y="496" text-anchor="middle">Service</text>
+        <rect class="d-box d-box--chip" x="450" y="474" width="106" height="34" rx="8"/><text class="d-s" x="503" y="496" text-anchor="middle">SupplyItem</text>
+        <rect class="d-box d-box--chip" x="572" y="474" width="180" height="34" rx="8" style="stroke:rgba(125,211,252,.55)"/><text class="d-s" x="662" y="496" text-anchor="middle">Invoice — свій агрегат</text>
+      </svg>
+    </figure>
+    <div class="card">
+      <p class="label">Що Order вирішує сам</p>
+      <ul class="list">
+        <li>Submit — лише з Draft і лише повного; <code>CanSubmit</code> перелічує, чого бракує.</li>
+        <li>Будь-яка дія хабу переводить Ready → In progress.</li>
+        <li>Disposal, Restack чи Loading не беруть більше, ніж є On stock.</li>
+        <li>Quantity delta alert відкривається й закривається разом із кількостями.</li>
+        <li>Unloading чи Disposal без фото відкриває Missing photo alert.</li>
+        <li>Complete — коли все Received, на складі порожньо і жодного відкритого Alert.</li>
+        <li>Час іде лише вперед: зміна, раніша за останню, — порушений контракт.</li>
+        <li>Кожна зміна оновлює <code>UpdatedAt</code> і робить <code>Version++</code> на корені.</li>
+      </ul>
+      <p class="ref">Конструктори й мутатори дочірніх сутностей — <code>internal</code>. <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0003-order-is-one-aggregate.md">ADR 0003</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Domain/Orders/Order.cs">Order.cs</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="2">
+  <p class="label">02 · Бізнес-метод</p>
+  <h2 class="title">Чи можна записати операцію — вирішує агрегат<span class="grad">обробник лише передає намір і момент часу</span></h2>
+  <div class="body grid g-wide-left">
+    <figure class="code"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Domain/Orders/Order.cs#L324-L351">src/Freitty.Domain/Orders/Order.cs</a><span class="lines">рядки 324–351</span></figcaption><pre><code class="lang-cs">public Result&lt;Operation&gt; RecordOperation(Guid shipmentId, NewOperation newOperation, DateTimeOffset now)
+{
+    NewOperation checkedOperation = CheckContract(newOperation);
+    DateTimeOffset instant = AcceptInstant(now);
+
+    Result&lt;Shipment&gt; lookup = FindActiveShipment(shipmentId);
+    if (lookup.IsFailure)
+    …
+    // Unloading has no upper bound: receiving more than declared is exactly what a Quantity delta records.
+    Shipment shipment = lookup.Value;
+    int onStock = shipment.OnStock(checkedOperation.UnitType);
+    if (checkedOperation.Type != OperationType.Unloading &amp;&amp; checkedOperation.Quantity &gt; onStock)
+    {
+        return OrderErrors.ExceedsStock(
+    …
+    Operation operation = shipment.RecordOperation(checkedOperation, instant);
+    RecordHubWork(instant);
+    return operation;
+}</code></pre></figure>
+    <div class="stack">
+      <figure class="code"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Domain/Orders/Operation.cs#L80-L87">src/Freitty.Domain/Orders/Operation.cs</a><span class="lines">рядки 80–87</span></figcaption><pre><code class="lang-cs">// A Restack rearranges pallets and does not change their count.
+internal int StockChange =&gt; Type switch
+{
+    OperationType.Unloading =&gt; Quantity,
+    OperationType.Disposal or OperationType.Loading =&gt; -Quantity,
+    OperationType.Restack =&gt; 0,
+…
+};</code></pre></figure>
+      <ul class="list">
+        <li>Unloading не має верхньої межі: надлишок — саме те, що фіксує Quantity delta.</li>
+        <li>Решта типів не бере більше, ніж є On stock цього Unit Type. Відмова <code>ExceedsStock</code> називає партію і числа.</li>
+        <li>On stock — сума <code>StockChange</code> по журналу; Restack кількості не змінює.</li>
+        <li><code>RecordHubWork</code>: перша дія хабу стартує замовлення, кожна дія — <code>Version++</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="2">
+  <p class="label">02 · Бізнес-правило</p>
+  <h2 class="title">Alert реагує на зміну дельти, а не на її наявність<span class="grad">прийнятий вручну надлишок не відкриває alert удруге</span></h2>
+  <div class="body grid g-even-left">
+    <figure class="code"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Domain/Orders/Shipment.cs#L174-L192">src/Freitty.Domain/Orders/Shipment.cs</a><span class="lines">рядки 174–192</span></figcaption><pre><code class="lang-cs">// The alert follows changes of the delta, not its presence: once resolved by hand, the same delta does not
+// raise it again, while a different one does — also a smaller one, since the client was told about a state
+// that no longer holds.
+private void FollowQuantityDelta(int[] deltasBefore, DateTimeOffset now)
+{
+    int[] deltasAfter = KnownDeltas();
+    Alert? openAlert = FindOpenAlert(AlertType.QuantityDelta);
+
+    if (deltasAfter.All(delta =&gt; delta == 0))
+    {
+        openAlert?.Resolve(now);
+        return;
+    }
+
+    if (!deltasAfter.SequenceEqual(deltasBefore))
+    {
+        RaiseUnlessOpen(AlertType.QuantityDelta, now);
+    }
+}</code></pre></figure>
+    <div class="stack">
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Domain/Orders/Shipment.cs#L213-L224">src/Freitty.Domain/Orders/Shipment.cs</a><span class="lines">рядки 213–224</span></figcaption><pre><code class="lang-cs">// One value per Unit Type, in enum order. An excess counts as soon as it is unloaded; a shortage only once
+// the shipment is received. A Unit Type that was not declared counts as declared zero.
+private int[] KnownDeltas()
+{
+    return AllUnitTypes.Select(KnownDelta).ToArray();
+}
+
+private int KnownDelta(UnitType unitType)
+{
+    int delta = ActualQuantity(unitType) - DeclaredQuantity(unitType);
+    return delta &gt; 0 || IsReceived ? delta : 0;
+}</code></pre></figure>
+      <div class="card card--quiet" style="padding:16px 20px">
+        <p class="label">Ті самі правила — назвами тестів</p>
+        <ul class="list names">
+          <li>UnloadingAboveDeclaredRaisesQuantityDeltaAlertAtOnce</li>
+          <li>FinishingReceivingAShortShipmentRaisesQuantityDeltaAlert</li>
+          <li>FinishingReceivingWithTheSameExcessKeepsAResolvedAlertResolved</li>
+          <li>SmallerShortageAfterManualResolutionRaisesANewAlert</li>
+        </ul>
+        <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Domain.Tests/Orders/QuantityDeltaTests.cs">QuantityDeltaTests.cs</a> — 16 тестів</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="2">
+  <p class="label">02 · Макет і модель</p>
+  <h2 class="title">Макет суперечив сам собі<span class="grad">модель побудована так, що ці суперечності неможливо відтворити</span></h2>
+  <div class="body table-wrap">
+    <table class="t">
+      <thead><tr><th style="width:15%">Де</th><th style="width:40%">У макеті</th><th>У моделі</th></tr></thead>
+      <tbody>
+        <tr><td class="k">FR001676</td><td>Q-ty «15 Std + 3 XL» = 18, а sub-orders 9 + 6 + 12 = 27</td><td>Declared є лише в Cargo Lines; кількість замовлення — їхня сума, окремої колонки немає</td></tr>
+        <tr><td class="k">Вкладки списку</td><td>Cross-Dock 18 + Consolidation 6 + Drafts 1 = 25, а All = 27</td><td>Лічильник вкладки — total списку з тим самим фільтром (<code>OrderFilter</code>)</td></tr>
+        <tr><td class="k">FR001383</td><td>У тулбарі 📷 0/5, а в операціях 4, 2 і 1 фото</td><td>Лічильники — суми по операціях; тепер за ними справжні файли</td></tr>
+        <tr><td class="k">Статуси</td><td>Draft → Ready → In Progress → Closed; бейджі «Completed» і «Done»; «Next: Paid»</td><td>Чотири статуси лише про вантаж; оплата — Invoice; Alert — запис, а не статус</td></tr>
+        <tr><td class="k">Dashboard</td><td>В Active Orders — FR001672 зі статусом Completed</td><td>Active = Ready або In progress (<code>Order.ActiveStatuses</code>)</td></tr>
+        <tr><td class="k">Dashboard</td><td>«Completed (30d): 24 — same as last month» поруч із «+18% vs previous month»</td><td>Плитка і підсумок графіка — з одного SQL-запиту</td></tr>
+        <tr><td class="k">Pipeline</td><td>Нотатка про сім колонок</td><td>Чотири колонки — статуси, якими володіє домен (крок 11)</td></tr>
+        <tr><td class="k">Гроші</td><td>Усі суми — $1</td><td>Реалістичні ціни; ціна Supply line фіксується в момент додавання</td></tr>
+      </tbody>
+    </table>
+    <p class="ref" style="margin-top:14px">Повний розбір: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/mockup-analysis.md">docs/mockup-analysis.md</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0004-quantities-have-one-source.md">ADR 0004</a></p>
+  </div>
+</section>
+
+<!-- ============================== 03 База даних ============================== -->
+
+<section class="slide has-bignum" data-section="3">
+  <span class="bignum" aria-hidden="true">03</span>
+  <p class="label">03 · Схема</p>
+  <h2 class="title">Схема: агрегат і довідники навколо<span class="grad">uuid v7, timestamptz в UTC, enum як integer з CHECK</span></h2>
+  <div class="body er">
+    <div class="er-zone">
+      <p class="label">Агрегат Order · змінюється лише через Order</p>
+      <div class="er-grid">
+        <div class="er-col">
+          <div class="tbl tbl--root"><b>orders</b>
+            <span class="pk">id<i>uuid</i></span>
+            <span>number<i>DRAFT-003 → FR001684</i></span>
+            <span>type · status<i>int</i></span>
+            <span class="fk">company_id<i>→ companies</i></span>
+            <span class="fk">created_by_id<i>→ users</i></span>
+            <span class="fk">hub_id<i>→ hubs</i></span>
+            <span class="fk">transfer_hub_id<i>→ hubs</i></span>
+            <span class="fk">carrier_id<i>→ carriers</i></span>
+            <span>scheduled_at<i>timestamptz</i></span>
+            <span>submitted_at … completed_at</span>
+            <span>version<i>int, token</i></span>
+          </div>
+          <div class="tbl"><b>order_services</b>
+            <span class="fk">order_id<i>→ orders</i></span>
+            <span class="fk">service_id<i>→ services</i></span>
+          </div>
+        </div>
+        <div class="er-col">
+          <div class="tbl"><b>shipments</b>
+            <span class="fk">order_id<i>→ orders</i></span>
+            <span>position<i>FR001676-1</i></span>
+            <span>ref_number<i>Ref N</i></span>
+            <span>arrived_at · dock …</span>
+            <span>received_at<i>nullable</i></span>
+          </div>
+          <div class="tbl"><b>supply_lines</b>
+            <span class="fk">order_id<i>→ orders</i></span>
+            <span class="fk">supply_item_id<i>→ supply_items</i></span>
+            <span>quantity<i>&gt; 0</i></span>
+            <span>unit_price<i>знімок ціни</i></span>
+          </div>
+        </div>
+        <div class="er-col">
+          <div class="tbl"><b>cargo_lines</b>
+            <span class="fk">shipment_id<i>→ shipments</i></span>
+            <span>unit_type<i>UK з shipment</i></span>
+            <span>quantity<i>declared</i></span>
+          </div>
+          <div class="tbl"><b>alerts</b>
+            <span class="fk">shipment_id<i>→ shipments</i></span>
+            <span>type<i>QuantityDelta | MissingPhoto</i></span>
+            <span>raised_at</span>
+            <span>resolved_at<i>одна відкрита на тип</i></span>
+          </div>
+        </div>
+        <div class="er-col">
+          <div class="tbl"><b>operations</b>
+            <span class="fk">shipment_id<i>→ shipments</i></span>
+            <span>type · unit_type<i>int</i></span>
+            <span>quantity<i>&gt; 0</i></span>
+            <span>trailer_number</span>
+            <span>applied_at</span>
+            <span>photo_count<i>= рядкам photos</i></span>
+          </div>
+          <div class="tbl"><b>photos</b>
+            <span class="fk">operation_id<i>→ operations</i></span>
+            <span>storage_key<i>uploads/&lt;uuid&gt;</i></span>
+            <span>content_type · size_bytes</span>
+            <span>uploaded_at</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="er-zone er-zone--ref">
+      <p class="label">Довідники й Invoice</p>
+      <div class="er-grid er-grid--ref">
+        <div class="tbl"><b>companies</b><span>name</span><span>balance</span></div>
+        <div class="tbl"><b>users</b><span class="fk">company_id<i>→</i></span><span>role</span></div>
+        <div class="tbl"><b>hubs</b><span>name · region</span><span>time_zone<i>IANA</i></span></div>
+        <div class="tbl"><b>carriers</b><span>name</span><span>phone</span></div>
+        <div class="tbl"><b>services</b><span>name</span></div>
+        <div class="tbl"><b>supply_items</b><span>sku</span><span>unit_price</span></div>
+        <div class="tbl" style="grid-column:1 / -1"><b>invoices</b><span class="fk">order_id<i>→ orders</i></span><span>number · amount</span><span>issued_at · paid_at</span></div>
+      </div>
+      <p class="ref" style="margin-top:12px">Видалення: CASCADE для рядків, що лише описують замовлення; RESTRICT для журналу і довідників.</p>
+    </div>
+  </div>
+  <p class="ref" style="margin-top:12px">Блакитним — зовнішні ключі. Повна схема з усіма колонками й обмеженнями: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/er-diagram.md">docs/er-diagram.md</a></p>
+</section>
+
+<section class="slide" data-section="3">
+  <p class="label">03 · Чому так</p>
+  <h2 class="title">Кожна кількість має одне джерело<span class="grad">журнал операцій лише доповнюється, похідне рахується</span></h2>
+  <div class="body grid g-even-left">
+    <div class="grid g-2 cards-compact" style="gap:14px">
+      <div class="card"><h3>Журнал операцій append-only</h3><p class="muted small">Домен ніколи не змінює й не видаляє Operation. Actual і On stock — суми по журналу; RESTRICT не дає видалити замовлення з журналом.</p><p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0005-stored-state-not-event-sourcing.md">ADR 0005</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0004-quantities-have-one-source.md">0004</a></p></div>
+      <div class="card"><h3><code>version</code> на корені</h3><p class="muted small">Кожна зміна агрегату його збільшує, тож <code>UPDATE … WHERE version = &lt;прочитана&gt;</code> ловить будь-який конкурентний запис.</p><p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0013-optimistic-concurrency-on-order-version.md">ADR 0013</a></p></div>
+      <div class="card"><h3>Enum — integer з явним значенням</h3><p class="muted small"><code>Draft = 1</code>: збережене значення не залежить від порядку оголошення. CHECK будується з самого enum.</p><p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/engineering/code-rules.md#12-a-closed-set-is-an-enum">правило 12</a></p></div>
+      <div class="card"><h3>Номери з послідовності</h3><p class="muted small"><code>order_number_seq</code>: унікальні й зростаючі, без гонки двох submit. Не щільні — і це прийнято.</p><p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0016-official-order-numbers-from-a-sequence.md">ADR 0016</a></p></div>
+      <div class="card"><h3>Фото — рядок плюс blob</h3><p class="muted small">Байти — у приватному контейнері, у <code>photos</code> — ключ, тип і розмір. <code>photo_count</code> підтримує агрегат.</p><p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0017-photos-in-blob-storage-behind-the-api.md">ADR 0017</a></p></div>
+      <div class="card"><h3>Міграції на старті, лише адитивні</h3><p class="muted small">Нова ревізія мігрує, поки стара ще обслуговує запити. Тому rename чи drop — у два релізи. Наразі п'ять міграцій.</p><p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0007-migrations-applied-at-startup.md">ADR 0007</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/src/Freitty.Infrastructure/Persistence/Migrations">Migrations/</a></p></div>
+    </div>
+    <div class="stack">
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Infrastructure/Persistence/Configurations/ConfigurationExtensions.cs#L24-L37">src/Freitty.Infrastructure/Persistence/Configurations/ConfigurationExtensions.cs</a><span class="lines">рядки 24–37</span></figcaption><pre><code class="lang-cs">// The list is built from the enum, so a new member changes the constraint in the next migration. The naming
+// convention does not touch raw SQL: the column is given in snake_case.
+public static TableBuilder&lt;TEntity&gt; HasEnumCheckConstraint&lt;TEntity, TEnum&gt;(
+    this TableBuilder&lt;TEntity&gt; table,
+    string column)
+    where TEntity : class
+    where TEnum : struct, Enum
+{
+    string values = string.Join(
+        ", ",
+        Enum.GetValues&lt;TEnum&gt;().Select(value =&gt; Convert.ToInt32(value, CultureInfo.InvariantCulture)));
+    table.HasCheckConstraint($"ck_{table.Name}_{column}", $"{column} IN ({values})");
+    return table;
+}</code></pre></figure>
+      <p class="muted small">Так у міграції з'являється <code>ck_orders_status</code> зі списком <code>status IN (1, 2, 3, 4)</code>, і новий член enum змінює обмеження в наступній міграції.</p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="3">
+  <p class="label">03 · Індекси</p>
+  <h2 class="title">Індекси підібрані під запити списку<span class="grad">виміряно EXPLAIN (ANALYZE, BUFFERS) на 200 000 замовлень</span></h2>
+  <div class="body grid g-even-left">
+    <div class="stack">
+      <div class="table-wrap">
+        <table class="t">
+          <thead><tr><th>Запит</th><th>Індекс</th><th>До</th><th>Після</th></tr></thead>
+          <tbody>
+            <tr><td>Список за замовчуванням, перша сторінка</td><td class="num">ix_orders_company_id_<br>scheduled_at_id</td><td class="num">4,3 мс<br>2 391 буф. · Sort</td><td class="num win">0,04 мс<br>4 буф. · без Sort</td></tr>
+            <tr><td>Пошук за номером <code>FR0000150</code></td><td class="num">ix_orders_number_trgm<br>GIN, pg_trgm</td><td class="num">5,3 мс<br>2 414 буф.</td><td class="num win">2,5 мс<br>150 буф.</td></tr>
+            <tr><td>Пошук за Ref N <code>REF-0000224</code></td><td class="num">ix_shipments_ref_<br>number_trgm</td><td class="num">47,9 мс<br>5 423 буф.</td><td class="num win">5,8 мс<br>364 буф.</td></tr>
+            <tr><td>Pipeline: totals і перші картки</td><td class="num">ix_orders_company_id_<br>status_scheduled_at_id</td><td class="num">6,5 + 7,4 мс<br>2 385 + 4 779</td><td class="num win">0,66 + 1,0 мс<br>36 + 78</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="ref">50 компаній по 4 000 замовлень, 300 000 shipments, 590 000 операцій; міряється компанія 0, другий прогін, PostgreSQL 18.7. Таймінги плавають, форма плану й буфери — ні. <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/explain/README.md">docs/explain/</a></p>
+    </div>
+    <div class="stack">
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/explain/search-ref-number.md?plain=1#L12-L32">docs/explain/search-ref-number.md</a><span class="lines">рядки 12–32</span></figcaption><pre><code class="lang-sql">SELECT o.id
+FROM orders AS o
+WHERE o.company_id = '01a1ec12-b046-79b9-9bbd-4b3fc38576fe' AND o.id IN (
+    SELECT o0.id
+    FROM orders AS o0
+    WHERE o0.company_id = '01a1ec12-b046-79b9-9bbd-4b3fc38576fe' AND o0.number ILIKE '%REF-0000224%' ESCAPE '\'
+    UNION
+    SELECT s.order_id AS id
+    FROM orders AS o1
+    INNER JOIN shipments AS s ON o1.id = s.order_id
+    WHERE o1.company_id = '01a1ec12-b046-79b9-9bbd-4b3fc38576fe' AND s.ref_number ILIKE '%REF-0000224%' ESCAPE '\'
+…
+ORDER BY o.scheduled_at DESC, o.id DESC
+LIMIT 12 OFFSET 0</code></pre></figure>
+      <p class="muted small">Пошук — <code>UNION</code> гілок, кожну обслуговує свій trigram-індекс. Очевидна форма <code>number ILIKE … OR EXISTS (…)</code> обходить усі 4 000 замовлень компанії: 9,7 мс і 4 350 буферів проти 5,8 мс і 364.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 04 Реалізація ============================== -->
+
+<section class="slide has-bignum" data-section="4">
+  <span class="bignum" aria-hidden="true">04</span>
+  <p class="label">04 · Архітектура</p>
+  <h2 class="title">Чотири проєкти, межі тримає компілятор<span class="grad">Light Clean Architecture: шари є, церемонії немає</span></h2>
+  <div class="body grid g-even-left" style="align-items:start">
+    <figure class="diagram" role="img" aria-label="Freitty.Api посилається на Application та Infrastructure; Infrastructure посилається на Application; Application посилається на Domain; Domain не посилається ні на що.">
+      <svg viewBox="0 0 660 500" aria-hidden="true">
+        <rect class="d-box d-box--accent" x="10" y="10" width="640" height="104" rx="12"/>
+        <text class="d-t" x="30" y="42">Freitty.Api</text>
+        <text class="d-s" x="30" y="68">FastEndpoints · конвеєр команд · ProblemDetails</text>
+        <text class="d-s" x="30" y="90">OpenAPI + Scalar · статичні сторінки з wwwroot</text>
+        <rect class="d-box" x="10" y="184" width="300" height="150" rx="12"/>
+        <text class="d-t" x="30" y="216">Freitty.Application</text>
+        <text class="d-s" x="30" y="242">команди, запити, handlers</text>
+        <text class="d-s" x="30" y="264">валідатори · DTO · Mapperly</text>
+        <text class="d-s" x="30" y="286">IAppDbContext · IOrderNumbers</text>
+        <text class="d-s" x="30" y="308">IPhotoStorage · IDashboardReader</text>
+        <rect class="d-box" x="370" y="184" width="280" height="150" rx="12"/>
+        <text class="d-t" x="390" y="216">Freitty.Infrastructure</text>
+        <text class="d-s" x="390" y="242">EF Core DbContext, міграції</text>
+        <text class="d-s" x="390" y="264">конфігурації · seed</text>
+        <text class="d-s" x="390" y="286">Dapper SQL дашборда</text>
+        <text class="d-s" x="390" y="308">Azure Blob · nextval</text>
+        <rect class="d-box d-box--root" x="10" y="400" width="300" height="90" rx="12"/>
+        <text class="d-t" x="30" y="432">Freitty.Domain</text>
+        <text class="d-s" x="30" y="458">агрегат Order · enum · Result</text>
+        <text class="d-s" x="30" y="478">жодного пакета чи проєкту</text>
+        <path class="d-line d-line--mint" d="M160 114 V174"/><polygon class="d-head d-head--mint" points="154,172 166,172 160,184"/>
+        <path class="d-line d-line--mint" d="M510 114 V174"/><polygon class="d-head d-head--mint" points="504,172 516,172 510,184"/>
+        <path class="d-line d-line--mint" d="M370 259 H322"/><polygon class="d-head d-head--mint" points="324,253 324,265 312,259"/>
+        <path class="d-line d-line--mint" d="M160 334 V390"/><polygon class="d-head d-head--mint" points="154,388 166,388 160,400"/>
+        <text class="d-s d-s--sans" x="370" y="416">Стрілка — посилання на проєкт.</text>
+        <text class="d-s d-s--sans" x="370" y="440">Domain не бачить EF Core,</text>
+        <text class="d-s d-s--sans" x="370" y="462">Application — ні Npgsql,</text>
+        <text class="d-s d-s--sans" x="370" y="484">ні ASP.NET Core.</text>
+      </svg>
+    </figure>
+    <div class="stack">
+      <div class="card" style="padding:16px 20px">
+        <p class="label">Одна операція — одна папка</p>
+<pre class="ref" style="margin:0; font-size:13px; line-height:1.55; color:var(--muted)">Application/Orders/RecordOperation/
+  RecordOperationCommand.cs
+  RecordOperationCommandHandler.cs
+  RecordOperationCommandValidator.cs
+  RecordOperationMapper.cs · RecordedOperationDto.cs
+Api/Endpoints/Orders/RecordOperation/
+  RecordOperationEndpoint.cs · RecordOperationRequest.cs</pre>
+      </div>
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Api/Pipeline/CommandPipeline.cs#L10-L17">src/Freitty.Api/Pipeline/CommandPipeline.cs</a><span class="lines">рядки 10–17</span></figcaption><pre><code class="lang-cs">public static IServiceCollection AddCommandPipeline(this IServiceCollection services)
+{
+    services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+    services.AddCommandMiddleware(middleware =&gt; middleware.Register(
+        typeof(CommandLogging&lt;,&gt;),
+        typeof(CommandValidation&lt;,&gt;)));
+    return services;
+}</code></pre></figure>
+      <p class="muted small">Кожна помилка — <code>ProblemDetails</code>: <code>DomainError.Kind</code> стає 404 чи 409 і несе стабільний <code>code</code>; 400 від валідатора — у форматі FastEndpoints. <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0001-light-clean-architecture.md">ADR 0001</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0009-fastendpoints-and-its-command-bus.md">0009</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="4">
+  <p class="label">04 · Патерни</p>
+  <h2 class="title">Що взято з DDD, CQRS, Clean Architecture і REPR<span class="grad">і чого свідомо не взято</span></h2>
+  <div class="body table-wrap">
+    <table class="t">
+      <thead><tr><th style="width:14%">Підхід</th><th style="width:44%">Взято</th><th>Не взято — і чому</th></tr></thead>
+      <tbody>
+        <tr><td class="k">DDD</td><td>Агрегат <code>Order</code> з інваріантами й бізнес-методами; єдина мова (<code>CONTEXT.md</code>); фабричний метод <code>Order.StartDraft</code>; очікувані відмови — <code>Result</code> з кодом, а не винятки</td><td class="muted">Value object на кожне поле, доменні події з диспетчером, generic repository, strongly typed ids, кілька bounded contexts: споживача для них немає (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0003-order-is-one-aggregate.md">ADR 0003</a>)</td></tr>
+        <tr><td class="k">CQRS</td><td>Читання проєктуються одразу в DTO (<code>AsNoTracking</code>, <code>Select</code>, <code>AsSplitQuery</code>); агрегати дашборда — Dapper і SQL (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0011-dapper-for-dashboard-aggregates.md">ADR 0011</a>); запис — лише через агрегат</td><td class="muted">Окреме сховище для читання й event sourcing: схема для екранів однаково була б, але вже як похідна з власним rebuild (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0005-stored-state-not-event-sourcing.md">ADR 0005</a>)</td></tr>
+        <tr><td class="k">Clean Architecture</td><td>Напрямок залежностей, Domain без пакетів, порти для зовнішнього: <code>IAppDbContext</code>, <code>IOrderNumbers</code>, <code>IPhotoStorage</code></td><td class="muted">«Light»: без інтерфейсу на кожен клас, без repository поверх EF і без use-case інтерфейсів — вони сховали б SQL, який тут і треба показати (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0001-light-clean-architecture.md">ADR 0001</a>)</td></tr>
+        <tr><td class="k">REPR</td><td>Один клас endpoint на маршрут: request → command → response; маршрути — константи <code>ApiRoutes</code></td><td class="muted">Контролери, що збирають непов'язані дії в одному класі (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0009-fastendpoints-and-its-command-bus.md">ADR 0009</a>)</td></tr>
+        <tr><td class="k">Бібліотеки</td><td>Command bus FastEndpoints для конвеєра «логування → валідація → handler»; Mapperly (source-generated) на боці запису</td><td class="muted">MediatR і AutoMapper — комерційні ліцензії, а їхню роботу вже роблять наявні інструменти (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/plan.md">docs/plan.md</a> §3)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="slide" data-section="4">
+  <p class="label">04 · Процес 1 · Order List</p>
+  <h2 class="title">Фільтри, пошук і сторінки виконуються в SQL<span class="grad">один клас фільтра — для списку, лічильників вкладок, експорту й дошки</span></h2>
+  <div class="body grid g-2">
+    <figure class="code"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Application/Orders/OrderFilter.cs#L19-L43">src/Freitty.Application/Orders/OrderFilter.cs</a><span class="lines">рядки 19–43</span></figcaption><pre><code class="lang-cs">IQueryable&lt;Order&gt; filtered = orders.Where(order =&gt; order.CompanyId == companyId);
+
+if (hubId is { } hub)
+{
+    filtered = filtered.Where(order =&gt; order.HubId == hub);
+}
+…
+if (status is { } orderStatus)
+{
+    filtered = filtered.Where(order =&gt; order.Status == orderStatus);
+}
+
+if (!string.IsNullOrWhiteSpace(searchText))
+{
+    IQueryable&lt;Guid&gt; matchingIds = search.MatchingOrderIds(companyId, searchText.Trim());
+    filtered = filtered.Where(order =&gt; matchingIds.Contains(order.Id));
+}
+
+return filtered;</code></pre></figure>
+    <div class="stack">
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Application/Orders/ListOrders/ListOrdersQueryHandler.cs#L30-L37">src/Freitty.Application/Orders/ListOrders/ListOrdersQueryHandler.cs</a><span class="lines">рядки 30–37</span></figcaption><pre><code class="lang-cs">int total = await orders.CountAsync(ct);
+List&lt;Guid&gt; pageIds = await OrderListSort.Apply(orders)
+    .Skip((query.Page - 1) * query.PageSize)
+    .Take(query.PageSize)
+    .Select(order =&gt; order.Id)
+    .ToListAsync(ct);
+
+IReadOnlyList&lt;OrderCardDto&gt; cards = await cardReader.ReadAsync(user.CompanyId, pageIds, ct);</code></pre></figure>
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/explain/list-default.md?plain=1#L11-L15">docs/explain/list-default.md</a><span class="lines">рядки 11–15</span></figcaption><pre><code class="lang-sql">SELECT o.id
+FROM orders AS o
+WHERE o.company_id = '01a1ec12-b046-79b9-9bbd-4b3fc38576fe'
+ORDER BY o.scheduled_at DESC, o.id DESC
+LIMIT 12 OFFSET 0</code></pre></figure>
+      <ul class="list small">
+        <li>Спершу id сторінки й total, потім картки лише цих id. Компанія — обов'язковий аргумент фільтра, тож жоден запит її не пропустить.</li>
+        <li>Сортування закінчується на <code>id</code>: сторінки не повторюють і не гублять рядків.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="4">
+  <p class="label">04 · Процес 2 · Запис операції</p>
+  <h2 class="title">Версія, агрегат, одна транзакція<span class="grad">з двох одночасних записів виграє рівно один, другий отримує 409</span></h2>
+  <ol class="flowline" style="margin-top:24px">
+    <li><strong>POST</strong>…/orders/{number}/operations</li>
+    <li><strong>Endpoint</strong>request → command</li>
+    <li><strong>CommandLogging</strong>один рядок на команду</li>
+    <li><strong>CommandValidation</strong>FluentValidation → 400</li>
+    <li><strong>Handler</strong>версія → агрегат</li>
+    <li><strong>SaveChanges</strong>WHERE version = …</li>
+    <li><strong>201 / 409</strong>ProblemDetails з code</li>
+  </ol>
+  <div class="body grid g-even-left" style="margin-top:22px">
+    <figure class="code"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Application/Orders/RecordOperation/RecordOperationCommandHandler.cs#L17-L47">src/Freitty.Application/Orders/RecordOperation/RecordOperationCommandHandler.cs</a><span class="lines">рядки 17–47</span></figcaption><pre><code class="lang-cs">Order? order = await LoadOrderAsync(user.CompanyId, command.OrderNumber, ct);
+…
+if (order.Version != command.ExpectedVersion)
+{
+    return OrderRequestErrors.VersionConflict(order.Number, order.Version, command.ExpectedVersion);
+}
+…
+Result&lt;Operation&gt; operationResult = order.RecordOperation(
+    shipment.Id,
+    command.ToNewOperation(),
+    clock.GetUtcNow());
+…
+if (!await db.TrySaveChangesAsync(ct))
+{
+    return OrderRequestErrors.ChangedConcurrently(order.Number);
+}</code></pre></figure>
+    <div class="stack">
+<figure class="code code--sm"><figcaption><span>409 Conflict · application/problem+json</span><span class="lines">форма відповіді</span></figcaption><pre><code class="lang-json">{
+  "status": 409,
+  "detail": "Order FR001383 was changed since you loaded it (version 21, expected 20). Reload and try again.",
+  "instance": "/api/v1/orders/FR001383/operations",
+  "code": "order.version_conflict",
+  …
+}</code></pre></figure>
+      <ul class="list small">
+        <li><code>expectedVersion</code> береться з detail і звіряється ще до агрегату: застаріла сторінка, подвійний клік і повтор не запишуться двічі.</li>
+        <li>Якщо інший запис устиг між читанням і збереженням, <code>UPDATE</code> не знаходить рядка — 409.</li>
+        <li>Друга гонка — два однакові відкриті Alert — упирається в частковий унікальний індекс і теж стає 409.</li>
+        <li><code>READ COMMITTED</code>, без повторів усередині запиту. Тест: <code>OfTwoSimultaneousRequestsOneIsRecorded</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="4">
+  <p class="label">04 · Процес 3 · Submit з Pipeline</p>
+  <h2 class="title">Чернетку в Ready переводить домен<span class="grad">«чи можна» → номер із послідовності → збереження з версією</span></h2>
+  <div class="body grid g-even-left">
+    <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Application/Orders/SubmitOrder/SubmitOrderCommandHandler.cs#L33-L50">src/Freitty.Application/Orders/SubmitOrder/SubmitOrderCommandHandler.cs</a><span class="lines">рядки 33–50</span></figcaption><pre><code class="lang-cs">Result check = order.CanSubmit();
+if (check.IsFailure)
+{
+    return check.Error;
+}
+
+string draftNumber = order.Number;
+string officialNumber = await orderNumbers.NextAsync(ct);
+Result submitResult = order.Submit(officialNumber, clock.GetUtcNow());
+…
+if (!await db.TrySaveChangesAsync(ct))
+{
+    return OrderRequestErrors.ChangedConcurrently(draftNumber);
+}</code></pre></figure>
+    <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Domain/Orders/Order.cs#L241-L256">src/Freitty.Domain/Orders/Order.cs</a><span class="lines">рядки 241–256</span></figcaption><pre><code class="lang-cs">// Asked before an official number is taken, so a refused submit uses none; Submit asks it again.
+public Result CanSubmit()
+{
+    if (Status != OrderStatus.Draft)
+    {
+        return OrderErrors.NotDraft(Number, Status);
+    }
+
+    List&lt;string&gt; missingParts = MissingForSubmit();
+    if (missingParts.Count &gt; 0)
+    {
+        return OrderErrors.NotReadyToSubmit(Number, missingParts);
+    }
+
+    return Result.Success();
+}</code></pre></figure>
+  </div>
+  <div class="grid g-3" style="margin-top:20px; gap:20px">
+    <p class="muted small"><code>IOrderNumbers.NextAsync</code> — порт; Infrastructure відповідає <code>nextval('order_number_seq')</code>, тож два submit не отримають один номер.</p>
+    <p class="muted small">Відмовлений submit номера не бере. Розрив лишає лише той, що програв гонку після <code>nextval</code>: номери унікальні, але не щільні.</p>
+    <p class="muted small">На демо <code>DRAFT-003</code> отримує 409 з переліком того, чого бракує, а <code>DRAFT-004</code> переходить у Ready з номером <code>FR</code> + шість цифр. <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/steps/11-pipeline.md">крок 11</a></p>
+  </div>
+</section>
+
+<section class="slide" data-section="4">
+  <p class="label">04 · Процес 4 · Фото операції</p>
+  <h2 class="title">Завантаження — це два записи без спільної транзакції<span class="grad">тому порядок перевірок і прибирання продумані наперед</span></h2>
+  <div class="body grid g-even-left">
+    <figure class="code"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Application/Orders/AttachPhotos/AttachPhotosCommandHandler.cs#L39-L56">src/Freitty.Application/Orders/AttachPhotos/AttachPhotosCommandHandler.cs</a><span class="lines">рядки 39–56</span></figcaption><pre><code class="lang-cs">List&lt;NewPhoto&gt; newPhotos = await NameUploadsAsync(command.Files, ct);
+Result&lt;PhotoAttachment&gt; attachResult = order.AttachPhotos(command.OperationId, newPhotos, clock.GetUtcNow());
+if (attachResult.IsFailure)
+{
+    return attachResult.Error;
+}
+…
+if (await CountUploadedPhotosAsync(ct) + command.Files.Count &gt; MaxUploadedPhotoCount)
+{
+    return PhotoRequestErrors.UploadLimit(MaxUploadedPhotoCount);
+}
+
+if (!await StoreAndSaveAsync(command.Files, newPhotos, ct))
+{
+    return OrderRequestErrors.ChangedConcurrently(order.Number);
+}
+
+return attachResult.Value.ToDto(order.Version);</code></pre></figure>
+    <div class="stack">
+      <ol class="list small">
+        <li>До handler: ≤ 4 завантаження одночасно (429); вимикач завантажень (503).</li>
+        <li>Валідатор: 1–5 файлів до 5 MB; JPEG, PNG чи WebP — за сигнатурою (400).</li>
+        <li>Замовлення (404), версія (409); агрегат: операція (404), активне замовлення і ≤ 10 фото (409); межа демо — 200 фото (409).</li>
+        <li>Blob <code>uploads/&lt;uuid&gt;</code> пишеться раніше за рядок; якщо збереження не вдалося — видаляється.</li>
+      </ol>
+      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Application/Orders/AttachPhotos/AttachPhotosCommandHandler.cs#L122-L128">src/Freitty.Application/Orders/AttachPhotos/AttachPhotosCommandHandler.cs</a><span class="lines">рядки 122–128</span></figcaption><pre><code class="lang-cs">finally
+{
+    if (!isSaved)
+    {
+        await photoStorage.DeleteAsync(newPhotos.Select(photo =&gt; photo.StorageKey), CancellationToken.None);
+    }
+}</code></pre></figure>
+      <p class="muted small">Missing photo alert агрегат закриває сам, коли в Shipment не лишилося Unloading чи Disposal без фото. <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0017-photos-in-blob-storage-behind-the-api.md">ADR 0017</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="4">
+  <p class="label">04 · Тести</p>
+  <h2 class="title">643 тести, більшість — на справжньому PostgreSQL<span class="grad">через HTTP, а назви тестів читаються як поведінка</span></h2>
+  <div class="body grid g-even-left">
+    <div class="stack" style="gap:22px">
+      <div class="stats">
+        <div><span class="stat__n">178</span><span class="stat__l">юніт-тестів домену:<br>без бази, без хоста</span></div>
+        <div><span class="stat__n">465</span><span class="stat__l">інтеграційних: HTTP,<br>PostgreSQL 18, Azurite</span></div>
+      </div>
+      <ul class="list">
+        <li><code>WebApplicationFactory</code> і Testcontainers: один контейнер PostgreSQL і один Azurite на прогін; кожен тест створює власні дані.</li>
+        <li>Час фіксований через <code>FakeTimeProvider</code> — і «сьогодні», і таймер перебудови даних.</li>
+        <li>Гонку відтворює <code>CompetingSaveInterceptor</code>: конкурентний запис комітиться всередині збереження запиту.</li>
+        <li>Без InMemory і SQLite: <code>ILIKE</code>, <code>pg_trgm</code>, обмеження й транзакції перевіряються на тій базі, на якій усе працює.</li>
+        <li>CI запускає ті самі тести, а потім ще й увесь Compose-стек.</li>
+      </ul>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/tests">tests/</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0002-integration-tests-on-real-postgres.md">ADR 0002</a></p>
+    </div>
+    <div class="card" style="padding:18px 22px">
+      <p class="label">Уся поведінка submit — назвами тестів</p>
+      <ul class="list names">
+        <li>SubmitMovesTheDraftToReadyUnderAnOfficialNumber</li>
+        <li>SubmitIsStampedWithTheClock</li>
+        <li>DraftNumberIsMatchedCaseInsensitively</li>
+        <li>LaterSubmitGetsAHigherNumber</li>
+        <li>DraftWithoutWhatSubmitNeedsIsAConflictListingIt</li>
+        <li>SubmittedOrderIsAConflictAsNotADraft</li>
+        <li>StaleVersionIsAConflictNamingBothVersions</li>
+        <li>UnknownOrderIsNotFound</li>
+        <li>DraftOfAnotherCompanyIsNotFound</li>
+        <li>MissingOrInvalidVersionIsABadRequestNamingIt</li>
+        <li>BodyThatIsNotAJsonObjectIsABadRequestOfTheWholeBody</li>
+      </ul>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Api.IntegrationTests/Orders/SubmitOrderTests.cs">SubmitOrderTests.cs</a> · гонки: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Api.IntegrationTests/Orders/SubmitOrderRaceTests.cs">SubmitOrderRaceTests.cs</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 05 Результат ============================== -->
+
+<section class="slide has-bignum" data-section="5">
+  <span class="bignum" aria-hidden="true">05</span>
+  <p class="label">05 · Стек</p>
+  <h2 class="title">Стек: кожна бібліотека з причиною<span class="grad">поточні стабільні версії з Directory.Packages.props</span></h2>
+  <div class="body table-wrap">
+    <table class="t t--compact">
+      <thead><tr><th style="width:18%">Шар</th><th style="width:44%">Що і яка версія</th><th>Навіщо</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Платформа</td><td class="mono">.NET SDK 10.0.100 · ASP.NET Core 10</td><td class="muted">Ціль завдання; Docker-образи <code>dotnet/sdk:10.0</code> і <code>aspnet:10.0</code></td></tr>
+        <tr><td class="k">API</td><td class="mono">FastEndpoints 9.0.0 · FastEndpoints.OpenApi 9.0.0 · Scalar.AspNetCore 3.0.1</td><td class="muted">REPR, command bus з middleware, OpenAPI і сторінка API reference</td></tr>
+        <tr><td class="k">Валідація, мапінг</td><td class="mono">FluentValidation 12.2.0 · Riok.Mapperly 4.3.1</td><td class="muted">Валідатор на кожну команду; мапінг генерується під час збірки</td></tr>
+        <tr><td class="k">Дані</td><td class="mono">EF Core 10.0.15 · Npgsql EF Core 10.0.3 · EFCore.NamingConventions 10.0.1 · Dapper 2.1.89</td><td class="muted">EF — для рядків і записів, Dapper — для агрегатів дашборда</td></tr>
+        <tr><td class="k">База, файли</td><td class="mono">PostgreSQL 18 (postgres:18-alpine) · Azure.Storage.Blobs 12.30.1 · Azurite 3.38.0</td><td class="muted">pg_trgm, sequence, CHECK; та сама версія локально, у тестах і в Azure</td></tr>
+        <tr><td class="k">Логи</td><td class="mono">Serilog.AspNetCore 10.0.0</td><td class="muted">Один рядок на запит і на команду</td></tr>
+        <tr><td class="k">Тести</td><td class="mono">xUnit v3 4.0.3 · Microsoft.Testing.Platform · Testcontainers 4.17.0 · TimeProvider.Testing 11.0.0</td><td class="muted">Справжній PostgreSQL і Azurite; фіксований час</td></tr>
+        <tr><td class="k">Frontend</td><td class="mono">HTML макета + ванільні ES-модулі</td><td class="muted">Верстка вже готова; без фреймворку і без збірки (<a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0012-static-pages-served-by-the-api.md">ADR 0012</a>)</td></tr>
+        <tr><td class="k">Доставка</td><td class="mono">Docker Compose · GitHub Actions · Azure</td><td class="muted">Один <code>docker compose up</code> локально, CD у Container Apps</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="slide" data-section="5">
+  <p class="label">05 · Деплой і CD</p>
+  <h2 class="title">У прод іде саме той образ, що пройшов перевірку<span class="grad">трафік переходить лише після того, як нова ревізія пройшла probes</span></h2>
+  <div class="body stack" style="gap:16px">
+    <figure class="diagram d-big" style="max-width:1300px" role="img" aria-label="Push у main запускає два jobs: build-test і stack. Stack піднімає Compose, перевіряє готовність і пушить той самий образ у реєстр. Deploy оновлює container app за digest; нова ревізія стартує поруч зі старою і отримує трафік, коли проходить probes; інакше її деактивують, а стара обслуговує далі.">
+      <svg viewBox="0 0 1424 296" aria-hidden="true">
+        <rect class="d-box d-box--accent" x="0" y="80" width="160" height="70" rx="12"/>
+        <text class="d-t" x="80" y="110" text-anchor="middle">push у main</text>
+        <text class="d-s" x="80" y="134" text-anchor="middle">GitHub Actions</text>
+        <rect class="d-box" x="210" y="0" width="330" height="100" rx="12"/>
+        <text class="d-t" x="230" y="30">build-test</text>
+        <text class="d-s" x="230" y="56">dotnet format --verify-no-changes</text>
+        <text class="d-s" x="230" y="78">build -c Release · test (643)</text>
+        <rect class="d-box" x="210" y="116" width="330" height="130" rx="12"/>
+        <text class="d-t" x="230" y="146">stack</text>
+        <text class="d-s" x="230" y="172">docker compose up --wait</text>
+        <text class="d-s" x="230" y="194">curl /health/ready</text>
+        <text class="d-s" x="230" y="216">OIDC → push :sha → image@sha256</text>
+        <path class="d-line" d="M160 115 H185 V50 H198 M185 115 V181 H198"/>
+        <polygon class="d-head" points="198,44 198,56 210,50"/><polygon class="d-head" points="198,175 198,187 210,181"/>
+        <rect class="d-box d-box--root" x="600" y="36" width="330" height="164" rx="12"/>
+        <text class="d-t" x="620" y="66">deploy · після обох jobs</text>
+        <text class="d-s" x="620" y="94">az containerapp update</text>
+        <text class="d-s" x="620" y="116">  --image &lt;digest&gt;</text>
+        <text class="d-s" x="620" y="144">чекає latestReadyRevision</text>
+        <text class="d-s" x="620" y="166">curl /health/ready, /dashboard</text>
+        <path class="d-line d-line--mint" d="M540 50 H570 V118 H588 M540 181 H570 V118"/>
+        <polygon class="d-head d-head--mint" points="588,112 588,124 600,118"/>
+        <text class="d-l" x="980" y="14">AZURE CONTAINER APPS · ОДНА РЕПЛІКА</text>
+        <rect class="d-box" x="980" y="26" width="444" height="62" rx="12"/>
+        <text class="d-t d-t--sm" x="1000" y="52">стара ревізія</text>
+        <text class="d-s" x="1000" y="74">обслуговує весь трафік, доки нова не готова</text>
+        <rect class="d-box d-box--accent" x="980" y="104" width="444" height="76" rx="12"/>
+        <text class="d-t d-t--sm" x="1000" y="130">нова ревізія поруч</text>
+        <text class="d-s" x="1000" y="152">storage → міграції → seed</text>
+        <text class="d-s" x="1000" y="172">startup · liveness · readiness probes</text>
+        <path class="d-line d-line--mint" d="M930 118 H956 V142 H968"/><polygon class="d-head d-head--mint" points="968,136 968,148 980,142"/>
+        <rect class="d-box d-box--root" x="980" y="204" width="212" height="88" rx="12"/>
+        <text class="d-t d-t--sm" x="1000" y="232">probes пройдено</text>
+        <text class="d-s" x="1000" y="256">трафік переходить</text>
+        <text class="d-s" x="1000" y="276">на нову ревізію</text>
+        <rect class="d-box d-box--warn" x="1212" y="204" width="212" height="88" rx="12"/>
+        <text class="d-w" x="1230" y="232">не ready за 10 хв</text>
+        <text class="d-s" x="1230" y="256">логи → deactivate;</text>
+        <text class="d-s" x="1230" y="276">стара працює далі</text>
+        <path class="d-line d-line--mint" d="M1086 180 V196"/><polygon class="d-head d-head--mint" points="1080,194 1092,194 1086,204"/>
+        <path class="d-line d-line--warn" d="M1318 180 V196"/><polygon class="d-head d-head--warn" points="1312,194 1324,194 1318,204"/>
+      </svg>
+    </figure>
+    <div class="grid g-3" style="gap:20px">
+      <div class="card" style="padding:16px 20px">
+        <p class="label">Ресурси Azure · North Europe</p>
+        <ul class="list small" style="gap:5px">
+          <li>Container Apps: 1 репліка, завжди ввімкнена, 0,25 vCPU, 0,5 GiB</li>
+          <li>PostgreSQL 18 flexible server, B1ms, TLS із перевіркою</li>
+          <li>Container Registry Basic, <code>AcrPull</code> через managed identity</li>
+          <li>Storage account, приватний контейнер <code>photos</code></li>
+          <li>Log Analytics з денним лімітом</li>
+        </ul>
+      </div>
+      <div class="card" style="padding:16px 20px">
+        <p class="label">Без збереженого облікового запису</p>
+        <p class="small muted">GitHub входить в Azure через OIDC: federated credential лише для <code>main</code>, ролі <code>AcrPush</code> і <code>Contributor</code> лише на одному container app. У GitHub — тільки змінні, жодного секрету.</p>
+        <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/.github/workflows/ci.yml">ci.yml</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/deploy/containerapp.yaml">containerapp.yaml</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0014-azure-container-apps-and-managed-postgresql.md">ADR 0014</a></p>
+      </div>
+      <div class="card card--accent" style="padding:16px 20px">
+        <p class="label">Виміряно на живому застосунку</p>
+        <p class="small">Ревізія, що не може стартувати, за п'ять хвилин спроб не отримала трафіку. Здорова перейняла його без жодного збійного запиту (один запит на секунду).</p>
+        <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/deployment.md">docs/deployment.md</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="5">
+  <p class="label">05 · Демо · Dashboard</p>
+  <h2 class="title">Dashboard: плитки й графік з одного SQL<span class="grad">періоди нарізаються в часовому поясі звітності</span></h2>
+  <div class="body shot-layout">
+    <figure class="shot" data-file="img/dashboard.png"><img src="img/dashboard.png" alt="Dashboard кабінету: чотири плитки, активні замовлення і графік активності" width="1492" height="812"></figure>
+    <div class="stack">
+      <ul class="list">
+        <li>Active, Completed за 30 днів, Need attention: кожна цифра — з одного запиту, тож плитка й підсумок графіка не суперечать одне одному.</li>
+        <li>Графік: Day, CW, Month, Quarter. Вісь генерується в поясі <code>America/Toronto</code>, тож порожні періоди — рядки з нулями.</li>
+        <li>Need attention і бейдж Orders рахуються за одним визначенням.</li>
+      </ul>
+      <p class="ref"><a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/">Відкрити Dashboard</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Infrastructure/Dashboard/DashboardSql.cs">DashboardSql.cs</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="5">
+  <p class="label">05 · Демо · Order List</p>
+  <h2 class="title">Order List як дошка: колонка на кожен статус<span class="grad">чернетку можна перетягнути в Ready</span></h2>
+  <div class="body shot-layout">
+    <figure class="shot" data-file="img/orders-pipeline.png"><img src="img/orders-pipeline.png" alt="Order List у вигляді Pipeline: чотири колонки статусів з картками замовлень" width="1492" height="812"></figure>
+    <div class="stack">
+      <ul class="list">
+        <li>Totals рахує <code>GROUP BY</code>, перші п'ять карток кожного статусу добирає віконна функція — з одного індексу.</li>
+        <li>Вкладки, Hub, Date, Status і пошук працюють так само, як у вигляді Cards і Table.</li>
+        <li><code>DRAFT-004</code> перетягується (або кнопка Submit) і отримує офіційний номер. <code>DRAFT-003</code> повертає перелік того, чого бракує.</li>
+      </ul>
+      <p class="ref"><a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/orders.html?view=pipeline">Відкрити Pipeline</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/explain/pipeline.md">pipeline.md</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="5">
+  <p class="label">05 · Демо · Order Detail</p>
+  <h2 class="title">Order Detail: усе про замовлення однією відповіддю<span class="grad">і з цієї ж сторінки записується операція</span></h2>
+  <div class="body shot-layout">
+    <figure class="shot" data-file="img/order-detail.png"><img src="img/order-detail.png" alt="Сторінка замовлення FR001383: Shipment, Declared і Actual, журнал операцій, supplies" width="1492" height="812"></figure>
+    <div class="stack">
+      <ul class="list">
+        <li>Shipment з Arrival і Dock, Declared проти Actual з дельтою, журнал операцій, supplies, services, invoices.</li>
+        <li>Читається split queries, які не завантажують жодної сутності, тож добутку двох колекцій немає.</li>
+        <li>Відповідь несе <code>version</code>, який форма запису операції відправляє назад.</li>
+      </ul>
+      <p class="ref"><a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/order.html?n=FR001383">Відкрити FR001383</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/steps/05-order-detail.md">крок 5</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="5">
+  <p class="label">05 · Демо · Фото</p>
+  <h2 class="title">Галерея операції: файли з blob storage через API<span class="grad">завантаження фото закриває Missing photo alert</span></h2>
+  <div class="body shot-layout">
+    <figure class="shot" data-file="img/photo-gallery.png"><img src="img/photo-gallery.png" alt="Діалог галереї фото операції з мініатюрами і кнопкою Add photos" width="1492" height="812"></figure>
+    <div class="stack">
+      <ul class="list">
+        <li>Контейнер приватний, байти віддає API: фото кешується на добу як <code>immutable</code>, а <code>Cross-Origin-Resource-Policy: same-origin</code> не дає вбудувати його на іншому сайті.</li>
+        <li>Засіяні фото — рядки, що вказують на кілька згенерованих зображень-заглушок, тож лічильники й галереї збігаються.</li>
+        <li>Завантажене відвідувачем видаляється при наступній перебудові даних.</li>
+      </ul>
+      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/steps/12-photos.md">крок 12</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0017-photos-in-blob-storage-behind-the-api.md">ADR 0017</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="slide" data-section="5">
+  <p class="label">05 · Межі й наступні кроки</p>
+  <h2 class="title">Що свідомо обмежено — і що робив би далі<span class="grad">кожне обмеження записане в наслідках свого ADR</span></h2>
+  <div class="body grid g-2">
+    <div class="card">
+      <p class="label">Відомі обмеження</p>
+      <ul class="list small">
+        <li>Один екземпляр: шлюз перебудови даних, послідовність номерів і годинник розраховані на один процес (ADR 0015, 0013).</li>
+        <li>Входу немає: кожен відвідувач — перший Admin засіяної компанії.</li>
+        <li>Демо-дані перебудовуються на кожному старті й щоночі за Торонто: записане відвідувачем живе до наступного дня.</li>
+        <li>Ліміти спільні для всіх: 4 завантаження одночасно, 120 переглядів фото на хвилину, 200 фото загалом. Файл перевіряється лише за сигнатурою (ADR 0017).</li>
+        <li>Помилковий Unloading не скасувати: reversal-операції в журналі ще немає (ADR 0005).</li>
+        <li>Сервер БД доступний з ресурсів Azure; захищають лише пароль і TLS (ADR 0014).</li>
+        <li>Перший запит після старту — близько 2,6 с через JIT на 0,25 vCPU.</li>
+      </ul>
+    </div>
+    <div class="card card--accent">
+      <p class="label">Що далі</p>
+      <ol class="list">
+        <li><strong>Reversal-операція в журналі</strong> — новий рядок, що посилається на скасовану операцію. Перше, що потрібно до реального використання; адитивна міграція.</li>
+        <li><strong>Вхід і компанія з токена.</strong> Запити обмежені компанією з першого дня; ліміти стануть per-user.</li>
+        <li><strong>Managed identity</strong> для Blob Storage і PostgreSQL замість рядка підключення й пароля.</li>
+        <li><strong>Кілька екземплярів:</strong> міграції бандлом у CD, перебудова даних, узгоджена через базу, idempotency key на запис; keyset-пагінація для великих списків.</li>
+      </ol>
+      <p class="ref" style="margin-top:16px"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/docs/adr">docs/adr/</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api">репозиторій</a> · <a href="https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/">живе демо</a></p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="controls" role="group" aria-label="Навігація слайдами">
+  <button type="button" id="prev" aria-label="Попередній слайд">‹</button>
+  <button type="button" id="next" aria-label="Наступний слайд">›</button>
+  <button type="button" id="open-overview" aria-label="Огляд усіх слайдів (O)">▦</button>
+</div>
+
+<div id="overview" class="overview" hidden>
+  <div class="overview__head">
+    <h2 class="label">Усі слайди</h2>
+    <button type="button" data-close>Закрити (Esc)</button>
+  </div>
+  <nav class="overview__grid" aria-label="Слайди"></nav>
+</div>
+
+<script src="deck.js"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+name: Pages
+
+# Publishes the slide deck. GitHub Pages must be enabled for the repository with the source
+# "GitHub Actions"; until then the job is skipped and the run stays green.
+on:
+  push:
+    branches: [main]
+    paths:
+      - presentation/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event.repository.has_pages
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: presentation
+      - id: deployment
+        uses: actions/deploy-pages@v5

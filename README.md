@@ -3,7 +3,7 @@
 The backend behind a logistics client cabinet — a dashboard, an order list and an order page —
 on .NET 10, FastEndpoints, EF Core and PostgreSQL. A test assignment for a backend role.
 
-[**Live demo**](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/) · [API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/) · [Where to start reading](#where-to-start-reading) ·
+[**Live demo**](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/) · [Presentation (in Ukrainian)](https://bohdan-ivaniichuk.github.io/freitty-cabinet-api/) · [API reference](https://freitty-cabinet.purplemoss-8046cc4d.northeurope.azurecontainerapps.io/scalar/) · [Where to start reading](#where-to-start-reading) ·
 [How it is built](#how-it-is-built) · [Decisions](docs/adr) · [Known limits](#known-limits) ·
 [Run locally](#run-locally)
 
