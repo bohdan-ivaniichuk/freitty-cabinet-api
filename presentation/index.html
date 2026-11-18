@@ -110,36 +110,6 @@
 </section>
 
 <section class="slide" data-section="1">
-  <p class="label">01 · Процес</p>
-  <h2 class="title">Спершу план і правила, потім дванадцять кроків<span class="grad">кожен: специфікація → код → незалежне рев'ю → моя перевірка → коміт</span></h2>
-  <div class="body stack" style="gap:26px">
-    <div class="stats">
-      <div><span class="stat__n">12</span><span class="stat__l">кроків плану</span></div>
-      <div><span class="stat__n">17</span><span class="stat__l">ADR</span></div>
-      <div><span class="stat__n">19</span><span class="stat__l">правил коду</span></div>
-      <div><span class="stat__n">643</span><span class="stat__l">тести</span></div>
-      <div><span class="stat__n">5</span><span class="stat__l">міграцій</span></div>
-      <div><span class="stat__n">13</span><span class="stat__l">endpoints</span></div>
-    </div>
-    <ol class="timeline">
-      <li><span class="n">01</span><span>Скелет: solution, health checks, Docker Compose, CI</span></li>
-      <li><span class="n">02</span><span>Домен: агрегат <code>Order</code>, схема, перша міграція</span></li>
-      <li><span class="n">03</span><span>Демо-дані, побудовані через агрегат</span></li>
-      <li><span class="n">04</span><span>Order List: фільтри, пошук, сторінки, індекси, конвеєр команд</span></li>
-      <li><span class="n">05</span><span>Order Detail: одна відповідь, split queries</span></li>
-      <li><span class="n">06</span><span>Dashboard: агрегати на Dapper і SQL</span></li>
-      <li><span class="n">07</span><span>Три сторінки з тієї ж верстки, ванільний JS</span></li>
-      <li><span class="n">08</span><span>Запис операції з optimistic concurrency</span></li>
-      <li><span class="n">09</span><span>Azure Container Apps і CD</span></li>
-      <li><span class="n">10</span><span>Документація, README і ця презентація</span></li>
-      <li><span class="n">11</span><span>Pipeline-дошка і submit чернетки</span></li>
-      <li><span class="n">12</span><span>Фото операцій у blob storage</span></li>
-    </ol>
-    <p class="ref">План: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/plan.md">docs/plan.md</a> · специфікації: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/docs/steps">docs/steps/</a> · рішення: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/docs/adr">docs/adr/</a> · після кроку 8 — окреме рев'ю кроків 4–8, прочитаних разом: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/9769ecf">9769ecf</a></p>
-  </div>
-</section>
-
-<section class="slide" data-section="1">
   <p class="label">01 · Робота з AI</p>
   <h2 class="title">Рішення ухвалював я, рутину делегував<span class="grad">а правила записані в репозиторії, не в голові</span></h2>
   <div class="body grid g-3">
@@ -172,32 +142,6 @@
     </div>
   </div>
   <p class="ref" style="margin-top:22px"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/CLAUDE.md">CLAUDE.md</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/.claude/hooks">.claude/hooks</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/.claude/agents">.claude/agents</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/engineering/code-rules.md">docs/engineering/code-rules.md</a></p>
-</section>
-
-<section class="slide" data-section="1">
-  <p class="label">01 · Робота з AI</p>
-  <h2 class="title">Що змінилося після перевірок<span class="grad">приклади, які видно в історії репозиторію</span></h2>
-  <div class="body stack" style="gap:18px">
-    <div class="table-wrap">
-      <table class="t t--compact">
-        <thead><tr><th style="width:33%">Що виявилося</th><th>Що стало</th><th style="width:19%">Де видно</th></tr></thead>
-        <tbody>
-          <tr><td>Кроки 4–8 по одному пройшли рев'ю, але разом робили одне й те саме по-різному</td><td>Назва каже, що це за значення: <code>hubId</code>, не <code>hub</code>; <code>search</code>, не <code>q</code>; <code>hasOpenAlerts</code>, <code>photoCount</code>. Записано як правило коду 9</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/9769ecf">9769ecf</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/engineering/code-rules.md#9-a-name-says-what-the-value-is">правило 9</a></td></tr>
-          <tr><td>Тести писали URL вручну, окремо від маршрутів endpoint</td><td>Константи в <code>ApiRoutes</code>; тести будують URL з них, тож перейменований маршрут перейменовується і в тестах</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Api/Endpoints/ApiRoutes.cs">ApiRoutes.cs</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Api.IntegrationTests/Support/ApiUrls.cs">ApiUrls.cs</a></td></tr>
-          <tr><td>Вкладка, фільтр чи сторінка перезавантажували всю сторінку</td><td>Вигляд змінюється на місці через History API: оновлюються лише потрібні блоки, а посилання, Reload і Back працюють</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0012-static-pages-served-by-the-api.md">ADR 0012</a></td></tr>
-          <tr><td>Перше розгортання розійшлося з runbook</td><td>В образі Azure CLI немає <code>awk</code>; <code>grant()</code> відмовляє на порожньому scope; публічний доступ PostgreSQL вмикається до правила firewall</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/a70645a">a70645a</a></td></tr>
-          <tr><td>Хибне налаштування storage проявилося б уже після міграції схеми</td><td>Storage готується до міграцій, тож реліз падає раніше, ніж схема зміниться</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/src/Freitty.Api/Program.cs#L37-L39">Program.cs</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0017-photos-in-blob-storage-behind-the-api.md">ADR 0017</a></td></tr>
-          <tr><td>Відмовлений submit міг би забрати номер із послідовності</td><td>Агрегат спершу відповідає <code>CanSubmit</code>, і лише потім береться <code>nextval</code></td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0016-official-order-numbers-from-a-sequence.md">ADR 0016</a></td></tr>
-          <tr><td>Старіша ревізія не перебудувала б дані, коли новіша додала таблицю</td><td>Один <code>TRUNCATE … CASCADE</code> по всіх таблицях моделі</td><td class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/commit/9761c71">9761c71</a></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="grid g-even-left" style="gap:24px; align-items:center">
-      <figure class="code code--sm"><figcaption><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/deployment.md?plain=1#L87-L88">docs/deployment.md</a><span class="lines">рядки 87–88</span></figcaption><pre><code class="lang-sh">grant() {  # role, principal object ID, scope; an empty scope would mean the whole subscription
-  [ -n "$2" ] &amp;&amp; [ -n "$3" ] || { echo "grant: empty principal or scope"; return 1; }</code></pre></figure>
-      <p class="muted small">Порожній scope в <code>az role assignment create</code> означав би всю підписку, тож функція відмовляє раніше, ніж Azure щось видасть. Скрізь ішов один цикл: агент пропонує → рев'ю або живий запуск знаходить проблему → я вирішую, що міняти, і записую рішення в специфікацію, ADR чи правило, щоб наступний крок уже його знав.</p>
-    </div>
-  </div>
 </section>
 
 <!-- ============================== 02 Домен ============================== -->
@@ -418,7 +362,7 @@ private int KnownDelta(UnitType unitType)
 <section class="slide has-bignum" data-section="3">
   <span class="bignum" aria-hidden="true">03</span>
   <p class="label">03 · Схема</p>
-  <h2 class="title">Схема: агрегат і довідники навколо<span class="grad">uuid v7, timestamptz в UTC, enum як integer з CHECK</span></h2>
+  <h2 class="title">Схема: агрегат і довідники навколо</h2>
   <div class="body er">
     <div class="er-zone">
       <p class="label">Агрегат Order · змінюється лише через Order</p>
@@ -826,44 +770,6 @@ return attachResult.Value.ToDto(order.Version);</code></pre></figure>
     }
 }</code></pre></figure>
       <p class="muted small">Missing photo alert агрегат закриває сам, коли в Shipment не лишилося Unloading чи Disposal без фото. <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0017-photos-in-blob-storage-behind-the-api.md">ADR 0017</a></p>
-    </div>
-  </div>
-</section>
-
-<section class="slide" data-section="4">
-  <p class="label">04 · Тести</p>
-  <h2 class="title">643 тести, більшість — на справжньому PostgreSQL<span class="grad">через HTTP, а назви тестів читаються як поведінка</span></h2>
-  <div class="body grid g-even-left">
-    <div class="stack" style="gap:22px">
-      <div class="stats">
-        <div><span class="stat__n">178</span><span class="stat__l">юніт-тестів домену:<br>без бази, без хоста</span></div>
-        <div><span class="stat__n">465</span><span class="stat__l">інтеграційних: HTTP,<br>PostgreSQL 18, Azurite</span></div>
-      </div>
-      <ul class="list">
-        <li><code>WebApplicationFactory</code> і Testcontainers: один контейнер PostgreSQL і один Azurite на прогін; кожен тест створює власні дані.</li>
-        <li>Час фіксований через <code>FakeTimeProvider</code> — і «сьогодні», і таймер перебудови даних.</li>
-        <li>Гонку відтворює <code>CompetingSaveInterceptor</code>: конкурентний запис комітиться всередині збереження запиту.</li>
-        <li>Без InMemory і SQLite: <code>ILIKE</code>, <code>pg_trgm</code>, обмеження й транзакції перевіряються на тій базі, на якій усе працює.</li>
-        <li>CI запускає ті самі тести, а потім ще й увесь Compose-стек.</li>
-      </ul>
-      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/tree/main/tests">tests/</a> · <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/docs/adr/0002-integration-tests-on-real-postgres.md">ADR 0002</a></p>
-    </div>
-    <div class="card" style="padding:18px 22px">
-      <p class="label">Уся поведінка submit — назвами тестів</p>
-      <ul class="list names">
-        <li>SubmitMovesTheDraftToReadyUnderAnOfficialNumber</li>
-        <li>SubmitIsStampedWithTheClock</li>
-        <li>DraftNumberIsMatchedCaseInsensitively</li>
-        <li>LaterSubmitGetsAHigherNumber</li>
-        <li>DraftWithoutWhatSubmitNeedsIsAConflictListingIt</li>
-        <li>SubmittedOrderIsAConflictAsNotADraft</li>
-        <li>StaleVersionIsAConflictNamingBothVersions</li>
-        <li>UnknownOrderIsNotFound</li>
-        <li>DraftOfAnotherCompanyIsNotFound</li>
-        <li>MissingOrInvalidVersionIsABadRequestNamingIt</li>
-        <li>BodyThatIsNotAJsonObjectIsABadRequestOfTheWholeBody</li>
-      </ul>
-      <p class="ref"><a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Api.IntegrationTests/Orders/SubmitOrderTests.cs">SubmitOrderTests.cs</a> · гонки: <a href="https://github.com/bohdan-ivaniichuk/freitty-cabinet-api/blob/main/tests/Freitty.Api.IntegrationTests/Orders/SubmitOrderRaceTests.cs">SubmitOrderRaceTests.cs</a></p>
     </div>
   </div>
 </section>
