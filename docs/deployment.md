@@ -343,7 +343,7 @@ az containerapp logs show --resource-group "$RG" --name "$APP" --revision <first
   --type console --tail 100 --format text
 ```
 
-The lines to find: the two migrations and `Rebuilt sample data: 70 orders`. If the start failed
+The lines to find: the two migrations and `Rebuilt sample data: 71 orders`. If the start failed
 on a certificate error, see [step 9, *Open questions*](steps/09-deploy.md#open-questions).
 
 **Stage 9 — Turn CD on (owner, in GitHub).** Set `AZURE_CONTAINER_APP=freitty-cabinet`, a few
@@ -469,6 +469,10 @@ Each block starts with the stage 2 variables.
 
   A change made with `az containerapp update` flags instead stays in the app's template even if
   its revision fails, and every later deploy carries it — so it is always made through the file.
+  Measured on the live app: a healthy revision takes over without a failed request (one request
+  a second). Putting the template back after a revision that failed to start answered `404`
+  for some seconds while the traffic moved; the failed revision itself never took traffic in
+  the five minutes it was left trying.
 - **Watch the cost:** *Cost Management → Cost analysis*, scope the subscription, daily, grouped by
   meter. About 0.73 USD a day while the free grant lasts (8.3 days), then 0.93 expected and 1.38
   at worst; data arrives 8–24 hours late.

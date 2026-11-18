@@ -906,6 +906,10 @@ Also in `docs/deployment.md`, after the runbook; each block starts with the stag
 
   A change made with `az containerapp update` flags instead stays in the app's template even if
   its revision fails, and every later deploy carries it — so it is always made through the file.
+  Measured on the live app: a healthy revision takes over without a failed request (one request
+  a second). Putting the template back after a revision that failed to start answered `404`
+  for some seconds while the traffic moved; the failed revision itself never took traffic in
+  the five minutes it was left trying.
 - **Watch the cost:** *Cost Management → Cost analysis*, scope the subscription, daily, grouped by
   meter. About 0.73 USD a day while the free grant lasts (8.3 days), then 0.93 expected and 1.38
   at worst; data arrives 8–24 hours late.
